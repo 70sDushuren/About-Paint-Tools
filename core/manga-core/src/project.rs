@@ -127,6 +127,114 @@ impl ReadingDirection {
     }
 }
 
+/// Active creative engine mode declared in `<Metadata>/<CreativeEngines>`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CreativeEngineMode {
+    MangaOnly,
+    NovelOnly,
+    DualNovelManga,
+}
+
+impl CreativeEngineMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::MangaOnly => "manga-only",
+            Self::NovelOnly => "novel-only",
+            Self::DualNovelManga => "dual-novel-manga",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.trim() {
+            "manga-only" => Some(Self::MangaOnly),
+            "novel-only" => Some(Self::NovelOnly),
+            "dual-novel-manga" => Some(Self::DualNovelManga),
+            _ => None,
+        }
+    }
+}
+
+/// Light novel illustration sourcing policy (`manga-pick`, `novel-custom`, or `hybrid`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NovelIllustrationMode {
+    None,
+    MangaPick,
+    NovelCustom,
+    Hybrid,
+}
+
+impl NovelIllustrationMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::MangaPick => "manga-pick",
+            Self::NovelCustom => "novel-custom",
+            Self::Hybrid => "hybrid",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.trim() {
+            "none" => Some(Self::None),
+            "manga-pick" => Some(Self::MangaPick),
+            "novel-custom" => Some(Self::NovelCustom),
+            "hybrid" => Some(Self::Hybrid),
+            _ => None,
+        }
+    }
+}
+
+/// Reference descriptor for a bidirectional AI intermediate draft (`Manga -> Novel` or `Novel -> Manga`).
+///
+/// Enforces the architectural hard red line: AI bridges MUST carry `role == "ai_reference_only"`
+/// and write strictly under `ai_assist/` — NEVER into human final directories (`novel/prose/`, `manuscript/`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AiBridgeArtifact {
+    pub role: String,
+    pub meta_src: String,
+    pub output_src: String,
+    pub derived_from: String,
+}
+
+fn is_safe_ai_sandbox_path(rel: &str) -> bool {
+    if rel.is_empty() || rel.starts_with('/') || rel.contains('\\') {
+        return false;
+    }
+    let mut parts = rel.split('/');
+    if parts.next() != Some("ai_assist") {
+        return false;
+    }
+    let rest: Vec<&str> = parts.collect();
+    if rest.is_empty() {
+        return false;
+    }
+    !rest.iter().any(|p| p.is_empty() || *p == "." || *p == "..")
+}
+
+impl AiBridgeArtifact {
+    pub fn validate_isolation(&self) -> Result<(), String> {
+        if self.role != "ai_reference_only" {
+            return Err(format!(
+                "AI bridge role must be 'ai_reference_only', got '{}'",
+                self.role
+            ));
+        }
+        if !is_safe_ai_sandbox_path(&self.meta_src) {
+            return Err(format!(
+                "AI bridge meta path '{}' escapes 'ai_assist/' sandbox",
+                self.meta_src
+            ));
+        }
+        if !is_safe_ai_sandbox_path(&self.output_src) {
+            return Err(format!(
+                "AI bridge output path '{}' escapes 'ai_assist/' sandbox (writing to human finals is forbidden)",
+                self.output_src
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditionRef {
     pub id: String,
@@ -155,6 +263,7 @@ pub struct CreativeProjectManifest {
     pub work_type: WorkType,
     pub reading_direction: ReadingDirection,
     pub primary_track: String,
+    pub creative_engines: CreativeEngineMode,
     pub license_spdx: String,
     pub allow_derivative: bool,
     pub commercial_allowed: bool,
@@ -228,6 +337,10 @@ impl CreativeProjectManifest {
         out.push_str(&format!(
             "    <PrimaryTrack>{}</PrimaryTrack>\n",
             xml_escape(&self.primary_track)
+        ));
+        out.push_str(&format!(
+            "    <CreativeEngines>{}</CreativeEngines>\n",
+            self.creative_engines.as_str()
         ));
         out.push_str("  </Metadata>\n");
 
@@ -310,6 +423,9 @@ impl CreativeProjectManifest {
             .unwrap_or(WorkType::Original);
         let primary_track =
             extract_simple_tag_text(xml, "PrimaryTrack").unwrap_or_else(|| "dual".into());
+        let creative_engines = extract_simple_tag_text(xml, "CreativeEngines")
+            .and_then(|s| CreativeEngineMode::from_str(&s))
+            .unwrap_or(CreativeEngineMode::DualNovelManga);
 
         let reading_direction = xml
             .find("<ReadingDirection")
@@ -418,6 +534,7 @@ impl CreativeProjectManifest {
             work_type,
             reading_direction,
             primary_track,
+            creative_engines,
             license_spdx,
             allow_derivative,
             commercial_allowed,
@@ -446,7 +563,9 @@ mod tests {
         assert_eq!(parsed.id, "prj-sample-manga-001");
         assert_eq!(parsed.work_type, WorkType::Original);
         assert_eq!(parsed.reading_direction, ReadingDirection::Rtl);
-        assert_eq!(parsed.editions.len(), 3);
+        assert_eq!(parsed.creative_engines, CreativeEngineMode::DualNovelManga);
+        assert_eq!(parsed.editions.len(), 4);
+        assert!(parsed.editions.iter().any(|e| e.id == "novel-ebook-zh" && e.track == "novel-ebook"));
         assert_eq!(parsed.chapters.len(), 1);
         assert!(parsed.allow_derivative);
         assert!(!parsed.commercial_allowed);
@@ -464,6 +583,7 @@ mod tests {
             work_type: WorkType::Doujinshi,
             reading_direction: ReadingDirection::VerticalScroll,
             primary_track: "color-webtoon".into(),
+            creative_engines: CreativeEngineMode::DualNovelManga,
             license_spdx: "CC-BY-NC-SA-4.0".into(),
             allow_derivative: true,
             commercial_allowed: false,
@@ -489,6 +609,58 @@ mod tests {
         let xml = orig.to_prj_xml();
         let parsed = CreativeProjectManifest::parse_prj_xml(&xml).unwrap();
         assert_eq!(parsed, orig);
+    }
+
+    #[test]
+    fn ai_bridge_artifact_enforces_hard_isolation_red_line() {
+        let valid_m2n = AiBridgeArtifact {
+            role: "ai_reference_only".into(),
+            meta_src: "ai_assist/manga_to_novel/meta.xml".into(),
+            output_src: "ai_assist/manga_to_novel/ai_prose_ref_zh-Hans.md".into(),
+            derived_from: "script/script.xml".into(),
+        };
+        assert!(valid_m2n.validate_isolation().is_ok());
+
+        // Attempting to overwrite human novel prose must fail.
+        let overwrite_novel = AiBridgeArtifact {
+            output_src: "novel/prose/zh-Hans.md".into(),
+            ..valid_m2n.clone()
+        };
+        assert!(overwrite_novel.validate_isolation().is_err());
+
+        // Attempting to overwrite human manga manuscript must fail.
+        let overwrite_manga = AiBridgeArtifact {
+            output_src: "manuscript/p001.mnga".into(),
+            ..valid_m2n.clone()
+        };
+        assert!(overwrite_manga.validate_isolation().is_err());
+
+        // Path traversal escaping ai_assist/ must fail.
+        let traversal = AiBridgeArtifact {
+            output_src: "ai_assist/../novel/prose/zh-Hans.md".into(),
+            ..valid_m2n.clone()
+        };
+        assert!(traversal.validate_isolation().is_err());
+
+        // Wrong role must fail.
+        let wrong_role = AiBridgeArtifact {
+            role: "human_authoritative".into(),
+            ..valid_m2n
+        };
+        assert!(wrong_role.validate_isolation().is_err());
+    }
+
+    #[test]
+    fn novel_illustration_mode_round_trips() {
+        for mode in [
+            NovelIllustrationMode::None,
+            NovelIllustrationMode::MangaPick,
+            NovelIllustrationMode::NovelCustom,
+            NovelIllustrationMode::Hybrid,
+        ] {
+            assert_eq!(NovelIllustrationMode::from_str(mode.as_str()), Some(mode));
+        }
+        assert_eq!(NovelIllustrationMode::from_str("unknown"), None);
     }
 
     #[test]

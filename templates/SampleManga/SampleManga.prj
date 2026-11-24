@@ -13,6 +13,7 @@
     <WorkType>original</WorkType>
     <ReadingDirection default="rtl"/>
     <PrimaryTrack>dual</PrimaryTrack>
+    <CreativeEngines>dual-novel-manga</CreativeEngines>
     <CreatedAt>2026-11-24T00:00:00Z</CreatedAt>
   </Metadata>
 
@@ -46,6 +47,8 @@
              locale="zh-Hans" config="editions/edition_webtoon_color.xml"/>
     <Edition id="intl-es-digital" track="color-webtoon" preset="WEBTOON_800" reading="vertical-scroll"
              locale="es" config="editions/edition_intl_digital.xml"/>
+    <Edition id="novel-ebook-zh" track="novel-ebook" preset="EPUB3" reading="ltr"
+             locale="zh-Hans" config="editions/edition_novel_epub.xml"/>
   </Editions>
 
   <StoryStructure>

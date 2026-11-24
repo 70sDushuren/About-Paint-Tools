@@ -36,6 +36,12 @@
     "project.manuscript.short": { "value": "Manuscrito", "status": "tuned", "locked": true, "max_chars": 12 },
     "project.edition.short": { "value": "Edición", "status": "auto", "locked": false, "max_chars": 12 },
     "project.fanwork_policy.full": { "value": "Licencia fanwork y derivados", "status": "tuned", "locked": true },
-    "ai.pledge.badge": { "value": "Local sin conexión · Sin entrenar con tus obras", "status": "tuned", "locked": true }
+    "ai.pledge.badge": { "value": "Local sin conexión · Sin entrenar con tus obras", "status": "tuned", "locked": true },
+    "workspace.dual_studio": { "value": "Estudio dual", "status": "tuned", "locked": true },
+    "novel.engine.short": { "value": "Novela", "status": "tuned", "locked": true, "max_chars": 12 },
+    "novel.final_badge.full": { "value": "Final humano independiente (la IA nunca sobrescribe)", "status": "tuned", "locked": true },
+    "novel.illustration.short": { "value": "Ilustración", "status": "tuned", "locked": true, "max_chars": 14 },
+    "ai.bridge.manga_to_novel": { "value": "Generar borrador IA de novela (solo ref.)", "status": "tuned", "locked": true },
+    "ai.bridge.novel_to_manga": { "value": "Generar boceto IA de manga (solo ref.)", "status": "tuned", "locked": true }
   }
 }

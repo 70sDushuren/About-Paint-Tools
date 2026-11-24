@@ -8,6 +8,12 @@
     <Scene id="sc001" title="Rooftop Storm" src="scenes/sc001_rooftop.md"/>
   </Scenes>
   <Script src="script/script.xml"/>
+  <Novel status="drafting" decoupledFromManga="true">
+    <Prose lang="zh-Hans" status="human_authoritative" locked="true" src="novel/prose/zh-Hans.md"/>
+    <Prose lang="en" status="human_authoritative" locked="true" src="novel/prose/en.md"/>
+    <Illustrations dir="novel/illustrations" mode="hybrid"/>
+    <DivergenceNote>小说版保留了星川莲在轨道学院天台对三年前磁暴的回忆独白，而漫画版压缩为两格高张力视觉冲击；双线均以各自人工终稿为准。</DivergenceNote>
+  </Novel>
   <Pages>
     <Page number="1"
           stage="storyboard"
@@ -17,5 +23,11 @@
   <AiAssist>
     <CompletionQueue src="ai_assist/completion_queue.xml"/>
     <ReviewPins src="ai_assist/review_pins.xml"/>
+    <MangaToNovelBridge role="ai_reference_only"
+                        meta="ai_assist/manga_to_novel/meta.xml"
+                        draft="ai_assist/manga_to_novel/ai_prose_ref_zh-Hans.md"/>
+    <NovelToMangaBridge role="ai_reference_only"
+                        meta="ai_assist/novel_to_manga/meta.xml"
+                        storyboard="ai_assist/novel_to_manga/ai_storyboard_ref.xml"/>
   </AiAssist>
 </ChapterManifest>

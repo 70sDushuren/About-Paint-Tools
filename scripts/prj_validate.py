@@ -24,6 +24,9 @@ from pathlib import Path
 NS_URI = "urn:about-paint-tools:cpff:1.0"
 NS = {"c": NS_URI}
 VALID_LINE_STATUSES = {"source", "auto", "tuned", "needs_review"}
+VALID_CREATIVE_ENGINES = {"manga-only", "novel-only", "dual-novel-manga"}
+VALID_NOVEL_ILLUSTRATION_MODES = {"none", "manga-pick", "novel-custom", "hybrid"}
+VALID_PROSE_STATUSES = {"human_authoritative", "drafting", "locked"}
 
 
 def resolve_prj_file(project_dir: Path) -> tuple[Path | None, str | None, str | None]:
@@ -62,6 +65,23 @@ def check_rel_path(base: Path, rel: str | None, label: str, errors: list[str], e
     return target
 
 
+def check_ai_sandbox_path(
+    ch_dir: Path, rel: str | None, label: str, errors: list[str], expect_dir: bool = False
+) -> Path | None:
+    """Enforces the hard isolation red line: AI bridge outputs MUST stay strictly under ai_assist/."""
+    if not rel or not rel.strip():
+        errors.append(f"Missing required AI bridge path for {label}")
+        return None
+    parts = Path(rel).parts
+    if rel.startswith("/") or ".." in parts or not parts or parts[0] != "ai_assist":
+        errors.append(
+            f"AI isolation violation for {label}: path '{rel}' escapes 'ai_assist/' "
+            f"(AI bridges must NEVER write into novel/prose/ or manuscript/)."
+        )
+        return None
+    return check_rel_path(ch_dir, rel, label, errors, expect_dir=expect_dir)
+
+
 def validate_project(project_dir: Path) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -95,6 +115,13 @@ def validate_project(project_dir: Path) -> tuple[list[str], list[str]]:
     else:
         if not meta.findall("c:Title", NS):
             errors.append("<Metadata> must include at least one <Title>")
+        engines_el = meta.find("c:CreativeEngines", NS)
+        if engines_el is not None:
+            engines_val = (engines_el.text or "").strip()
+            if engines_val not in VALID_CREATIVE_ENGINES:
+                errors.append(
+                    f"Invalid <CreativeEngines> value '{engines_val}'; expected one of {sorted(VALID_CREATIVE_ENGINES)}"
+                )
 
     # 2. Declarations
     decl = root.find("c:Declarations", NS)
@@ -183,7 +210,14 @@ def validate_project(project_dir: Path) -> tuple[list[str], list[str]]:
             ed_path = check_rel_path(project_dir, ed.attrib.get("config"), f"Edition[{ed_id}]", errors)
             if ed_path:
                 try:
-                    ET.parse(ed_path)
+                    ed_root = ET.parse(ed_path).getroot()
+                    ill_policy = ed_root.find("c:IllustrationPolicy", NS)
+                    if ill_policy is not None:
+                        ill_mode = ill_policy.attrib.get("mode")
+                        if ill_mode not in VALID_NOVEL_ILLUSTRATION_MODES:
+                            errors.append(
+                                f"Edition[{ed_id}] invalid IllustrationPolicy mode '{ill_mode}'"
+                            )
                 except ET.ParseError as exc:
                     errors.append(f"Invalid XML in edition {ed_id}: {exc}")
 
@@ -228,17 +262,96 @@ def validate_project(project_dir: Path) -> tuple[list[str], list[str]]:
                                 )
                     except ET.ParseError as exc:
                         errors.append(f"Invalid XML in {script_path}: {exc}")
+
+            # Dual-Engine Novel Prose & Illustrations (independent human final)
+            novel_el = ch_root.find("c:Novel", NS)
+            if novel_el is not None:
+                for prose in novel_el.findall("c:Prose", NS):
+                    lang = prose.attrib.get("lang", "?")
+                    p_status = prose.attrib.get("status")
+                    p_locked = prose.attrib.get("locked")
+                    if p_status not in VALID_PROSE_STATUSES:
+                        errors.append(f"Chapter[{cid}]/Novel/Prose[{lang}] invalid status '{p_status}'")
+                    if p_locked not in {"true", "false"}:
+                        errors.append(f"Chapter[{cid}]/Novel/Prose[{lang}] must set locked='true'|'false'")
+                    check_rel_path(ch_dir, prose.attrib.get("src"), f"Chapter[{cid}]/Novel/Prose[{lang}]", errors)
+                ill_el = novel_el.find("c:Illustrations", NS)
+                if ill_el is not None:
+                    ill_mode = ill_el.attrib.get("mode", "hybrid")
+                    if ill_mode not in VALID_NOVEL_ILLUSTRATION_MODES:
+                        errors.append(f"Chapter[{cid}]/Novel/Illustrations invalid mode '{ill_mode}'")
+                    check_rel_path(
+                        ch_dir,
+                        ill_el.attrib.get("dir"),
+                        f"Chapter[{cid}]/Novel/Illustrations",
+                        errors,
+                        expect_dir=True,
+                    )
+
             for page in ch_root.findall("c:Pages/c:Page", NS):
                 check_rel_path(ch_dir, page.attrib.get("storyboardDir"), f"Chapter[{cid}]/storyboardDir", errors, expect_dir=True)
                 check_rel_path(ch_dir, page.attrib.get("manuscriptDir"), f"Chapter[{cid}]/manuscriptDir", errors, expect_dir=True)
+
             ai = ch_root.find("c:AiAssist", NS)
             if ai is not None:
                 cq = ai.find("c:CompletionQueue", NS)
                 if cq is not None:
-                    check_rel_path(ch_dir, cq.attrib.get("src"), f"Chapter[{cid}]/CompletionQueue", errors)
+                    check_ai_sandbox_path(ch_dir, cq.attrib.get("src"), f"Chapter[{cid}]/CompletionQueue", errors)
                 rp = ai.find("c:ReviewPins", NS)
                 if rp is not None:
-                    check_rel_path(ch_dir, rp.attrib.get("src"), f"Chapter[{cid}]/ReviewPins", errors)
+                    check_ai_sandbox_path(ch_dir, rp.attrib.get("src"), f"Chapter[{cid}]/ReviewPins", errors)
+
+                m2n = ai.find("c:MangaToNovelBridge", NS)
+                if m2n is not None:
+                    if m2n.attrib.get("role") != "ai_reference_only":
+                        errors.append(
+                            f"Chapter[{cid}]/MangaToNovelBridge must enforce role='ai_reference_only', "
+                            f"got '{m2n.attrib.get('role')}'"
+                        )
+                    meta_path = check_ai_sandbox_path(
+                        ch_dir, m2n.attrib.get("meta"), f"Chapter[{cid}]/MangaToNovelBridge/meta", errors
+                    )
+                    if meta_path:
+                        try:
+                            m_root = ET.parse(meta_path).getroot()
+                            if m_root.attrib.get("role") != "ai_reference_only":
+                                errors.append(f"{meta_path.name} must declare role='ai_reference_only'")
+                        except ET.ParseError as exc:
+                            errors.append(f"Invalid XML in {meta_path}: {exc}")
+                    check_ai_sandbox_path(
+                        ch_dir, m2n.attrib.get("draft"), f"Chapter[{cid}]/MangaToNovelBridge/draft", errors
+                    )
+
+                n2m = ai.find("c:NovelToMangaBridge", NS)
+                if n2m is not None:
+                    if n2m.attrib.get("role") != "ai_reference_only":
+                        errors.append(
+                            f"Chapter[{cid}]/NovelToMangaBridge must enforce role='ai_reference_only', "
+                            f"got '{n2m.attrib.get('role')}'"
+                        )
+                    meta_path = check_ai_sandbox_path(
+                        ch_dir, n2m.attrib.get("meta"), f"Chapter[{cid}]/NovelToMangaBridge/meta", errors
+                    )
+                    if meta_path:
+                        try:
+                            m_root = ET.parse(meta_path).getroot()
+                            if m_root.attrib.get("role") != "ai_reference_only":
+                                errors.append(f"{meta_path.name} must declare role='ai_reference_only'")
+                        except ET.ParseError as exc:
+                            errors.append(f"Invalid XML in {meta_path}: {exc}")
+                    sb_path = check_ai_sandbox_path(
+                        ch_dir,
+                        n2m.attrib.get("storyboard"),
+                        f"Chapter[{cid}]/NovelToMangaBridge/storyboard",
+                        errors,
+                    )
+                    if sb_path:
+                        try:
+                            sb_root = ET.parse(sb_path).getroot()
+                            if sb_root.attrib.get("role") != "ai_reference_only":
+                                errors.append(f"{sb_path.name} must declare role='ai_reference_only'")
+                        except ET.ParseError as exc:
+                            errors.append(f"Invalid XML in {sb_path}: {exc}")
 
     # 6. Git / Git LFS compatibility check
     repo = root.find("c:Repository", NS)
@@ -271,7 +384,10 @@ def main() -> int:
             print(f"  - {err}", file=sys.stderr)
         return 1
 
-    print(f"OK: Validated CPFF v1.0 creative project '{target.name}' (XML, declarations, 5-locale dialogue, editions, chapters, Git LFS).")
+    print(
+        f"OK: Validated CPFF v1.0 creative project '{target.name}' "
+        f"(XML, declarations, 5-locale dialogue, editions, dual-engine novel/manga & AI isolation, Git LFS)."
+    )
     return 0
 
 

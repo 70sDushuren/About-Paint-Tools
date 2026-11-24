@@ -21,8 +21,8 @@ Today's iPad anime & manga creators face an awkward gap:
 
 **About-Paint-Tools** is designed from day one under the permissive **MIT License** to serve **both B&W Page Manga (Japanese Manga / Doujinshi) and Full-Color Webtoon / Anime Illustration equally**, uniting:
 1. **Procreate-grade iPad touch & Apple Pencil Pro ergonomics** (`≤ 9ms` latency target, 240Hz coalesced & predicted touches, Squeeze radial menu, Hover preview, Barrel Roll).
-2. **Dual-track anime/manga production primitives** (B&W Page Manga: B4 600DPI print templates, vector lineart + intersection eraser, panel folders, procedural GPU screentones; Full-Color Webtoon & Illustration: cel blend modes, close-gap anti-halo expand fill, vertical strip preview & slicer, layered PSD interop).
-3. **Artist-in-the-Loop Embedded Local AI (Gemma 4 E2B/E4B + Vision)** — offline **Gemma 4 (Apache 2.0)** driving **Script Supervision / Continuity Logging (with hands-free voice dictation)**, **Story & Storyboard Planning**, and **Function-Calling Batch Workflow Macros** via a deterministic `ActionBus`, paired with specialized on-device Smart Flatting, offline LT conversion, and cel-shading assists — **zero forced cloud uploads, zero unauthorized model training**.
+2. **Dual-track anime/manga production primitives & Dual-Engine Novel × Manga Studio** (B&W Page Manga: B4 600DPI print templates, vector lineart + intersection eraser, panel folders, procedural GPU screentones; Full-Color Webtoon & Illustration: cel blend modes, close-gap anti-halo expand fill, vertical strip preview & slicer, layered PSD interop; **Parallel Light Novel & Manga Engine** sharing one `.prj` Story Bible, Outline, and 5-language dictionary while keeping human novel & manga finals 100% decoupled, with self-selected or custom-designed novel illustrations).
+3. **Artist-in-the-Loop Embedded Local AI (Gemma 4 E2B/E4B + Vision)** — offline **Gemma 4 (Apache 2.0)** powering **`v1.0` Bidirectional AI Reference Drafts** (`Manga → Novel` & `Novel → Manga`, strictly isolated in `ai_assist/` as `role="ai_reference_only"` — never overwriting human finals), **Script Supervision / Continuity Logging (with hands-free voice dictation)**, **Story & Storyboard Planning**, and **Function-Calling Batch Workflow Macros** via a deterministic `ActionBus`, paired with specialized on-device Smart Flatting, offline LT conversion, and cel-shading assists — **zero forced cloud uploads, zero unauthorized model training**.
 
 ---
 
@@ -47,11 +47,11 @@ flowchart TD
         Canvas["Tiled Canvas Manager<br/>256x256 Sparse Tiles / Disk Paging / CoW Undo"]
         Vector["Dual-Track Manga & Color Core<br/>Vector Ink / Panels / Tones / Anti-Halo Fill / Slicer"]
         Render["GPU Compositor (wgpu + WGSL)<br/>Metal / Vulkan / DX12 Backends"]
-        IO["Open Format & Interop<br/>.mnga Archive (+Continuity DB) / PSD / Timelapse"]
+        IO["Open Format & CPFF v1.0<br/>.prj Dual-Engine / .mnga (+Continuity DB) / PSD / EPUB3"]
     end
 
     subgraph AI["Artist-in-the-Loop Local AI"]
-        Gemma["Embedded Local LLM (Gemma 4 E2B/E4B, Apache 2.0)<br/>Continuity · Planning · Voice · Function Calling"]
+        Gemma["Embedded Local LLM (Gemma 4 E2B/E4B, Apache 2.0)<br/>Novel↔Manga Ref Drafts · Continuity · Planning · Macros"]
         Vision["Specialized On-Device Vision (CoreML / ONNX)<br/>Smart Flatting · Offline LT · Cel Normals · Pose"]
         BridgeAI["Open Workflow Bridge (BYOK)<br/>Local ComfyUI / Custom API Endpoints"]
     end
@@ -86,12 +86,12 @@ flowchart TD
   - `v0.7`: Open `.mnga` file format (+ continuity tables), layered PSD import/export, timelapse, **deterministic `ActionBus`**
   - `v0.8`: Apple Pencil Pro Squeeze radial menu, Hover cursor, reference window, **5-language live switching**
   - `v0.9`: B4 600DPI & `1600×25600` Webtoon disk paging soak test, 5-language Split View UI layout QA, public TestFlight Beta
-- **1.x Series (`v1.0` – `v1.5+`) — Pro UI Overhaul, Embedded Gemma 4 Local AI & Multi-Platform**
-  - `v1.0`: Complete Design System & dual-mode workspace (*Focus Illustration/Webtoon* vs *Manga Studio*) + full 5-language polish
-  - `v1.1`: **Embedded Gemma 4 E2B/E4B** (Script Supervisor with voice dictation + Story/Storyboard Planner + 5-language dialogue localization) + Smart Flatting & offline LT conversion
+- **1.x Series (`v1.0` – `v1.5+`) — Dual-Engine Novel × Manga Studio, Embedded Gemma 4 Local AI & Multi-Platform**
+  - `v1.0`: Complete Design System & **Three-Mode Workspace** (*Focus Illustration/Webtoon* · *Manga Studio* · *Novel × Manga Dual Studio*) + **Light Novel Authoring Engine** (shared `.prj` Story Bible/Outline/Dictionary, decoupled finals, self-selected or custom-designed novel illustrations, EPUB3/Markdown) + **Embedded Gemma 4 E2B/E4B Bidirectional AI Reference Drafts** (`Manga → Novel` & `Novel → Manga` strictly isolated in `ai_assist/`) + full 5-language polish
+  - `v1.1`: **Gemma 4 Script Supervisor & Story Planner** (hands-free voice continuity dictation, intentional `<DivergenceNote>` awareness, 5-language dialogue & prose localization) + Smart Flatting & offline LT conversion
   - `v1.2`: **Gemma 4 Function-Calling Workflow Driver** (batch macros over `ActionBus`) + style-preserving sketch-to-vector cleanup + 3D light-sphere cel shading
-  - `v1.3`: Lightweight 3D anime pose mannequin + multi-page chapter spreads & multi-episode Webtoon studio
-  - `v1.4`: **Gemma 4 Vision Continuity Critic** + local ComfyUI/BYOK workflow bridge
+  - `v1.3`: Lightweight 3D anime pose mannequin (with Novel → Manga auto-pose roughs) + multi-page chapter spreads, multi-episode Webtoon & multi-volume light novel studio
+  - `v1.4`: **Gemma 4 Vision Continuity Critic** + local ComfyUI/BYOK workflow bridge (including optional Novel → Manga visual rough generation into `ai_assist/`)
   - `v1.5+`: macOS, Android tablet, and Windows native shells + community Lua/WASM plugin API
 
 ---

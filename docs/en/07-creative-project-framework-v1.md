@@ -138,9 +138,22 @@ See the live validated example in [`templates/SampleManga/SampleManga.prj`](../.
 </DialogueLocale>
 ```
 
-- `status="ai_draft"`: Unapproved Gemma 4 proposals staged exclusively in `ai_assist/completion_queue.xml`.
+- `status="ai_draft"`: Unapproved Gemma 4 proposals staged exclusively in `ai_assist/`.
 - `status="auto" locked="false"`: Accepted automated translations eligible for sync updates.
 - `status="tuned" locked="true"`: Human-edited or bubble-width-tuned lines **permanently protected from automated overwrites**.
+
+### 4.4 Dual-Engine Novel × Manga Parallel Studio & AI Intermediate Isolation (`v1.0` Core Capability)
+
+Within a single CPFF project, the **Novel Engine** and **Manga Engine** share one backbone (`<ProjectName>.prj`, `outline/`, `bible/`, `i18n/dictionary.xml`, and `chapters/chXXX/scenes/`) while maintaining complete creative sovereignty over their human finals:
+
+- **Independent Human Novel Tree (`chapters/chXXX/novel/`)**:
+  - `novel/prose/{en,zh-Hans,zh-Hant,yue-Hant,es}.md`: Authoritative human-approved novel prose (`status="human_authoritative"`), which **need not match either the manga final or the AI reference prose**.
+  - `novel/illustrations/`: Dedicated light-novel illustration folder — when configuring a light-novel edition (`editions/edition_novel_epub.xml`), illustrations may either be **self-selected from curated manga pages (`source="manga-pick"`)** or **custom-designed separately (`source="novel-custom"`)**.
+- **Intentional Divergence Declaration (`<DivergenceNote>`)**: `chapter.xml` marks `<Novel decoupledFromManga="true">` with optional `<DivergenceNote>` explaining deliberate cross-media adaptations so Continuity Critics flag only accidental lore/prop errors.
+- **Bidirectional AI Intermediate Red Line (Hard Constraint)**:
+  - **Manga → Novel AI Drafts** live strictly inside `chapters/chXXX/ai_assist/manga_to_novel/` (`meta.xml` + reference prose marked `role="ai_reference_only"`);
+  - **Novel → Manga AI Drafts** live strictly inside `chapters/chXXX/ai_assist/novel_to_manga/` (`meta.xml` + AI storyboard/rough intermediates marked `role="ai_reference_only"`);
+  - **Hard Red Line**: AI bridges read human finals strictly read-only and **MUST NEVER write into `novel/prose/` or `manuscript/`**; text intermediates stay in Git as creative process history while heavy visual roughs route through Git LFS and may be pruned anytime.
 
 ---
 

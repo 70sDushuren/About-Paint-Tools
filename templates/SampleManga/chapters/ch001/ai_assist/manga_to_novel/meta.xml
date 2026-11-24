@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AiBridgeMeta xmlns="urn:about-paint-tools:cpff:1.0"
+              direction="manga_to_novel"
+              role="ai_reference_only"
+              engine="gemma-4-e2b-local"
+              generatedAt="2026-11-24T12:00:00Z"
+              derivedFrom="script/script.xml"
+              humanOverwritePolicy="never">
+  <Notes>Generated offline as a side-by-side prose reference from manga panels and bubbles. Never overwrites novel/prose/.</Notes>
+</AiBridgeMeta>

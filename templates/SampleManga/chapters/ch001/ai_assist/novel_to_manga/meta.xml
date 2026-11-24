@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AiBridgeMeta xmlns="urn:about-paint-tools:cpff:1.0"
+              direction="novel_to_manga"
+              role="ai_reference_only"
+              engine="gemma-4-e2b-local"
+              generatedAt="2026-11-24T12:05:00Z"
+              derivedFrom="novel/prose/zh-Hans.md"
+              humanOverwritePolicy="never">
+  <Notes>Generated offline as an intermediate storyboard proposal from human novel prose. Author's final manga manuscript may diverge completely.</Notes>
+</AiBridgeMeta>

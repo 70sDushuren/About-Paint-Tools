@@ -36,6 +36,12 @@
     "project.manuscript.short": { "value": "原稿", "status": "auto", "locked": false, "max_chars": 12 },
     "project.edition.short": { "value": "發行版", "status": "auto", "locked": false, "max_chars": 12 },
     "project.fanwork_policy.full": { "value": "同人與二次創作授權聲明", "status": "auto", "locked": false },
-    "ai.pledge.badge": { "value": "本機離線 · 零作品上傳訓練", "status": "tuned", "locked": true }
+    "ai.pledge.badge": { "value": "本機離線 · 零作品上傳訓練", "status": "tuned", "locked": true },
+    "workspace.dual_studio": { "value": "小說×漫畫雙引擎", "status": "tuned", "locked": true },
+    "novel.engine.short": { "value": "小說", "status": "auto", "locked": false, "max_chars": 12 },
+    "novel.final_badge.full": { "value": "人工獨立完稿（AI 永不覆寫）", "status": "tuned", "locked": true },
+    "novel.illustration.short": { "value": "小說插圖", "status": "auto", "locked": false, "max_chars": 14 },
+    "ai.bridge.manga_to_novel": { "value": "產生小說 AI 參考稿（僅供對照）", "status": "tuned", "locked": true },
+    "ai.bridge.novel_to_manga": { "value": "產生漫畫 AI 中間稿（僅供參考）", "status": "tuned", "locked": true }
   }
 }

@@ -47,6 +47,17 @@
 
 > **安全护栏**：Gemma 4 仅拥有注册在白名单内的 `ActionBus` 工具调用权限；任何涉及批量修改或导出的计划必须先弹出**预览确认条**，执行过程包装在单个 `UndoGroup` 内，画师双指轻点即可完整回滚。
 
+### 能力 D：小说 × 漫画双引擎双向 AI 参考稿生成（`v1.0` 首发核心支柱）
+面向同时推进轻小说连载与漫画改编（或「先画漫画再补文字版 / 先写小说再画漫画」）的跨媒介创作者，本地 **Gemma 4 E2B / E4B** 提供离线双向参考转译管线：
+- **漫画 → 小说 AI 文字参考稿（`Manga → Novel`）**：以**只读方式**读取当前话漫画分格缩略图、[`script/script.xml`](../../templates/SampleManga/chapters/ch001/script/script.xml) 气泡对白、`scenes/` 分场节拍与 `i18n/dictionary.xml` 专有名词，自动撰写可供对照写作的小说散文参考稿，隔离存放于 `chapters/chXXX/ai_assist/manga_to_novel/`（附 `meta.xml` 记录源版本、生成时间与模型名）。
+- **小说 → 漫画 AI 分镜/草图中间稿（`Novel → Manga`）**：以**只读方式**读取人工小说正文 `novel/prose/*.md`、`scenes/` 与角色设定卡，将其拆解为可一键载入画布预览的分镜脚本与分格文字占位框架（`ai_storyboard_ref.xml`），隔离存放于 `chapters/chXXX/ai_assist/novel_to_manga/`；如需进一步生成视觉草图参考，可于后续版本通过内置 3D 二次元人偶自动摆姿或可选本地 ComfyUI BYOK 桥接输出至同一隔离目录。
+- **双线有意分歧友好（Intentional Divergence）**：支持在 `chapter.xml` 中为 `<Novel>` 与 `<Manga>` 声明 `decoupledFromManga="true"` 及 `<DivergenceNote>`（如「小说版保留大段内心独白，漫画版改为无台词动作特写」），使场记 AI 仅提示**无意的设定穿帮**，绝不把作者有意的跨媒介改编误报为错误。
+
+> **不可逾越的架构红线（Hard Isolation Red Line）**：
+> 1. 所有双向 AI 中间产物必须显式标记 `role="ai_reference_only"`，**仅作为创作参考与中间演化过程留存**；
+> 2. 数据严格单向流动——自动化与 AI 管线**严禁写入** `novel/prose/`（人工小说终稿）或 `manuscript/`（人工漫画原稿）目录（由 Rust 核心与 CI 校验器双层强制拦截）；
+> 3. 作者人工确认的小说终稿与漫画终稿 **100% 独立解耦**，内容、节奏与情节编排完全不必与另一媒介或 AI 参考稿一致。
+
 ---
 
 ## 3. 支柱二：专项端侧视觉与图形辅助工具（`v1.1` – `v1.4`）
@@ -58,7 +69,7 @@
 | **3. 风格保留型草稿清稿 & 矢量化** | 双线通用 | 保留画师原有起收笔节奏，将杂乱草稿提纯为可调线宽的**矢量线稿层**，并附带 `< 4px` 断口雷达高亮 | 轻量线稿提取模型 + MIT 自研 Bézier 中心线拟合 |
 | **4. 3D 光源球引导自动赛璐璐二分** | 全彩条漫 / 插画 | 画布直接拖放 3D 光源球，实时在独立 `Multiply` 图层生成锐利赛璐璐一分/二分阴影与轮廓高光 | 端侧线稿法线估计 + 实时 Metal/`wgpu` 二值光照着色器 |
 | **5. 拍照/火柴人提姿 3D 二次元人偶** | 双线通用 | 拍照或画火柴人一键对齐内置 5–8 头身二次元 3D 人偶与手部库，并与 1/2/3 点透视尺自动锁焦 | 端侧轻量姿态估计（CoreML） + Metal 轻量骨骼渲染 |
-| **6. 开放本地桥接（BYOK / ComfyUI Bridge）** | 进阶扩展 | 支持对接用户自建局域网 ComfyUI 或自定义 HTTP 端点，选区送出、结果作为新图层无损贴回 | 标准 JSON/WebSocket 插件桥接协议 |
+| **6. 开放本地桥接（BYOK / ComfyUI Bridge）** | 进阶扩展 | 支持对接用户自建局域网 ComfyUI 或自定义 HTTP 端点，选区送出、结果作为新图层或 `ai_assist/` 参考稿无损贴回 | 标准 JSON/WebSocket 插件桥接协议 |
 
 ---
 
@@ -66,12 +77,14 @@
 
 ```mermaid
 flowchart LR
-    Input["画师交互<br/>自然语言 / 语音 / 工具按钮"] --> Router["AI Task Router<br/>（内存守护 / 懒加载 / 120s 闲置卸载）"]
-    Router --> Gemma["Gemma 4 E2B / E4B<br/>（LiteRT-LM / CoreML, Apache 2.0）<br/>场记 · 策划 · Function Calling"]
+    Input["创作者交互<br/>自然语言 / 语音 / 工具按钮"] --> Router["AI Task Router<br/>（内存守护 / 懒加载 / 120s 闲置卸载）"]
+    Router --> Gemma["Gemma 4 E2B / E4B<br/>（LiteRT-LM / CoreML, Apache 2.0）<br/>场记 · 策划 · 双引擎参考稿 · Function Calling"]
     Router --> Vision["专项视觉引擎<br/>（CoreML ANE 加速）<br/>铺色 · LT转线 · 二分 · 提姿"]
     Router --> BYOK["局域网 ComfyUI / BYOK Bridge"]
     Gemma --> Preview["ActionPlan 预览确认"]
+    Gemma --> Iso["ai_assist/ 隔离参考区<br/>（role=ai_reference_only，严禁写终稿）"]
     Preview --> Bus["Rust ActionBus<br/>（单步 UndoGroup 原子执行）"]
     Vision --> Bus
     BYOK --> Bus
+    BYOK -.-> Iso
 ```

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AiStoryboardReference xmlns="urn:about-paint-tools:cpff:1.0"
+                       chapterId="ch001"
+                       role="ai_reference_only"
+                       derivedFrom="novel/prose/zh-Hans.md">
+  <SuggestedPage number="1" layoutPreset="jp-4-panel-dramatic">
+    <PanelProposal index="1" shot="high-angle-wide">
+      <VisualBeat>Dusk wind-pressure sirens flashing on Orbital Academy north rooftop; dark magnetic clouds rolling overhead.</VisualBeat>
+      <NarrationHint>暮色尚未褪尽，轨道学院北侧天台的风压警报已经拉响第三轮。</NarrationHint>
+    </PanelProposal>
+    <PanelProposal index="2" shot="extreme-close-up-hand">
+      <VisualBeat>Ren's palm tightening around the warm, glowing hilt of the dormant Starlight Blade; faint memory flashback overlay.</VisualBeat>
+      <DialogueHint speaker="char_hero">……终于来了吗。</DialogueHint>
+    </PanelProposal>
+    <PanelProposal index="3" shot="low-angle-silhouette">
+      <VisualBeat>Azure lightning backlights Ren shifting his stance as the first glowing orbital debris pierces the clouds.</VisualBeat>
+    </PanelProposal>
+  </SuggestedPage>
+</AiStoryboardReference>

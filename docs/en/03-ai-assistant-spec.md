@@ -47,6 +47,17 @@ Turns tedious multi-menu manga chores into a single text or voice command → de
 
 > **Safety Guardrail**: Gemma 4 may only invoke whitelisted `ActionBus` schemas; every batch plan displays a **preview confirmation banner** and wraps mutations in one `UndoGroup` so a single two-finger tap reverts everything cleanly.
 
+### Capability D: Dual-Engine Novel × Manga Bidirectional AI Reference Drafts (`v1.0` Core Pillar)
+Designed for cross-media creators developing a light novel and manga adaptation in parallel (or drafting one medium first while cross-referencing the other), embedded **Gemma 4 E2B / E4B** drives offline bidirectional reference pipelines:
+- **Manga → Novel AI Prose Reference (`Manga → Novel`)**: Opens panel thumbnails, [`script/script.xml`](../../templates/SampleManga/chapters/ch001/script/script.xml) speech bubbles, `scenes/` beat sheets, and `i18n/dictionary.xml` proper nouns **read-only**, generating a side-by-side prose reference draft isolated inside `chapters/chXXX/ai_assist/manga_to_novel/` (accompanied by `meta.xml` recording source revision, timestamp, and model ID).
+- **Novel → Manga AI Storyboard/Rough Intermediate (`Novel → Manga`)**: Reads authoritative human prose in `novel/prose/*.md`, `scenes/`, and character sheets **read-only**, breaking prose beats into a structured storyboard & panel placeholder layout (`ai_storyboard_ref.xml`) isolated inside `chapters/chXXX/ai_assist/novel_to_manga/`. Optional visual rough references can later be generated into the same sandbox via built-in 3D mannequin auto-posing or an opt-in local ComfyUI BYOK bridge.
+- **Intentional Divergence Friendly**: Supports `decoupledFromManga="true"` and `<DivergenceNote>` inside `chapter.xml` (e.g., *"Novel retains an 800-word rooftop monologue; manga converts it into a silent action sequence"*), so Continuity AI only flags **unintended canon errors** without falsely rejecting intentional cross-medium adaptation.
+
+> **Hard Architectural Red Line (Non-Negotiable Isolation)**:
+> 1. Every bidirectional AI intermediate artifact MUST carry `role="ai_reference_only"` and is retained strictly as an authoring reference and creative process artifact.
+> 2. Data flows strictly one way — AI pipelines are **hard-blocked from writing into** `novel/prose/` (authoritative human novel finals) or `manuscript/` (authoritative human manga finals), enforced in both the Rust core and CI validator.
+> 3. Human-confirmed novel finals and human-confirmed manga finals remain **100% decoupled** and are never required to match each other or any AI intermediate draft.
+
 ---
 
 ## 3. Pillar Two: Specialized On-Device Vision & Graphics Tools (`v1.1` – `v1.4`)
@@ -58,7 +69,7 @@ Turns tedious multi-menu manga chores into a single text or voice command → de
 | **3. Style-Preserving Sketch Cleanup & Vectorization** | Both Tracks | Converts rough pencil sketches into editable variable-width **Vector Lineart** while preserving stroke rhythm, plus `< 4px` Gap Radar | Lightweight line extraction + MIT Bézier centerline fitting |
 | **4. 3D Light-Sphere Cel Shading Assist** | Color Webtoon / Art | Drag a 3D light sphere directly on canvas to preview & bake crisp `Multiply` cel shadows and `Screen/Glow` rim lights | On-device lineart normal estimation + Metal/`wgpu` cel shader |
 | **5. Photo/Stick-Figure Pose-to-3D Anime Mannequin** | Both Tracks | Aligns a built-in 5–8 head anime 3D figure + hand preset library from photos/doodles and syncs focal length with perspective rulers | CoreML lightweight pose estimation + Metal skeletal renderer |
-| **6. Open Local Workflow Bridge (BYOK / ComfyUI)** | Power Users | Sends active selections/lineart to a user's LAN ComfyUI or custom HTTP endpoint and imports outputs onto a new layer | Standard JSON/WebSocket plugin bridge |
+| **6. Open Local Workflow Bridge (BYOK / ComfyUI)** | Power Users | Sends active selections/lineart to a user's LAN ComfyUI or custom HTTP endpoint and imports outputs onto a new layer or `ai_assist/` reference slot | Standard JSON/WebSocket plugin bridge |
 
 ---
 
@@ -66,12 +77,14 @@ Turns tedious multi-menu manga chores into a single text or voice command → de
 
 ```mermaid
 flowchart LR
-    Input["Artist Input<br/>Text / Voice / Tool Button"] --> Router["AI Task Router<br/>(Memory Guard / Lazy Load / 120s Idle Unload)"]
-    Router --> Gemma["Gemma 4 E2B / E4B<br/>(LiteRT-LM / CoreML, Apache 2.0)<br/>Continuity · Planning · Function Calling"]
+    Input["Creator Input<br/>Text / Voice / Tool Button"] --> Router["AI Task Router<br/>(Memory Guard / Lazy Load / 120s Idle Unload)"]
+    Router --> Gemma["Gemma 4 E2B / E4B<br/>(LiteRT-LM / CoreML, Apache 2.0)<br/>Continuity · Planning · Dual-Engine Drafts · Function Calling"]
     Router --> Vision["Specialized Vision Engine<br/>(CoreML ANE)<br/>Flatting · LT · Cel Shade · Pose"]
     Router --> BYOK["LAN ComfyUI / BYOK Bridge"]
     Gemma --> Preview["ActionPlan Preview Confirmation"]
+    Gemma --> Iso["ai_assist/ Reference Sandbox<br/>(role=ai_reference_only, never writes finals)"]
     Preview --> Bus["Rust ActionBus<br/>(Atomic Single-Step UndoGroup)"]
     Vision --> Bus
     BYOK --> Bus
+    BYOK -.-> Iso
 ```

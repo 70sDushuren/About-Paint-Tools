@@ -35,6 +35,12 @@
     "project.manuscript.short": { "value": "Manuscript", "status": "source", "locked": true, "max_chars": 12 },
     "project.edition.short": { "value": "Edition", "status": "source", "locked": true, "max_chars": 12 },
     "project.fanwork_policy.full": { "value": "Fanwork & Derivative License", "status": "source", "locked": true },
-    "ai.pledge.badge": { "value": "On-Device Offline · Zero Artwork Training", "status": "source", "locked": true }
+    "ai.pledge.badge": { "value": "On-Device Offline · Zero Artwork Training", "status": "source", "locked": true },
+    "workspace.dual_studio": { "value": "Dual Studio", "status": "source", "locked": true },
+    "novel.engine.short": { "value": "Novel", "status": "source", "locked": true, "max_chars": 12 },
+    "novel.final_badge.full": { "value": "Independent Human Final (AI Never Overwrites)", "status": "source", "locked": true },
+    "novel.illustration.short": { "value": "Illustrations", "status": "source", "locked": true, "max_chars": 14 },
+    "ai.bridge.manga_to_novel": { "value": "Generate AI Novel Reference (Read-Only)", "status": "source", "locked": true },
+    "ai.bridge.novel_to_manga": { "value": "Generate AI Manga Rough (Reference Only)", "status": "source", "locked": true }
   }
 }

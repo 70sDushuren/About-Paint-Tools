@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<EditionConfig xmlns="urn:about-paint-tools:cpff:1.0" id="novel-ebook-zh">
+  <Track>novel-ebook</Track>
+  <Format>EPUB3</Format>
+  <ReadingDirection>ltr</ReadingDirection>
+  <DefaultLocale>zh-Hans</DefaultLocale>
+  <IllustrationPolicy mode="hybrid"
+                      allowMangaPick="true"
+                      allowCustomNovelArt="true"
+                      customDir="novel/illustrations"/>
+  <Typography fontFamily="Noto Serif CJK SC" rubyFurigana="true" paragraphIndentEm="2"/>
+</EditionConfig>

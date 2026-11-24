@@ -106,22 +106,25 @@ This document decomposes [04. Phased Development Roadmap](./04-roadmap.md) into 
 
 ## 3. 1.x Engineering Tasks (UI Overhaul + Embedded Gemma 4 + AI Suite)
 
-### `v1.0` — Pro UI Overhaul & Dual Workspaces
+### `v1.0` — Pro UI Overhaul + Dual-Engine Novel × Manga Parallel Studio (Core Foundation)
 
 | Task ID | Tag | Module | Engineering Scope | Acceptance Criteria |
 | :--- | :--- | :--- | :--- | :--- |
 | `T1.0-01` | `[Dual]` | `apps/ipad` | Complete Design System (OLED Dark / Studio Gray / Light themes, left/right-handed layout, crisp custom icon set) | Visual design & 5-language layout audit sign-off |
-| `T1.0-02` | `[Dual]` | `apps/ipad` | **One-Tap Dual Workspace**: *Focus Illustration/Webtoon Mode* ↔ *Manga Studio Mode* | `< 100ms` mode transition preserving viewport & active brush |
+| `T1.0-02` | `[Dual]` | `apps/ipad` | **Three-Mode Workspace**: *Focus Illustration/Webtoon* ↔ *Manga Studio* ↔ **Novel × Manga Dual-Engine Studio** | `< 100ms` mode transition preserving viewport, brush & editor cursor |
+| `T1.0-03` | `[Dual]` | `apps/ipad` + `core/manga-core` | **Built-in Light Novel Engine**: Markdown/rich prose editor, word stats, shared outline/dictionary autocomplete, 5-language novel chapters & EPUB/MD export (supporting curated manga picks or custom `novel/illustrations/`) | Single `.prj` exports independent EPUB & manga editions with `<DivergenceNote>` support |
+| `T1.0-04` | `[Local AI]` | `ai/local-llm` | **Integrate LiteRT-LM / CoreML Runtime in `v1.0`**: opt-in download/verification for **Gemma 4 E2B (8GB) / E4B (16GB)**, 120s idle auto-unload & memory-warning eviction | Fully offline inference; `0 MB` RAM when unloaded |
+| `T1.0-05` | `[Local AI]` | `ai/dual-bridge` | **Manga → Novel AI Reference Draft & Split Writer**: Gemma 4 reads manga panels + `script.xml` read-only and outputs reference prose to `ai_assist/manga_to_novel/` (`role="ai_reference_only"`), displayed alongside an independent human editor | Never writes into `novel/prose/`; AI intermediates preserved for reference history |
+| `T1.0-06` | `[Local AI]` | `ai/dual-bridge` | **Novel → Manga AI Storyboard/Rough Draft & Overlay**: Gemma 4 reads novel prose read-only and outputs storyboard/panel drafts to `ai_assist/novel_to_manga/` as an optional translucent reference overlay; human manuscript may diverge completely | Never writes into `manuscript/`; dual guard in validator & Rust core |
 
-### `v1.1` — Embedded Gemma 4 (Phase 1: Continuity & Planning) + Flatting / LT
+### `v1.1` — Gemma 4 Voice Continuity + On-Device Flatting / LT Conversion
 
 | Task ID | Tag | Module | Engineering Scope | Acceptance Criteria |
 | :--- | :--- | :--- | :--- | :--- |
-| `T1.1-01` | `[Local AI]` | `ai/local-llm` | Integrate **LiteRT-LM / CoreML runtime** with opt-in download/verification for **Gemma 4 E2B (8GB) / E4B (16GB)**, 120s idle auto-unload, and memory-warning eviction | Fully offline inference; `0 MB` RAM when unloaded |
-| `T1.1-02` | `[Local AI]` | `ai/script-supervisor` | **Intelligent Continuity Log**: wired to `.mnga` SQLite tables with cast/outfit/lighting/prop tracking & **Gemma 4 voice dictation structuring** | Voice memos parsed into structured page/panel logs within 3s |
-| `T1.1-03` | `[Local AI]` | `ai/story-planner` | **Story & Storyboard Planner**: plot-to-panel script generation (B&W page or Webtoon pacing), one-tap scaffolding, and **5-language dialogue localization** | Generated breakdown scaffolds directly into canvas panel folders |
-| `T1.1-04` | `[Color Webtoon]` | `ai/vision` | **On-Device Semantic Smart Flatting**: quantized CoreML `MobileSAM`/`SAM2-Tiny` multi-layer skin/hair/outfit fill with anti-halo expansion | Typical single-character anime lineart flatted in 3–6s offline |
-| `T1.1-05` | `[B&W Manga]` | `ai/vision` | **Offline Photo/3D-to-Manga LT Conversion**: splits into editable lineart + procedural LPI screentone + solid shadow layers | 2K photo converted offline in `< 5s` with 3 fully editable layers |
+| `T1.1-01` | `[Local AI]` | `ai/script-supervisor` | **Intelligent Continuity Log**: wired to `.mnga` / `.prj` logs, respecting `<DivergenceNote>` intentional adaptations & **Gemma 4 voice dictation structuring** | Voice memos parsed into structured page/panel logs within 3s |
+| `T1.1-02` | `[Local AI]` | `ai/story-planner` | **5-Language Dialogue & Novel Localization Polish**: honors `i18n/dictionary.xml` glossary while strictly protecting `locked="true"` human lines | `100%` glossary adherence; zero overwrites of locked entries |
+| `T1.1-03` | `[Color Webtoon]` | `ai/vision` | **On-Device Semantic Smart Flatting**: quantized CoreML `MobileSAM`/`SAM2-Tiny` multi-layer skin/hair/outfit fill with anti-halo expansion | Typical single-character anime lineart flatted in 3–6s offline |
+| `T1.1-04` | `[B&W Manga]` | `ai/vision` | **Offline Photo/3D-to-Manga LT Conversion**: splits into editable lineart + procedural LPI screentone + solid shadow layers | 2K photo converted offline in `< 5s` with 3 fully editable layers |
 
 ### `v1.2` — Gemma 4 Workflow Driver + Sketch Cleanup & Cel Shading
 

@@ -35,6 +35,12 @@
     "project.manuscript.short": { "value": "原稿", "status": "source", "locked": true, "max_chars": 12 },
     "project.edition.short": { "value": "发行版", "status": "source", "locked": true, "max_chars": 12 },
     "project.fanwork_policy.full": { "value": "同人与二次创作授权声明", "status": "source", "locked": true },
-    "ai.pledge.badge": { "value": "端侧离线 · 零画作上传训练", "status": "source", "locked": true }
+    "ai.pledge.badge": { "value": "端侧离线 · 零画作上传训练", "status": "source", "locked": true },
+    "workspace.dual_studio": { "value": "小说×漫画双引擎", "status": "source", "locked": true },
+    "novel.engine.short": { "value": "小说", "status": "source", "locked": true, "max_chars": 12 },
+    "novel.final_badge.full": { "value": "人工独立终稿（AI 永不覆盖）", "status": "source", "locked": true },
+    "novel.illustration.short": { "value": "小说插图", "status": "source", "locked": true, "max_chars": 14 },
+    "ai.bridge.manga_to_novel": { "value": "生成小说 AI 参考稿（仅作对照）", "status": "source", "locked": true },
+    "ai.bridge.novel_to_manga": { "value": "生成漫画 AI 中间稿（仅作参考）", "status": "source", "locked": true }
   }
 }

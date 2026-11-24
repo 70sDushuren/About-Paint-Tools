@@ -138,9 +138,22 @@
 </DialogueLocale>
 ```
 
-- `status="ai_draft"`：仅存在于 `ai_assist/completion_queue.xml` 中的未签收自动补全草案。
+- `status="ai_draft"`：仅存在于 `ai_assist/` 中的未签收自动补全草案。
 - `status="auto" locked="false"`：已入库但允许自动翻译脚本随源文更新的条目。
 - `status="tuned" locked="true"`：经人工精修或针对气泡字数微调的条目，**任何自动补全或翻译同步工具严禁覆盖**。
+
+### 4.4 小说创作 × 漫画创作「双引擎并进」与双向 AI 中间产物隔离规范（`v1.0` 基础能力）
+
+同一工程下，**小说引擎（Novel Engine）**与**漫画引擎（Manga Engine）**共享唯一主干（`<ProjectName>.prj`、`outline/`、`bible/`、`i18n/dictionary.xml` 与 `chapters/chXXX/scenes/`），但各自拥有完全独立的人工终稿主权：
+
+- **独立人工小说目录（`chapters/chXXX/novel/`）**：
+  - `novel/prose/{zh-Hans,en,zh-Hant,yue-Hant,es}.md`：作者确认的小说终稿正文（`status="human_authoritative"`），**无需与漫画稿或 AI 小说参考稿一致**。
+  - `novel/illustrations/`：轻小说专属插画目录——在配置轻小说发行版（`editions/edition_novel_epub.xml`）时，插图既可**自选精选漫画原稿页（`source="manga-pick"`）**，也可**单独设计绘制专属轻小说插图（`source="novel-custom"`）**。
+- **双线有意分歧声明（`<DivergenceNote>`）**：在 `chapter.xml` 的 `<Novel decoupledFromManga="true">` 节点中记录小说版与漫画版的刻意改编差异，场记 AI 巡检会尊重作者声明的媒介分歧，仅提示无意的设定穿帮。
+- **双向 AI 中间产物隔离红线（硬性约束）**：
+  - **漫画 → 小说 AI 中间稿** 严格存放于 `chapters/chXXX/ai_assist/manga_to_novel/`（含 `meta.xml` 与参考散文草稿，强制标记 `role="ai_reference_only"`）；
+  - **小说 → 漫画 AI 中间稿** 严格存放于 `chapters/chXXX/ai_assist/novel_to_manga/`（含 `meta.xml` 与 AI 分镜/大样中间稿，强制标记 `role="ai_reference_only"`）；
+  - **红线**：AI 桥接管线对漫画原稿与小说正文均为单向只读，**严禁任何自动化流程越界写入 `novel/prose/` 或 `manuscript/` 人工终稿目录**；纯文本 AI 中间稿可随 Git 留存创作脉络，重型参考图走 Git LFS 且可随时归档清理。
 
 ---
 

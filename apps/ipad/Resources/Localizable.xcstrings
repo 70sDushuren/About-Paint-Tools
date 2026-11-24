@@ -126,6 +126,88 @@
       },
       "comment": "Compact UI label budget: max 12 chars"
     },
+    "ai.bridge.manga_to_novel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generate AI Novel Reference (Read-Only)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成小说 AI 参考稿（仅作对照）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "產生小說 AI 參考稿（僅供對照）"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成小說 AI 參考稿（只供對照）"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成小說 AI 參考稿（只供對照）"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generar borrador IA de novela (solo ref.)"
+          }
+        }
+      }
+    },
+    "ai.bridge.novel_to_manga": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generate AI Manga Rough (Reference Only)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成漫画 AI 中间稿（仅作参考）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "產生漫畫 AI 中間稿（僅供參考）"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成漫畫 AI 中間稿（只供參考）"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成漫畫 AI 中間稿（只供參考）"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generar boceto IA de manga (solo ref.)"
+          }
+        }
+      }
+    },
     "ai.continuity.short": {
       "extractionState": "manual",
       "localizations": {
@@ -374,6 +456,131 @@
           }
         }
       }
+    },
+    "novel.engine.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Novel"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小说"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小說"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小說"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小說"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Novela"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 12 chars"
+    },
+    "novel.final_badge.full": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Independent Human Final (AI Never Overwrites)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "人工独立终稿（AI 永不覆盖）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "人工獨立完稿（AI 永不覆寫）"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "人工獨立終稿（AI 絕唔會覆寫）"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "人工獨立終稿（AI 絕唔會覆寫）"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Final humano independiente (la IA nunca sobrescribe)"
+          }
+        }
+      }
+    },
+    "novel.illustration.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Illustrations"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小说插图"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小說插圖"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小說插圖"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小說插圖"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ilustración"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 14 chars"
     },
     "panel.layers.title": {
       "extractionState": "manual",
@@ -1325,6 +1532,47 @@
           "stringUnit": {
             "state": "translated",
             "value": "Borrador vectorial de intersecciones"
+          }
+        }
+      }
+    },
+    "workspace.dual_studio": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dual Studio"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小说×漫画双引擎"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小說×漫畫雙引擎"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小說×漫畫雙引擎"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小說×漫畫雙引擎"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estudio dual"
           }
         }
       }

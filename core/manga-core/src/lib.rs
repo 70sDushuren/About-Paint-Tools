@@ -35,8 +35,9 @@ pub use layer::{blend_rgba, BlendMode, LayerId, LayerKind, LayerNode, LayerStack
 pub use panel::{PanelFrame, PanelId, PanelLayout, PanelPolygon};
 pub use preset::{CanvasPreset, CanvasSpec, MangaPageGuides, ProductionTrack, WebtoonSliceSpec};
 pub use project::{
-    resolve_prj_file, ChapterRef, CreativeProjectManifest, EditionRef, PrjResolution,
-    ReadingDirection, WorkType, CPFF_SCHEMA_VERSION, CPFF_XML_NAMESPACE,
+    resolve_prj_file, AiBridgeArtifact, ChapterRef, CreativeEngineMode, CreativeProjectManifest,
+    EditionRef, NovelIllustrationMode, PrjResolution, ReadingDirection, WorkType,
+    CPFF_SCHEMA_VERSION, CPFF_XML_NAMESPACE,
 };
 pub use ruler::RulerKind;
 pub use screentone::{ScreentoneSpec, TonePattern};

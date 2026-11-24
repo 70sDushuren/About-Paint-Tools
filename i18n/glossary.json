@@ -199,7 +199,61 @@
       "zh-Hant": "發行版本",
       "yue-Hant": "發行版本",
       "es": "Edición",
-      "note": "Target release profile (print / Webtoon / intl)"
+      "note": "Target release profile (print / Webtoon / intl / novel EPUB)"
+    },
+    {
+      "id": "novel_engine",
+      "en": "Light Novel Engine",
+      "zh-Hans": "轻小说创作引擎",
+      "zh-Hant": "輕小說創作引擎",
+      "yue-Hant": "輕小說創作引擎",
+      "es": "Motor de novela",
+      "note": "Parallel light novel prose & illustration engine in Dual Studio"
+    },
+    {
+      "id": "ai_ref_draft",
+      "en": "AI Reference Draft",
+      "zh-Hans": "AI 参考稿",
+      "zh-Hant": "AI 參考稿",
+      "yue-Hant": "AI 參考稿",
+      "es": "Borrador ref. IA",
+      "note": "Intermediate AI artifact tagged role=ai_reference_only inside ai_assist/"
+    },
+    {
+      "id": "manga_to_novel",
+      "en": "Manga → Novel Ref",
+      "zh-Hans": "漫画→小说参考稿",
+      "zh-Hant": "漫畫→小說參考稿",
+      "yue-Hant": "漫畫→小說參考稿",
+      "es": "Manga → Novela",
+      "note": "Offline Gemma 4 prose reference generated from manga panels/script"
+    },
+    {
+      "id": "novel_to_manga",
+      "en": "Novel → Manga Ref",
+      "zh-Hans": "小说→漫画中间稿",
+      "zh-Hant": "小說→漫畫中間稿",
+      "yue-Hant": "小說→漫畫中間稿",
+      "es": "Novela → Manga",
+      "note": "Offline Gemma 4 storyboard/rough intermediate generated from novel prose"
+    },
+    {
+      "id": "independent_final",
+      "en": "Independent Final",
+      "zh-Hans": "人工独立终稿",
+      "zh-Hant": "人工獨立完稿",
+      "yue-Hant": "人工獨立終稿",
+      "es": "Final independiente",
+      "note": "Decoupled human-authoritative novel or manga final; never overwritten by AI"
+    },
+    {
+      "id": "novel_illustration",
+      "en": "Novel Illustration",
+      "zh-Hans": "小说插图",
+      "zh-Hant": "小說插圖",
+      "yue-Hant": "小說插圖",
+      "es": "Ilustración",
+      "note": "Self-selected manga pick or custom-designed artwork for light novel editions"
     }
   ]
 }
