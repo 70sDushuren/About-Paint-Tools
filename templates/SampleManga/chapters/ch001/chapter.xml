@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ChapterManifest xmlns="urn:about-paint-tools:cpff:1.0"
+                 id="ch001"
+                 number="1"
+                 titleKey="ch001.title"
+                 status="drafting">
+  <Scenes>
+    <Scene id="sc001" title="Rooftop Storm" src="scenes/sc001_rooftop.md"/>
+  </Scenes>
+  <Script src="script/script.xml"/>
+  <Pages>
+    <Page number="1"
+          stage="storyboard"
+          storyboardDir="storyboard"
+          manuscriptDir="manuscript"/>
+  </Pages>
+  <AiAssist>
+    <CompletionQueue src="ai_assist/completion_queue.xml"/>
+    <ReviewPins src="ai_assist/review_pins.xml"/>
+  </AiAssist>
+</ChapterManifest>

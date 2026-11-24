@@ -31,6 +31,11 @@
     "ai.planner.short": { "value": "Guion/Plan", "status": "tuned", "locked": true, "max_chars": 14 },
     "ai.macro.short": { "value": "Macros IA", "status": "tuned", "locked": true, "max_chars": 12 },
     "ai.voice_note.full": { "value": "Nota de voz de continuidad (Gemma 4 local)", "status": "tuned", "locked": true },
+    "project.open_prj": { "value": "Abrir proyecto (.prj)", "status": "auto", "locked": false },
+    "project.storyboard.short": { "value": "Boceto", "status": "tuned", "locked": true, "max_chars": 12 },
+    "project.manuscript.short": { "value": "Manuscrito", "status": "tuned", "locked": true, "max_chars": 12 },
+    "project.edition.short": { "value": "Edición", "status": "auto", "locked": false, "max_chars": 12 },
+    "project.fanwork_policy.full": { "value": "Licencia fanwork y derivados", "status": "tuned", "locked": true },
     "ai.pledge.badge": { "value": "Local sin conexión · Sin entrenar con tus obras", "status": "tuned", "locked": true }
   }
 }

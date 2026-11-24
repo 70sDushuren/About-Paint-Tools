@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<EditionConfig xmlns="urn:about-paint-tools:cpff:1.0" id="jp-b4-print">
+  <Track>bw-manga</Track>
+  <CanvasPreset>B4_600DPI</CanvasPreset>
+  <ReadingDirection>rtl</ReadingDirection>
+  <DefaultLocale>zh-Hans</DefaultLocale>
+  <PrintSpec bleedMm="5" defaultScreentoneLpi="60" screentoneAngleDeg="45" colorSpace="Grayscale-1bit"/>
+</EditionConfig>

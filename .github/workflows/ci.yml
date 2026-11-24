@@ -19,6 +19,8 @@ jobs:
         run: python3 scripts/i18n_check.py
       - name: Verify iPadOS Localizable.xcstrings is in sync
         run: python3 scripts/i18n_sync.py --check-xcstrings
+      - name: Validate CPFF v1.0 SampleManga project template
+        run: python3 scripts/prj_validate.py templates/SampleManga
 
   rust-core:
     name: Rust Core Engine Tests

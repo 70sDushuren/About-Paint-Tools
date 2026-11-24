@@ -30,6 +30,11 @@
     "ai.planner.short": { "value": "Planner", "status": "source", "locked": true, "max_chars": 14 },
     "ai.macro.short": { "value": "Macros", "status": "source", "locked": true, "max_chars": 12 },
     "ai.voice_note.full": { "value": "Voice Continuity Note (Local Gemma 4)", "status": "source", "locked": true },
+    "project.open_prj": { "value": "Open Project (.prj)", "status": "source", "locked": true },
+    "project.storyboard.short": { "value": "Rough", "status": "source", "locked": true, "max_chars": 12 },
+    "project.manuscript.short": { "value": "Manuscript", "status": "source", "locked": true, "max_chars": 12 },
+    "project.edition.short": { "value": "Edition", "status": "source", "locked": true, "max_chars": 12 },
+    "project.fanwork_policy.full": { "value": "Fanwork & Derivative License", "status": "source", "locked": true },
     "ai.pledge.badge": { "value": "On-Device Offline · Zero Artwork Training", "status": "source", "locked": true }
   }
 }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CompletionQueue xmlns="urn:about-paint-tools:cpff:1.0" chapterId="ch001">
+  <Proposal id="prop-001"
+            engine="gemma-4-e2b-local"
+            target="script/script.xml#p01_03"
+            status="ai_draft"
+            locked="false">
+    <Summary>Suggest Panel 3: Dutch-angle diagonal cut showing the Starlight Blade igniting across the gutter.</Summary>
+  </Proposal>
+</CompletionQueue>

@@ -30,6 +30,11 @@
     "ai.planner.short": { "value": "策划", "status": "source", "locked": true, "max_chars": 14 },
     "ai.macro.short": { "value": "批处理", "status": "source", "locked": true, "max_chars": 12 },
     "ai.voice_note.full": { "value": "语音场记速记（本地 Gemma 4）", "status": "source", "locked": true },
+    "project.open_prj": { "value": "打开创作工程（.prj）", "status": "source", "locked": true },
+    "project.storyboard.short": { "value": "大样", "status": "source", "locked": true, "max_chars": 12 },
+    "project.manuscript.short": { "value": "原稿", "status": "source", "locked": true, "max_chars": 12 },
+    "project.edition.short": { "value": "发行版", "status": "source", "locked": true, "max_chars": 12 },
+    "project.fanwork_policy.full": { "value": "同人与二次创作授权声明", "status": "source", "locked": true },
     "ai.pledge.badge": { "value": "端侧离线 · 零画作上传训练", "status": "source", "locked": true }
   }
 }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DialogueLocale xmlns="urn:about-paint-tools:cpff:1.0" locale="zh-Hant" preferredSource="zh-Hans">
+  <Line key="vol01.title" status="auto" locked="false">第一卷：塔頂風暴</Line>
+  <Line key="ch001.title" status="auto" locked="false">第 1 話：天台覺醒</Line>
+  <Line key="ch001.p01.b01" speaker="char_hero" status="tuned" locked="true">磁暴已經逼近頂樓了！</Line>
+  <Line key="ch001.p01.b02" speaker="char_hero" status="auto" locked="false">現在絕不能退後。</Line>
+</DialogueLocale>

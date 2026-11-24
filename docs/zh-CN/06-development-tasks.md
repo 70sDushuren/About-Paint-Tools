@@ -89,6 +89,8 @@
 | `T0.7-02` | `[双线]` | `core/manga-io` | Clean-room MIT 多层 PSD 编解码（图层树、混合模式、不透明度、剪切蒙版与文字元数据） | 导出 PSD 在 CSP / Photoshop 打开视觉一致 |
 | `T0.7-03` | `[双线]` | `core/manga-core` | **确定性 `ActionBus` 命令总线**：定义白名单命令集、非破坏性 Dry-Run 预览与单步 `UndoGroup` 原子撤回 | ✅ `action_bus.rs`（`ActionBus` + `ProjectDocument` + Gemma 4 批处理单测）已落地 |
 | `T0.7-04` | `[双线]` | `core/manga-io` | 轻量过程回放（Timelapse）关键帧采集与后台 MP4 导出 | 录制对绘制帧率影响 `< 2%` |
+| `T0.7-05` | `[双线]` | `core/manga-core` | **CPFF v1.0 创作工程框架**：同名 `.prj` XML 读写、Git Clone 改名回退解析、多发行版与章节索引（见 [07. 创作工程文件框架 V1.0](./07-creative-project-framework-v1.md)） | ✅ `project.rs` + `templates/SampleManga/` 已落地并通过单测 |
+| `T0.7-06` | `[双线]` | `scripts/` + `templates/` | GitHub / GitLab 兼容模板（`.gitattributes` Git LFS / `.gitignore` / 版权与同人声明）与自动化校验器 `prj_validate.py` | ✅ 已落地并接入 GitHub Actions CI |
 
 ### `v0.8` – `v0.9` — Apple Pencil Pro、5 语言打磨与双线极限 Beta
 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DialogueLocale xmlns="urn:about-paint-tools:cpff:1.0" locale="en" role="canonical_source">
+  <Line key="vol01.title" status="source" locked="true">Volume 1: Storm Over the Spire</Line>
+  <Line key="ch001.title" status="source" locked="true">Chapter 1: Rooftop Awakening</Line>
+  <Line key="ch001.p01.b01" speaker="char_hero" status="source" locked="true">The storm is closing in on the rooftop!</Line>
+  <Line key="ch001.p01.b02" speaker="char_hero" status="source" locked="true">We can't fall back now.</Line>
+</DialogueLocale>

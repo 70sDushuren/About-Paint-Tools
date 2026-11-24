@@ -155,6 +155,51 @@
       "yue-Hant": "AI 批處理驅動",
       "es": "Macros IA",
       "note": "Gemma 4 Function-Calling workflow engine over ActionBus"
+    },
+    {
+      "id": "project_file",
+      "en": "Project Manifest (.prj)",
+      "zh-Hans": "创作工程文件 (.prj)",
+      "zh-Hant": "創作專案檔 (.prj)",
+      "yue-Hant": "創作項目檔 (.prj)",
+      "es": "Archivo de proyecto (.prj)",
+      "note": "CPFF v1.0 root XML manifest"
+    },
+    {
+      "id": "storyboard_rough",
+      "en": "Storyboard / Rough",
+      "zh-Hans": "漫画稿大样",
+      "zh-Hant": "分鏡草稿大樣",
+      "yue-Hant": "分鏡大樣",
+      "es": "Boceto / Storyboard",
+      "note": "Rough manga layout (Name)"
+    },
+    {
+      "id": "manuscript_final",
+      "en": "Final Manuscript",
+      "zh-Hans": "漫画原稿",
+      "zh-Hant": "完稿原稿",
+      "yue-Hant": "正式原稿",
+      "es": "Manuscrito final",
+      "note": "Production-ready comic manuscript"
+    },
+    {
+      "id": "fanwork_policy",
+      "en": "Fanwork License",
+      "zh-Hans": "同人授权声明",
+      "zh-Hant": "同人授權聲明",
+      "yue-Hant": "同人授權聲明",
+      "es": "Licencia fanwork",
+      "note": "Derivative / doujinshi policy declaration"
+    },
+    {
+      "id": "edition",
+      "en": "Edition",
+      "zh-Hans": "发行版本",
+      "zh-Hant": "發行版本",
+      "yue-Hant": "發行版本",
+      "es": "Edición",
+      "note": "Target release profile (print / Webtoon / intl)"
     }
   ]
 }

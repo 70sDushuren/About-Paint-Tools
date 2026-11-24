@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TableOfContents xmlns="urn:about-paint-tools:cpff:1.0">
+  <Volume number="1" titleKey="vol01.title">
+    <ChapterRef id="ch001" number="1" status="drafting" src="chapters/ch001/chapter.xml"/>
+  </Volume>
+</TableOfContents>

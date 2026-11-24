@@ -108,6 +108,7 @@ All project documents are maintained in 1:1 mirrored **English** and **Simplifie
 | 04. Phased Development Roadmap (`0.1`–`1.x`) | [04-roadmap.md](./docs/en/04-roadmap.md) | [04-roadmap.md](./docs/zh-CN/04-roadmap.md) |
 | 05. 5-Language i18n & Layout Guide | [05-i18n-and-l10n-guide.md](./docs/en/05-i18n-and-l10n-guide.md) | [05-i18n-and-l10n-guide.md](./docs/zh-CN/05-i18n-and-l10n-guide.md) |
 | 06. Detailed Engineering Task Breakdown (WBS) | [06-development-tasks.md](./docs/en/06-development-tasks.md) | [06-development-tasks.md](./docs/zh-CN/06-development-tasks.md) |
+| 07. Creative Project File Framework V1.0 (`.prj` / Git) | [07-creative-project-framework-v1.md](./docs/en/07-creative-project-framework-v1.md) | [07-creative-project-framework-v1.md](./docs/zh-CN/07-creative-project-framework-v1.md) |
 
 ---
 
@@ -119,29 +120,36 @@ About-Paint-Tools/
 ├── README.md                    # English project homepage
 ├── README.zh-CN.md              # Simplified Chinese project homepage
 ├── docs/
-│   ├── en/                      # Canonical English documentation
-│   └── zh-CN/                   # Canonical Simplified Chinese documentation
+│   ├── en/                      # Canonical English documentation (01–07)
+│   └── zh-CN/                   # Canonical Simplified Chinese documentation (01–07)
+├── templates/
+│   └── SampleManga/             # Reference CPFF v1.0 project (SampleManga.prj + Git LFS)
 ├── i18n/
 │   ├── glossary.json            # 5-language art & manga terminology glossary
 │   └── locales/                 # en, zh-Hans (sources) + zh-Hant, yue-Hant, es
 ├── scripts/
-│   └── i18n_check.py            # CI parity, placeholder & UI length guardrails
-├── core/                        # v0.1 Rust cross-platform canvas core (MIT)
-│   └── manga-core/              # Sparse tiles, stroke stabilizer, CoW undo
+│   ├── i18n_check.py            # CI parity, placeholder & UI length guardrails
+│   ├── i18n_sync.py             # Glossary-locked sync & Xcode .xcstrings exporter
+│   └── prj_validate.py          # CPFF v1.0 .prj XML & Git LFS validator
+├── core/                        # Rust cross-platform canvas & project core (MIT)
+│   └── manga-core/              # Tiles, layers, fill, vectors, panels, ActionBus, .prj
 └── apps/
-    └── ipad/                    # v0.1 iPadOS native SwiftUI/UIKit shell scaffold
+    └── ipad/                    # iPadOS native SwiftUI/UIKit shell & FFI bridge
 ```
 
 ---
 
-## Quick Verification (v0.1 Foundation)
+## Quick Verification
 
 ```bash
-# 1. Validate 5-language localization parity, placeholders, and Spanish/UI length budgets
-python3 scripts/i18n_check.py
+# 1. Validate 5-language localization, .xcstrings sync, and bilingual docs
+python3 scripts/i18n_check.py && python3 scripts/i18n_sync.py --check-xcstrings
 
-# 2. Run v0.1 Rust core unit tests (sparse tile store, rope stabilizer, CoW undo)
-cargo test --manifest-path core/Cargo.toml
+# 2. Validate reference CPFF v1.0 creative project (SampleManga.prj + Git LFS)
+python3 scripts/prj_validate.py templates/SampleManga
+
+# 3. Run Rust core unit tests
+cargo test --manifest-path core/Cargo.toml --all-targets
 ```
 
 ---

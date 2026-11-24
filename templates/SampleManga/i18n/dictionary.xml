@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ContentDictionary xmlns="urn:about-paint-tools:cpff:1.0">
+  <Term id="char_hero" category="character">
+    <Value lang="en">Ren Hoshikawa</Value>
+    <Value lang="zh-Hans">林星河</Value>
+    <Value lang="zh-Hant">林星河</Value>
+    <Value lang="yue-Hant">林星河</Value>
+    <Value lang="es">Ren Hoshikawa</Value>
+  </Term>
+  <Term id="weapon_starlight" category="artifact">
+    <Value lang="en">Starlight Blade</Value>
+    <Value lang="zh-Hans">星光之刃</Value>
+    <Value lang="zh-Hant">星光之刃</Value>
+    <Value lang="yue-Hant">星光之刃</Value>
+    <Value lang="es">Hoja Estelar</Value>
+  </Term>
+  <Term id="sfx_thunder" category="sfx">
+    <Value lang="en">KRAAAK!</Value>
+    <Value lang="zh-Hans">轰隆——！</Value>
+    <Value lang="zh-Hant">轟隆——！</Value>
+    <Value lang="yue-Hant">轟隆——！</Value>
+    <Value lang="es">¡CRAAACK!</Value>
+  </Term>
+</ContentDictionary>

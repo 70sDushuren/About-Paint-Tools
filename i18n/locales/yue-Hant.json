@@ -32,6 +32,11 @@
     "ai.planner.short": { "value": "策劃", "status": "auto", "locked": false, "max_chars": 14 },
     "ai.macro.short": { "value": "批處理", "status": "auto", "locked": false, "max_chars": 12 },
     "ai.voice_note.full": { "value": "語音記場記（本機 Gemma 4）", "status": "tuned", "locked": true },
+    "project.open_prj": { "value": "開啟創作項目（.prj）", "status": "tuned", "locked": true },
+    "project.storyboard.short": { "value": "大樣", "status": "auto", "locked": false, "max_chars": 12 },
+    "project.manuscript.short": { "value": "原稿", "status": "auto", "locked": false, "max_chars": 12 },
+    "project.edition.short": { "value": "發行版", "status": "auto", "locked": false, "max_chars": 12 },
+    "project.fanwork_policy.full": { "value": "同人及二次創作授權聲明", "status": "tuned", "locked": true },
     "ai.pledge.badge": { "value": "本機離線 · 絕唔會上傳畫作訓練", "status": "tuned", "locked": true }
   }
 }

@@ -15,6 +15,7 @@ pub mod fill;
 pub mod layer;
 pub mod panel;
 pub mod preset;
+pub mod project;
 pub mod ruler;
 pub mod screentone;
 pub mod stroke;
@@ -33,6 +34,10 @@ pub use fill::{close_gap_expand_fill, FillOptions, FillResult};
 pub use layer::{blend_rgba, BlendMode, LayerId, LayerKind, LayerNode, LayerStack};
 pub use panel::{PanelFrame, PanelId, PanelLayout, PanelPolygon};
 pub use preset::{CanvasPreset, CanvasSpec, MangaPageGuides, ProductionTrack, WebtoonSliceSpec};
+pub use project::{
+    resolve_prj_file, ChapterRef, CreativeProjectManifest, EditionRef, PrjResolution,
+    ReadingDirection, WorkType, CPFF_SCHEMA_VERSION, CPFF_XML_NAMESPACE,
+};
 pub use ruler::RulerKind;
 pub use screentone::{ScreentoneSpec, TonePattern};
 pub use stroke::{RopeStabilizer, StrokePoint};

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ContinuityLog xmlns="urn:about-paint-tools:cpff:1.0">
+  <Entry id="1" chapter="1" page="1" panel="1" source="manual">
+    <Characters>char_hero</Characters>
+    <OutfitState>White school jacket intact, silver clip on left collar</OutfitState>
+    <LightingDir>Top-left storm backlight</LightingDir>
+    <PropsNote>Holds dormant hilt in right hand</PropsNote>
+  </Entry>
+</ContinuityLog>

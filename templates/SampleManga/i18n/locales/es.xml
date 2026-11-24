@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DialogueLocale xmlns="urn:about-paint-tools:cpff:1.0" locale="es" preferredSource="en">
+  <Line key="vol01.title" status="tuned" locked="true">Volumen 1: Tormenta en la torre</Line>
+  <Line key="ch001.title" status="tuned" locked="true">Capítulo 1: Despertar en la azotea</Line>
+  <Line key="ch001.p01.b01" speaker="char_hero" status="tuned" locked="true" maxChars="42">¡La tormenta se acerca a la azotea!</Line>
+  <Line key="ch001.p01.b02" speaker="char_hero" status="auto" locked="false">No podemos retroceder ahora.</Line>
+</DialogueLocale>

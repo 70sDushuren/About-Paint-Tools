@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CreativeProject xmlns="urn:about-paint-tools:cpff:1.0"
+                 schemaVersion="1.0"
+                 id="prj-sample-manga-001">
+
+  <Metadata>
+    <Title lang="en">SampleManga: Starlight Blade</Title>
+    <Title lang="zh-Hans">示例工程：星光之刃</Title>
+    <Authors>
+      <Author role="creator" handle="@70sDushuren">About-Paint-Tools Sample Creator</Author>
+    </Authors>
+    <Genre>Anime Action / Sci-Fi</Genre>
+    <WorkType>original</WorkType>
+    <ReadingDirection default="rtl"/>
+    <PrimaryTrack>dual</PrimaryTrack>
+    <CreatedAt>2026-11-24T00:00:00Z</CreatedAt>
+  </Metadata>
+
+  <Declarations>
+    <Readme lang="en" src="README.md"/>
+    <Readme lang="zh-Hans" src="README.zh-CN.md"/>
+    <License spdx="CC-BY-NC-SA-4.0" src="LICENSE"/>
+    <FormatSpec src="declarations/FORMAT_AND_EDITION.md"/>
+    <FanworkPolicy allowDerivative="true" commercialAllowed="false" aiTrainingOptOut="true"
+                   src="declarations/FANWORK_LICENSE.md"/>
+    <AiDisclosure src="declarations/AI_DISCLOSURE.md"/>
+  </Declarations>
+
+  <Localization>
+    <SourceLocales>
+      <Locale code="en" src="i18n/locales/en.xml"/>
+      <Locale code="zh-Hans" src="i18n/locales/zh-Hans.xml"/>
+    </SourceLocales>
+    <TargetLocales>
+      <Locale code="zh-Hant" preferredSource="zh-Hans" src="i18n/locales/zh-Hant.xml"/>
+      <Locale code="yue-Hant" fallback="zh-HK" preferredSource="zh-Hans" src="i18n/locales/yue-Hant.xml"/>
+      <Locale code="es" preferredSource="en" src="i18n/locales/es.xml"/>
+    </TargetLocales>
+    <Dictionary src="i18n/dictionary.xml"/>
+  </Localization>
+
+  <Editions>
+    <Edition id="jp-b4-print" track="bw-manga" preset="B4_600DPI" reading="rtl"
+             locale="zh-Hans" config="editions/edition_jp_b4_print.xml"/>
+    <Edition id="webtoon-color" track="color-webtoon" preset="WEBTOON_800" reading="vertical-scroll"
+             locale="zh-Hans" config="editions/edition_webtoon_color.xml"/>
+    <Edition id="intl-es-digital" track="color-webtoon" preset="WEBTOON_800" reading="vertical-scroll"
+             locale="es" config="editions/edition_intl_digital.xml"/>
+  </Editions>
+
+  <StoryStructure>
+    <Outline synopsis="outline/synopsis.md" toc="outline/toc.xml"/>
+    <Bible world="bible/world.md" continuity="bible/continuity/continuity_log.xml"/>
+    <Chapters>
+      <Chapter id="ch001" number="1" status="drafting" src="chapters/ch001/chapter.xml"/>
+    </Chapters>
+  </StoryStructure>
+
+  <Repository vcs="git" lfsEnabled="true" remoteHint="github-or-gitlab">
+    <TextDiffPaths>*.prj,*.xml,*.md,*.json</TextDiffPaths>
+    <LfsBinaryPaths>*.mnga,*.psd,*.tiff,*.png,*.glb</LfsBinaryPaths>
+  </Repository>
+
+</CreativeProject>

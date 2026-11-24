@@ -108,6 +108,7 @@ flowchart TD
 | 04. 分阶段开发规划（`v0.1`–`v1.x`） | [04-roadmap.md](./docs/zh-CN/04-roadmap.md) | [04-roadmap.md](./docs/en/04-roadmap.md) |
 | 05. 5 语言国际化与界面适配规范 | [05-i18n-and-l10n-guide.md](./docs/zh-CN/05-i18n-and-l10n-guide.md) | [05-i18n-and-l10n-guide.md](./docs/en/05-i18n-and-l10n-guide.md) |
 | 06. 开发任务细化清单（WBS） | [06-development-tasks.md](./docs/zh-CN/06-development-tasks.md) | [06-development-tasks.md](./docs/en/06-development-tasks.md) |
+| 07. 创作工程文件框架 V1.0（`.prj` / Git） | [07-creative-project-framework-v1.md](./docs/zh-CN/07-creative-project-framework-v1.md) | [07-creative-project-framework-v1.md](./docs/en/07-creative-project-framework-v1.md) |
 
 ---
 
@@ -119,29 +120,36 @@ About-Paint-Tools/
 ├── README.md                    # 英文主页（GitHub 默认入口）
 ├── README.zh-CN.md              # 简体中文主页
 ├── docs/
-│   ├── zh-CN/                   # 简体中文基准文档
-│   └── en/                      # 英文基准文档（1:1 镜像）
+│   ├── zh-CN/                   # 简体中文基准文档（01–07）
+│   └── en/                      # 英文基准文档（1:1 镜像，01–07）
+├── templates/
+│   └── SampleManga/             # CPFF v1.0 标准示例创作工程（SampleManga.prj + Git LFS）
 ├── i18n/
 │   ├── glossary.json            # 二次元绘画专业术语 5 语词典
 │   └── locales/                 # en, zh-Hans（双基准）+ zh-Hant, yue-Hant, es
 ├── scripts/
-│   └── i18n_check.py            # CI 词条完整性、占位符与西语长度预警校验
-├── core/                        # v0.1 Rust 跨平台画布核心引擎（MIT）
-│   └── manga-core/              # 稀疏分块画布、拉绳防抖、写时复制撤销栈
+│   ├── i18n_check.py            # CI 词条完整性、占位符与西语长度预警校验
+│   ├── i18n_sync.py             # 术语锁定同步与 iPadOS .xcstrings 导出
+│   └── prj_validate.py          # CPFF v1.0 .prj XML 与 Git LFS 校验器
+├── core/                        # Rust 跨平台画布与创作工程核心引擎（MIT）
+│   └── manga-core/              # 瓦片、图层、填色、矢量、分格、ActionBus、.prj 解析
 └── apps/
-    └── ipad/                    # v0.1 iPadOS 原生 SwiftUI/UIKit 壳骨架
+    └── ipad/                    # iPadOS 原生 SwiftUI/UIKit 壳与 FFI 桥接
 ```
 
 ---
 
-## 快速本地校验（v0.1 基座）
+## 快速本地校验
 
 ```bash
-# 1. 校验 5 语言词条对齐、占位符一致性与西语短文案长度预算
-python3 scripts/i18n_check.py
+# 1. 校验 5 语言词条、.xcstrings 同步与中英双语文档镜像
+python3 scripts/i18n_check.py && python3 scripts/i18n_sync.py --check-xcstrings
 
-# 2. 运行 v0.1 Rust 核心引擎单元测试（稀疏瓦片、拉绳防抖、写时复制撤销）
-cargo test --manifest-path core/Cargo.toml
+# 2. 校验 CPFF v1.0 标准示例创作工程（SampleManga.prj + Git LFS）
+python3 scripts/prj_validate.py templates/SampleManga
+
+# 3. 运行 Rust 核心引擎全部单元测试
+cargo test --manifest-path core/Cargo.toml --all-targets
 ```
 
 ---

@@ -1,0 +1,8 @@
+# Local tile caches and compiled distribution exports (publish dist/ via GitHub/GitLab Releases)
+.cache/
+dist/
+chapters/*/ai_assist/tmp/
+
+# OS & editor noise
+.DS_Store
+Thumbs.db

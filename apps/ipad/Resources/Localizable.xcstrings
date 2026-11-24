@@ -539,6 +539,214 @@
         }
       }
     },
+    "project.edition.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edition"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发行版"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "發行版"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "發行版"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "發行版"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edición"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 12 chars"
+    },
+    "project.fanwork_policy.full": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fanwork & Derivative License"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同人与二次创作授权声明"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同人與二次創作授權聲明"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同人及二次創作授權聲明"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同人及二次創作授權聲明"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Licencia fanwork y derivados"
+          }
+        }
+      }
+    },
+    "project.manuscript.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manuscript"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原稿"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原稿"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原稿"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原稿"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manuscrito"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 12 chars"
+    },
+    "project.open_prj": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Project (.prj)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开创作工程（.prj）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟創作專案（.prj）"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟創作項目（.prj）"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟創作項目（.prj）"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir proyecto (.prj)"
+          }
+        }
+      }
+    },
+    "project.storyboard.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rough"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大样"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大樣"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大樣"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "大樣"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Boceto"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 12 chars"
+    },
     "settings.language": {
       "extractionState": "manual",
       "localizations": {

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ChapterScript xmlns="urn:about-paint-tools:cpff:1.0" chapterId="ch001">
+  <Scene ref="sc001">
+    <Panel id="p01_01" page="1" shot="wide-low-angle">
+      <Action>Wide establishing shot of the rain-swept rooftop; lightning illuminates Ren's silhouette.</Action>
+      <Sfx termId="sfx_thunder"/>
+      <Bubble id="b01" speaker="char_hero" dialogueKey="ch001.p01.b01" style="shout"/>
+    </Panel>
+    <Panel id="p01_02" page="1" shot="close-up-eyes">
+      <Action>Close-up on Ren's eyes reflecting blue sparks as he grips the hilt tighter.</Action>
+      <Bubble id="b02" speaker="char_hero" dialogueKey="ch001.p01.b02" style="normal"/>
+    </Panel>
+  </Scene>
+</ChapterScript>

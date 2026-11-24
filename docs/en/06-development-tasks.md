@@ -89,6 +89,8 @@ This document decomposes [04. Phased Development Roadmap](./04-roadmap.md) into 
 | `T0.7-02` | `[Dual]` | `core/manga-io` | Clean-room MIT layered PSD codec (layer tree, blend modes, opacity, clipping masks, text metadata) | Visual parity when opened in CSP / Photoshop |
 | `T0.7-03` | `[Dual]` | `core/manga-core` | **Deterministic `ActionBus`**: whitelisted commands, dry-run preview, and atomic single-step `UndoGroup` rollback | ✅ `action_bus.rs` (`ActionBus`, `ProjectDocument`, Gemma 4 batch test) landed & unit-tested |
 | `T0.7-04` | `[Dual]` | `core/manga-io` | Lightweight Timelapse keyframe capture & background MP4 export | `< 2%` frame-rate overhead while drawing |
+| `T0.7-05` | `[Dual]` | `core/manga-core` | **CPFF v1.0 Creative Project Framework**: same-name `.prj` XML codec, Git-clone rename fallback, editions & chapters (see [07. CPFF v1.0](./07-creative-project-framework-v1.md)) | ✅ `project.rs` + `templates/SampleManga/` landed & unit-tested |
+| `T0.7-06` | `[Dual]` | `scripts/` + `templates/` | GitHub / GitLab repo scaffold (`.gitattributes` Git LFS / `.gitignore` / declarations) & `scripts/prj_validate.py` | ✅ Landed & enforced in GitHub Actions CI |
 
 ### `v0.8` – `v0.9` — Apple Pencil Pro, 5-Locale Polish & Dual-Track Beta
 

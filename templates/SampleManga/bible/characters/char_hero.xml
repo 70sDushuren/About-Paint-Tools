@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CharacterSheet xmlns="urn:about-paint-tools:cpff:1.0" id="char_hero">
+  <Name lang="zh-Hans">林星河</Name>
+  <Name lang="en">Ren Hoshikawa</Name>
+  <Palette>
+    <Swatch role="hair" hex="#1E2B4F"/>
+    <Swatch role="eyes" hex="#4FD1FF"/>
+    <Swatch role="jacket" hex="#E8EDF5"/>
+  </Palette>
+  <SignatureTraits>
+    <Trait>Silver clip on left collar</Trait>
+    <Trait>Cracked lens on right glasses (starting Ch.1 Panel 5)</Trait>
+  </SignatureTraits>
+</CharacterSheet>
