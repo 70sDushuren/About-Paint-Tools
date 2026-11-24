@@ -25,6 +25,12 @@
     <string name="project_open_prj">打开创作工程（.prj）</string>
     <string name="project_storyboard_short">大样</string>
     <string name="settings_language">应用语言</string>
+    <string name="suite_hub_name">创想空间</string>
+    <string name="suite_hub_subtitle">创作工程概览与多语发布中心（暂定代号）</string>
+    <string name="suite_manga_name">雕龙</string>
+    <string name="suite_manga_subtitle">系列漫画绘制与画稿管理（暂定代号）</string>
+    <string name="suite_novel_name">文心</string>
+    <string name="suite_novel_subtitle">轻小说撰写与出版工坊（暂定代号）</string>
     <string name="tool_brush_short">画笔</string>
     <string name="tool_clipping_mask_full">剪切蒙版</string>
     <string name="tool_clipping_mask_short">剪切</string>

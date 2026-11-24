@@ -19,10 +19,14 @@ Today's touch-first anime & manga creators face an awkward gap:
 - **ibisPaint X / MediBang Paint** excel at accessibility and fast flatting, yet rely on ads/paywalls and closed ecosystems.
 - **Krita** is the leading open-source painting suite, but its **GPLv3 license** conflicts with Apple App Store distribution terms, leaving a major open-source vacuum on iPadOS / iOS.
 
-**About-Paint-Tools** is designed from day one under the permissive **MIT License** to serve **both B&W Page Manga (Japanese Manga / Doujinshi) and Full-Color Webtoon / Anime Illustration equally**, across **six touch & foldable platforms** (Wave 1 `v0.9`→`v1.0`: **iPad · Touchscreen MacBook · iPhone Duo**; Wave 2 `v1.1`–`v1.3`: **Android Pad/Foldable · Touchscreen Windows · Touchscreen Linux**), uniting:
-1. **Hardware-native touch, foldable & stylus ergonomics** (`≤ 9ms` target latency, iPadOS 240Hz Apple Pencil Pro, Touchscreen MacBook direct touch + shortcuts, iPhone Duo & Android foldable hinge-aware dual-pane, Windows Ink, and Wayland `zwp_tablet_v2`).
-2. **Dual-track anime/manga production primitives & Dual-Engine Novel × Manga Studio** (B&W Page Manga: B4 600DPI print templates, vector lineart + intersection eraser, panel folders, procedural GPU screentones; Full-Color Webtoon & Illustration: cel blend modes, close-gap anti-halo expand fill, vertical strip preview & slicer, layered PSD interop; **Parallel Light Novel & Manga Engine** sharing one `.prj` Story Bible, Outline, and 5-language dictionary while keeping human novel & manga finals 100% decoupled, with self-selected or custom-designed novel illustrations).
-3. **Artist-in-the-Loop Embedded Local AI (Gemma 4 E2B/E4B + Vision)** — offline **Gemma 4 (Apache 2.0)** powering **`v1.0` Bidirectional AI Reference Drafts** (`Manga → Novel` & `Novel → Manga`, strictly isolated in `ai_assist/` as `role="ai_reference_only"` — never overwriting human finals), **Script Supervision / Continuity Logging (with hands-free voice dictation)**, **Story & Storyboard Planning**, and **Function-Calling Batch Workflow Macros** via a deterministic `ActionBus`, paired with specialized on-device Smart Flatting, offline LT conversion, and cel-shading assists — **zero forced cloud uploads, zero unauthorized model training**.
+**About-Paint-Tools** is designed from day one under the permissive **MIT License** to serve **both B&W Page Manga (Japanese Manga / Doujinshi) and Full-Color Webtoon / Anime Illustration equally**, across **six touch & foldable platforms** (Wave 1 `v0.9`→`v1.0`: **iPad · Touchscreen MacBook · iPhone Duo**; Wave 2 `v1.1`–`v1.3`: **Android Pad/Foldable · Touchscreen Windows · Touchscreen Linux**).
+
+To minimize RAM & GPU VRAM footprint on mobile/touch hardware, the suite provides **three independent tools over one CPFF v1.0 (`.prj`) file framework** that run **either standalone or concurrently side-by-side** *(all Chinese, English, and Spanish names below are **working codenames** pending final pre-release branding)*:
+- **S1 — `NoemaDock` (`创想空间`, codename)**: Project overview, prose & artwork import, dual-engine (Manga × Light Novel) serialization, Git/LFS sync & multi-language edition publishing (`< 200 MB` standalone RAM).
+- **S2 — `DracoNib` (`雕龙`, codename)**: Series manga & illustration drawing tool (`≤ 9ms` latency target, 240Hz Apple Pencil Pro / S-Pen / Windows Ink / Wayland `zwp_tablet_v2`, vector lineart + intersection eraser, panels, procedural screentones, anti-halo close-gap fill, Webtoon slicer).
+- **S3 — `LitteraCore` (`文心`, codename)**: Light novel authoring & publishing workbench (5-language prose, shared Story Bible/dictionary autocomplete, curated or custom illustrations, EPUB3/Markdown export; `< 120 MB` standalone RAM, zero GPU canvas overhead).
+- **Mandatory S4 Release Gate**: Every version (`v0.1`–`v1.5+`) decomposes into independent `S1`, `S2`, and `S3` subprojects followed by a dedicated **S4 Tri-App Integration & Compatibility Revision Stage** before unified PR publication.
+- **Artist-in-the-Loop Embedded Local AI (Gemma 4 E2B/E4B + Vision)**: Offline **Gemma 4 (Apache 2.0)** powering **`v1.0` Bidirectional AI Reference Drafts** (`Manga → Novel` & `Novel → Manga`, strictly isolated in `ai_assist/` as `role="ai_reference_only"` — never overwriting human finals), Voice Continuity, Story Planning, and `ActionBus` Function-Calling batch macros — **zero forced cloud uploads, zero unauthorized model training**.
 
 ---
 
@@ -32,16 +36,17 @@ To deliver **uncompromised hardware-native stylus & foldable feel** across every
 
 ```mermaid
 flowchart TD
-    subgraph UI["Hardware-Native Touch & Foldable Shells"]
+    subgraph UI["Hardware-Native Touch & Foldable Shells (3 Modular Apps: S1 Hub · S2 Manga · S3 Novel)"]
         Apple["Wave 1 (v0.9 -> v1.0): apps/apple/<br/>iPadOS (240Hz Pencil Pro) · Touchscreen MacBook · iPhone Duo Foldable"]
         Wave2["Wave 2 (v1.1 - v1.3): Cross-Ecosystem Shells<br/>Android Pad/Foldable (Compose/Vulkan) · Windows Touch (WinUI 3/DX12) · Linux Touch (Rust GTK4/Wayland)"]
     end
 
-    subgraph Bridge["Zero-Copy FFI & Direct Rust Link"]
+    subgraph Bridge["Zero-Copy FFI & Direct Rust Link (Feature-Sliced: hub / canvas / novel)"]
         FFI["C-ABI staticlib/cdylib (Apple/Android/Win) · Direct Rust Crate (Linux)"]
     end
 
     subgraph Core["Shared Cross-Platform Engine (Rust, MIT)"]
+        Suite["suite.rs (Tri-App Write Ownership, Deep-Link IPC & S4 Gate)"]
         Platform["platform.rs (6-Platform Posture & Hinge Layout Engine)"]
         Bus["ActionBus (Deterministic Command Bus)<br/>Transactional Macros / Single UndoGroup"]
         Input["Stroke Pipeline<br/>Pressure Curves / Rope Stabilizer / Prediction"]
@@ -59,6 +64,7 @@ flowchart TD
 
     Apple --> FFI
     Wave2 --> FFI
+    FFI --> Suite
     FFI --> Platform
     FFI --> Input
     FFI --> Bus
@@ -78,6 +84,8 @@ flowchart TD
 
 ## Phased Roadmap Summary
 
+> Every milestone below splits into **`S1` (`NoemaDock`) + `S2` (`DracoNib`) + `S3` (`LitteraCore`) + `S4` (Tri-App Integration & Compatibility Gate) → Unified Release PR**. See [06. Detailed Engineering WBS](./docs/en/06-development-tasks.md).
+
 - **Wave 1 — Pre-1.0 Series (`v0.1` – `v0.9`) — Dual-Track Core + Apple Trio (iPad · Touch MacBook · iPhone Duo)**
   - `v0.1`: Low-latency `256×256` sparse tile canvas, 240Hz Apple Pencil input, B4 600DPI & Webtoon canvas presets, dual-source `en`/`zh-Hans` i18n base
   - `v0.2`: Brush stamping engine, pressure/tilt/barrel-roll curves, real-time rope stabilizer, 8 dual-track anime presets (G-Pen, Maru, Flatting, etc.)
@@ -89,7 +97,7 @@ flowchart TD
   - `v0.8`: Apple Pencil Pro Squeeze/Hover, **Touchscreen MacBook** direct touch + shortcuts, **iPhone Duo** foldable posture, **5-language live switching**
   - `v0.9`: **Wave 1 Apple Trio Joint Beta (iPad · Touchscreen MacBook · iPhone Duo)**, B4 600DPI & `1600×25600` disk paging soak, 5-language layout QA
 - **1.x Series (`v1.0` – `v1.5+`) — Dual-Engine Studio, Embedded Gemma 4 Local AI & Wave 2 Cross-Platform**
-  - `v1.0`: **Apple Trio Official Launch** — Design System & **Three-Mode Workspace** + **Light Novel Authoring Engine** (shared `.prj`, decoupled finals, self-selected/custom illustrations, EPUB3) + **Embedded Gemma 4 Bidirectional AI Reference Drafts** (strictly isolated in `ai_assist/`)
+  - `v1.0`: **Apple Trio Official Launch** — Tri-App GA (`NoemaDock` · `DracoNib` · `LitteraCore`, codenames) + **Light Novel Authoring Engine** (shared `.prj`, decoupled finals, self-selected/custom illustrations, EPUB3) + **Embedded Gemma 4 Bidirectional AI Reference Drafts** (strictly isolated in `ai_assist/`)
   - `v1.1`: **Android Pad / Foldable Edition (`apps/android/`)** (Compose + WindowManager Tabletop/Dual-Pane + S-Pen/M-Pencil Vulkan) + Gemma 4 Voice Continuity + Smart Flatting & offline LT conversion
   - `v1.2`: **Touchscreen Windows Edition (`apps/windows/`)** (WinUI 3 + Windows Ink + 2-in-1 Tablet Mode + DX12) + Gemma 4 Function-Calling Workflow Driver + Sketch Cleanup & 3D Cel Shading
   - `v1.3`: **Touchscreen Linux Edition (`apps/linux/`)** (Native Rust + GTK4/Wayland `zwp_tablet_v2` + Vulkan) + 3D anime pose mannequin + multi-page/episode/volume studio
@@ -127,14 +135,14 @@ About-Paint-Tools/
 ├── templates/
 │   └── SampleManga/             # Reference CPFF v1.0 dual-engine project (SampleManga.prj + Git LFS)
 ├── i18n/
-│   ├── glossary.json            # 5-language art, manga & novel terminology glossary
+│   ├── glossary.json            # 5-language art, manga, novel & tri-app codename glossary
 │   └── locales/                 # en, zh-Hans (sources) + zh-Hant, yue-Hant, es
 ├── scripts/
 │   ├── i18n_check.py            # CI parity, placeholder & UI length guardrails
 │   ├── i18n_sync.py             # Sync & export Apple .xcstrings + Android strings.xml
 │   └── prj_validate.py          # CPFF v1.0 .prj XML, AI red-line & Git LFS validator
-├── core/                        # Rust cross-platform canvas, posture & project core (MIT)
-│   └── manga-core/              # Tiles, layers, fill, vectors, panels, ActionBus, platform, .prj
+├── core/                        # Rust cross-platform canvas, suite, posture & project core (MIT)
+│   └── manga-core/              # Feature-sliced (hub / canvas / novel) engine + suite.rs + platform.rs
 └── apps/
     ├── apple/                   # Wave 1 (v0.9→v1.0): Unified iPadOS, macOS Touch & iPhone Duo shell
     ├── android/                 # Wave 2 (v1.1): Android Pad & Foldable (Compose + WindowManager + Vulkan)
@@ -153,10 +161,13 @@ python3 scripts/i18n_check.py && python3 scripts/i18n_sync.py --check-xcstrings 
 # 2. Validate reference CPFF v1.0 dual-engine project (SampleManga.prj + AI isolation + Git LFS)
 python3 scripts/prj_validate.py templates/SampleManga
 
-# 3. Verify C-ABI header, Rust workspace tests (manga-core + manga-linux-shell), and Linux self-check
+# 3. Verify C-ABI header, Rust workspace tests, modular feature slices, and S4 Tri-App Integration Gate
 gcc -std=c11 -Wall -Wextra -Werror -fsyntax-only core/manga-core/include/manga_core.h
 cargo test --manifest-path core/Cargo.toml --workspace --all-targets
-cargo run --manifest-path core/Cargo.toml -p manga-linux-shell -- --self-check
+cargo check --manifest-path core/Cargo.toml -p manga-core --no-default-features --features hub
+cargo check --manifest-path core/Cargo.toml -p manga-core --no-default-features --features canvas
+cargo check --manifest-path core/Cargo.toml -p manga-core --no-default-features --features novel
+cargo run --manifest-path core/Cargo.toml -p manga-linux-shell -- --integration-check
 ```
 
 ---

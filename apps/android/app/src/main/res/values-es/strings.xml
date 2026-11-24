@@ -25,6 +25,12 @@
     <string name="project_open_prj">Abrir proyecto (.prj)</string>
     <string name="project_storyboard_short">Boceto</string>
     <string name="settings_language">Idioma de la app</string>
+    <string name="suite_hub_name">NoemaDock</string>
+    <string name="suite_hub_subtitle">Espacio creativo y publicación (nombre clave)</string>
+    <string name="suite_manga_name">DracoNib</string>
+    <string name="suite_manga_subtitle">Estudio de manga e ilustración (nombre clave)</string>
+    <string name="suite_novel_name">LitteraCore</string>
+    <string name="suite_novel_subtitle">Taller de novela ligera (nombre clave)</string>
     <string name="tool_brush_short">Pincel</string>
     <string name="tool_clipping_mask_full">Máscara de recorte</string>
     <string name="tool_clipping_mask_short">Máscara</string>

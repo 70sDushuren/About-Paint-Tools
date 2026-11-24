@@ -42,6 +42,12 @@
     "novel.final_badge.full": { "value": "人工獨立完稿（AI 永不覆寫）", "status": "tuned", "locked": true },
     "novel.illustration.short": { "value": "小說插圖", "status": "auto", "locked": false, "max_chars": 14 },
     "ai.bridge.manga_to_novel": { "value": "產生小說 AI 參考稿（僅供對照）", "status": "tuned", "locked": true },
-    "ai.bridge.novel_to_manga": { "value": "產生漫畫 AI 中間稿（僅供參考）", "status": "tuned", "locked": true }
+    "ai.bridge.novel_to_manga": { "value": "產生漫畫 AI 中間稿（僅供參考）", "status": "tuned", "locked": true },
+    "suite.hub.name": { "value": "創想空間", "status": "auto", "locked": false, "max_chars": 16 },
+    "suite.hub.subtitle": { "value": "創作專案概覽與多語發行中心（暫定代號）", "status": "auto", "locked": false },
+    "suite.manga.name": { "value": "雕龍", "status": "auto", "locked": false, "max_chars": 16 },
+    "suite.manga.subtitle": { "value": "系列漫畫繪製與畫稿管理（暫定代號）", "status": "auto", "locked": false },
+    "suite.novel.name": { "value": "文心", "status": "auto", "locked": false, "max_chars": 16 },
+    "suite.novel.subtitle": { "value": "輕小說撰寫與出版工坊（暫定代號）", "status": "auto", "locked": false }
   }
 }

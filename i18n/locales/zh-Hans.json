@@ -41,6 +41,12 @@
     "novel.final_badge.full": { "value": "人工独立终稿（AI 永不覆盖）", "status": "source", "locked": true },
     "novel.illustration.short": { "value": "小说插图", "status": "source", "locked": true, "max_chars": 14 },
     "ai.bridge.manga_to_novel": { "value": "生成小说 AI 参考稿（仅作对照）", "status": "source", "locked": true },
-    "ai.bridge.novel_to_manga": { "value": "生成漫画 AI 中间稿（仅作参考）", "status": "source", "locked": true }
+    "ai.bridge.novel_to_manga": { "value": "生成漫画 AI 中间稿（仅作参考）", "status": "source", "locked": true },
+    "suite.hub.name": { "value": "创想空间", "status": "source", "locked": false, "max_chars": 16 },
+    "suite.hub.subtitle": { "value": "创作工程概览与多语发布中心（暂定代号）", "status": "source", "locked": false },
+    "suite.manga.name": { "value": "雕龙", "status": "source", "locked": false, "max_chars": 16 },
+    "suite.manga.subtitle": { "value": "系列漫画绘制与画稿管理（暂定代号）", "status": "source", "locked": false },
+    "suite.novel.name": { "value": "文心", "status": "source", "locked": false, "max_chars": 16 },
+    "suite.novel.subtitle": { "value": "轻小说撰写与出版工坊（暂定代号）", "status": "source", "locked": false }
   }
 }

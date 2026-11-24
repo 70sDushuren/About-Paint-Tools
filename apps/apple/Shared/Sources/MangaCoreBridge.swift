@@ -87,6 +87,17 @@ public enum WorkspaceLayoutHintKind: UInt32, CaseIterable, Sendable {
     case desktopTouchHybrid = 4
 }
 
+/// Swift-side mirror of `MangaSuiteApp` in `manga_core.h`.
+/// Chinese/English/Spanish tool names are working codenames pending final pre-release branding.
+public enum SuiteAppKind: UInt32, CaseIterable, Sendable {
+    /// Working codename: 创想空间 / NoemaDock (Project Hub & Multi-Language Publishing)
+    case hub = 0
+    /// Working codename: 雕龙 / DracoNib (Manga & Illustration Drawing)
+    case manga = 1
+    /// Working codename: 文心 / LitteraCore (Light Novel Authoring & Publishing)
+    case novel = 2
+}
+
 #if canImport(MangaCoreFFI)
 import MangaCoreFFI
 

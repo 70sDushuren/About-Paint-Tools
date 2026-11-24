@@ -197,6 +197,17 @@ uint32_t manga_platform_recommend_layout(
 
 uint8_t manga_platform_release_wave(uint32_t platform_code);
 
+/* --- Tri-App Suite (Working Codenames: Hub / Manga / Novel) Boundary API --- */
+
+typedef enum MangaSuiteApp {
+    MANGA_SUITE_APP_HUB   = 0, /* Working Codename: 创想空间 / NoemaDock */
+    MANGA_SUITE_APP_MANGA = 1, /* Working Codename: 雕龙 / DracoNib */
+    MANGA_SUITE_APP_NOVEL = 2, /* Working Codename: 文心 / LitteraCore */
+} MangaSuiteApp;
+
+uint8_t manga_suite_can_write_path(uint32_t app_code, const char *rel_path_utf8);
+uint32_t manga_suite_ram_budget_mb(uint32_t app_code);
+
 #ifdef __cplusplus
 }
 #endif

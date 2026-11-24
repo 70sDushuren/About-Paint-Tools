@@ -32,5 +32,12 @@ jobs:
         run: gcc -std=c11 -Wall -Wextra -Werror -fsyntax-only core/manga-core/include/manga_core.h
       - name: Run Rust workspace unit tests (manga-core + manga-linux-shell)
         run: cargo test --manifest-path core/Cargo.toml --workspace --all-targets
-      - name: Run Linux shell headless self-check
-        run: cargo run --manifest-path core/Cargo.toml -p manga-linux-shell -- --self-check
+      - name: Verify modular Cargo feature slices (hub / canvas / novel)
+        run: |
+          cargo check --manifest-path core/Cargo.toml -p manga-core --no-default-features --features hub
+          cargo check --manifest-path core/Cargo.toml -p manga-core --no-default-features --features canvas
+          cargo check --manifest-path core/Cargo.toml -p manga-core --no-default-features --features novel
+      - name: Run Linux shell headless self-check & S4 Tri-App Integration Gate
+        run: |
+          cargo run --manifest-path core/Cargo.toml -p manga-linux-shell -- --app manga --self-check
+          cargo run --manifest-path core/Cargo.toml -p manga-linux-shell -- --integration-check

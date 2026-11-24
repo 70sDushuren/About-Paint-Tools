@@ -93,6 +93,17 @@ flowchart TD
 | **波次二 (`v1.2`)** | **触摸屏 Windows Notebook / Pad** | `apps/windows/` | WinUI 3 (Windows App SDK) + `WM_POINTER` / Windows Ink + P/Invoke | `wgpu` DX12 | Surface/翻转本 2-in-1 平板模式自动切换大热区、笔尾橡皮 |
 | **波次二 (`v1.3`)** | **触摸屏 Linux Notebook / Pad** | `apps/linux/` | **Rust 原生直连 `manga-core`** + GTK4/Wayland `zwp_tablet_v2` + `libinput` | `wgpu` Vulkan | 零 FFI 损耗、`SW_TABLET_MODE` 2-in-1 切换、Flatpak/AppImage |
 
+### 3.0.1 三独立工具模块化架构（低内存独立运行 × 同屏并发协同）
+
+> **命名说明**：以下三个工具的中/英/西语名称当前均作为**暂定开发代号**留置，待正式发版前最终确认品牌名后再统一 PR 落盘。
+
+为避免纯写作或项目管理时加载重型 GPU 瓦片画布浪费内存，本项目在 `core/manga-core` 中通过 **Cargo Feature Flags（`hub` / `canvas` / `novel`）** 与 [`suite.rs`](../../core/manga-core/src/suite.rs) 拆分出 **三个可独立运行、亦可多窗/分屏并发协同的独立工具**：
+1. **`S1` 创想空间（暂定英文/西语代号：`NoemaDock`，`--features hub`）**：项目概览、文案与画稿导入、双引擎（漫画 × 轻小说）分集连载管理、Git/LFS 与多语种发行版发布；单独运行无需 GPU 画布，内存预算 `< 200 MB`。
+2. **`S2` 雕龙（暂定英文/西语代号：`DracoNib`，`--features canvas`）**：系列漫画与插画绘制工具（画稿大样/原稿管理、240Hz 笔刷、矢量线稿、分格、网点与防白边填色）；独占 GPU 显存与瓦片池。
+3. **`S3` 文心（暂定英文/西语代号：`LitteraCore`，`--features novel`）**：轻小说撰写与出版管理工具（5 语正文、大纲/专有名词词典联想、自选或定制插图、EPUB3/Markdown 导出）；零 GPU 画布负载，内存预算 `< 120 MB`。
+
+三工具共享同一套 CPFF v1.0（`.prj`）工程目录，通过 **目录写权分治 + 原子写替换 + Deep-Link（`noemadock://`、`draconib://`、`litteracore://`）** 实现零冲突并发协同，并在每次版本发布前强制通过 **独立阶段 `S4`（三工具集成、并发与兼容性修订）** 门禁验收。
+
 ### 3.1 `ActionBus`（确定性命令总线）的战略意义
 
 为了在 `v1.1+` 让内嵌的 **Gemma 4 轻量版** 可靠地驱动复杂重复工作流而不破坏画布稳定性，我们在 **`v0.7–v0.8`** 阶段就将所有画布与文档修改操作收敛到 Rust 层的确定性 `ActionBus`：

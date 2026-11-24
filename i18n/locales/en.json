@@ -41,6 +41,12 @@
     "novel.final_badge.full": { "value": "Independent Human Final (AI Never Overwrites)", "status": "source", "locked": true },
     "novel.illustration.short": { "value": "Illustrations", "status": "source", "locked": true, "max_chars": 14 },
     "ai.bridge.manga_to_novel": { "value": "Generate AI Novel Reference (Read-Only)", "status": "source", "locked": true },
-    "ai.bridge.novel_to_manga": { "value": "Generate AI Manga Rough (Reference Only)", "status": "source", "locked": true }
+    "ai.bridge.novel_to_manga": { "value": "Generate AI Manga Rough (Reference Only)", "status": "source", "locked": true },
+    "suite.hub.name": { "value": "NoemaDock", "status": "source", "locked": false, "max_chars": 16 },
+    "suite.hub.subtitle": { "value": "Creative Project & Publishing Hub (Codename)", "status": "source", "locked": false },
+    "suite.manga.name": { "value": "DracoNib", "status": "source", "locked": false, "max_chars": 16 },
+    "suite.manga.subtitle": { "value": "Manga & Illustration Studio (Codename)", "status": "source", "locked": false },
+    "suite.novel.name": { "value": "LitteraCore", "status": "source", "locked": false, "max_chars": 16 },
+    "suite.novel.subtitle": { "value": "Light Novel Authoring & Publishing (Codename)", "status": "source", "locked": false }
   }
 }

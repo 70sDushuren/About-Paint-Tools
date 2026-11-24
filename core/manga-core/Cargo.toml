@@ -10,6 +10,16 @@ description = "MIT-licensed cross-platform sparse tiled canvas, stroke stabiliza
 name = "manga_core"
 crate-type = ["rlib", "staticlib", "cdylib"]
 
+[features]
+default = ["all"]
+all = ["hub", "canvas", "novel"]
+# S1 — Project Overview, Import & Multi-Language Publishing Hub (Codename: 创想空间 / NoemaDock)
+hub = []
+# S2 — Series Manga & Illustration Drawing Tool (Codename: 雕龙 / DracoNib)
+canvas = []
+# S3 — Light Novel Authoring & Publishing Tool (Codename: 文心 / LitteraCore)
+novel = []
+
 [dependencies]
 # Zero external dependencies in v0.1 foundation for fast offline verification.
 # Curated MIT/Apache-2.0/BSD-3 graphics & core crates by milestone (see docs/en/02-architecture-and-tech-stack.md):

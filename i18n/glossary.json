@@ -254,6 +254,33 @@
       "yue-Hant": "小說插圖",
       "es": "Ilustración",
       "note": "Self-selected manga pick or custom-designed artwork for light novel editions"
+    },
+    {
+      "id": "suite_hub",
+      "en": "NoemaDock",
+      "zh-Hans": "创想空间",
+      "zh-Hant": "創想空間",
+      "yue-Hant": "創想空間",
+      "es": "NoemaDock",
+      "note": "WORKING CODENAME (TBD before release) — S1 Project Overview, Import & Multi-Language Publishing Hub"
+    },
+    {
+      "id": "suite_manga",
+      "en": "DracoNib",
+      "zh-Hans": "雕龙",
+      "zh-Hant": "雕龍",
+      "yue-Hant": "雕龍",
+      "es": "DracoNib",
+      "note": "WORKING CODENAME (TBD before release) — S2 Series Manga & Illustration Drawing Tool"
+    },
+    {
+      "id": "suite_novel",
+      "en": "LitteraCore",
+      "zh-Hans": "文心",
+      "zh-Hant": "文心",
+      "yue-Hant": "文心",
+      "es": "LitteraCore",
+      "note": "WORKING CODENAME (TBD before release) — S3 Light Novel Authoring & Publishing Tool"
     }
   ]
 }

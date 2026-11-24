@@ -995,6 +995,255 @@
         }
       }
     },
+    "suite.hub.name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NoemaDock"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创想空间"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "創想空間"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "創想空間"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "創想空間"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NoemaDock"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 16 chars"
+    },
+    "suite.hub.subtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creative Project & Publishing Hub (Codename)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创作工程概览与多语发布中心（暂定代号）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "創作專案概覽與多語發行中心（暫定代號）"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "創作項目概覽及多語發佈中心（暫定代號）"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "創作項目概覽及多語發佈中心（暫定代號）"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Espacio creativo y publicación (nombre clave)"
+          }
+        }
+      }
+    },
+    "suite.manga.name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DracoNib"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "雕龙"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "雕龍"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "雕龍"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "雕龍"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DracoNib"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 16 chars"
+    },
+    "suite.manga.subtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manga & Illustration Studio (Codename)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系列漫画绘制与画稿管理（暂定代号）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系列漫畫繪製與畫稿管理（暫定代號）"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系列漫畫繪製及畫稿管理（暫定代號）"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系列漫畫繪製及畫稿管理（暫定代號）"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estudio de manga e ilustración (nombre clave)"
+          }
+        }
+      }
+    },
+    "suite.novel.name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LitteraCore"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文心"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文心"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文心"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文心"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LitteraCore"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 16 chars"
+    },
+    "suite.novel.subtitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Light Novel Authoring & Publishing (Codename)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "轻小说撰写与出版工坊（暂定代号）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "輕小說撰寫與出版工坊（暫定代號）"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "輕小說撰寫及出版工坊（暫定代號）"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "輕小說撰寫及出版工坊（暫定代號）"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taller de novela ligera (nombre clave)"
+          }
+        }
+      }
+    },
     "tool.brush.short": {
       "extractionState": "manual",
       "localizations": {

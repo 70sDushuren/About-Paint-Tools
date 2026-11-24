@@ -155,6 +155,19 @@
   - **小说 → 漫画 AI 中间稿** 严格存放于 `chapters/chXXX/ai_assist/novel_to_manga/`（含 `meta.xml` 与 AI 分镜/大样中间稿，强制标记 `role="ai_reference_only"`）；
   - **红线**：AI 桥接管线对漫画原稿与小说正文均为单向只读，**严禁任何自动化流程越界写入 `novel/prose/` 或 `manuscript/` 人工终稿目录**；纯文本 AI 中间稿可随 Git 留存创作脉络，重型参考图走 Git LFS 且可随时归档清理。
 
+### 4.5 三独立工具套件的文件写权分治、并发保护与 Deep-Link 协同规范
+
+为降低系统内存与显存占用，本项目拆分为 **三个基于同一 CPFF v1.0 目录、既可单独运行也可并发同屏运行的独立工具**（以下中文/英文/西语名称当前均作为**暂定开发代号**，正式发版前定稿）：
+
+| 子项目 | 暂定代号（简中 / 繁粤 / EN & ES） | URL Scheme | 单独运行内存目标 | 写权归属目录（严禁跨界写入） |
+| :--- | :--- | :--- | :--- | :--- |
+| **`S1` 项目总控** | **创想空间** / 創想空間 / `NoemaDock` | `noemadock://` | `< 200 MB`（无 GPU 画布） | `<ProjectName>.prj`、`README*.md`、`LICENSE`、`declarations/`、`outline/`、`bible/`、`i18n/`、`editions/`、`dist/`、`chapters/*/chapter.xml`、`chapters/*/scenes/` |
+| **`S2` 漫画绘制** | **雕龙** / 雕龍 / `DracoNib` | `draconib://` | 独占 GPU 显存与瓦片池 | `chapters/*/storyboard/`、`chapters/*/manuscript/`、`chapters/*/script/`、`chapters/*/ai_assist/novel_to_manga/` |
+| **`S3` 小说出版** | **文心** / 文心 / `LitteraCore` | `litteracore://` | `< 120 MB`（无 GPU 画布） | `chapters/*/novel/prose/`、`chapters/*/novel/illustrations/`、`chapters/*/ai_assist/manga_to_novel/` |
+
+- **并发读写安全**：三工具均采用「临时文件写盘 + 原子重命名」与代码级目录写权校验（见 [`core/manga-core/src/suite.rs`](../../core/manga-core/src/suite.rs)），任何工具尝试向非归属目录写入时均在内核层拦截报错；三工具均可只读订阅彼此保存的目录变更并即时刷新视图。
+- **跨工具 Deep-Link 跳转**：例如从「创想空间」一键拉起「雕龙」直达第 1 话第 1 页（`draconib://open?project=prj-sample-manga-001&chapter=ch001&detail=page=1`），或拉起「文心」打开简体正文（`litteracore://open?project=prj-sample-manga-001&chapter=ch001&detail=locale=zh-Hans`）。
+
 ---
 
 ## 5. GitHub / GitLab 兼容规范（Git + Git LFS）
@@ -188,6 +201,7 @@
 
 ## 6. 自动化校验与工程工具支持
 
-仓库已配套提供两套零外部依赖验证能力：
+仓库已配套提供三套零外部依赖验证能力：
 1. **CLI / CI 校验器**：`python3 scripts/prj_validate.py <path/to/ProjectFolder>`（已接入 `.github/workflows/ci.yml` 自动校验 [`templates/SampleManga`](../../templates/SampleManga/)）。
-2. **Rust 核心读写模块**：[`core/manga-core/src/project.rs`](../../core/manga-core/src/project.rs) 提供原生 `CreativeProjectManifest` 解析、规范 XML 输出与目录同名/改名容错定位能力，供 iPadOS 及未来多端直接调用。
+2. **Rust 核心读写模块**：[`core/manga-core/src/project.rs`](../../core/manga-core/src/project.rs) 提供原生 `CreativeProjectManifest` 解析、规范 XML 输出与目录同名/改名容错定位能力。
+3. **S4 三工具集成兼容门禁**：[`core/manga-core/src/suite.rs`](../../core/manga-core/src/suite.rs) 与 `cargo run --manifest-path core/Cargo.toml -p manga-linux-shell -- --integration-check` 在每次 PR 自动验证三工具写权隔离、AI 红线与跨工具 Deep-Link 互通。

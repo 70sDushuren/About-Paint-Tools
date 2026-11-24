@@ -93,6 +93,17 @@ flowchart TD
 | **Wave 2 (`v1.2`)** | **Touchscreen Windows Notebook / Pad** | `apps/windows/` | WinUI 3 (Windows App SDK) + `WM_POINTER` / Windows Ink + P/Invoke | `wgpu` DX12 | Surface/convertible 2-in-1 auto tablet-mode hit targets, eraser tail |
 | **Wave 2 (`v1.3`)** | **Touchscreen Linux Notebook / Pad** | `apps/linux/` | **Native Rust (`manga-core` direct link)** + GTK4/Wayland `zwp_tablet_v2` + `libinput` | `wgpu` Vulkan | Zero FFI overhead, `SW_TABLET_MODE` 2-in-1 switch, Flatpak / AppImage |
 
+### 3.0.1 Modular Tri-App Architecture (Low-RAM Standalone × Concurrent Multi-Window Collaboration)
+
+> **Naming Notice**: All Chinese, English, and Spanish tool names below are **working codenames** reserved until final pre-release branding sign-off.
+
+To prevent light novel writing or project management from allocating heavy GPU tile pools, `core/manga-core` provides **Cargo Feature Flags (`hub`, `canvas`, `novel`)** and [`suite.rs`](../../core/manga-core/src/suite.rs) powering **three independent tools that run either standalone or concurrently side-by-side**:
+1. **`S1` Hub (Working Codename: `创想空间` / `NoemaDock`, `--features hub`)**: Project overview, prose & artwork import, dual-engine (Manga × Light Novel) serialization, Git/LFS sync, and multi-language edition publishing; `< 200 MB` standalone RAM (no GPU canvas).
+2. **`S2` Manga Drawing (Working Codename: `雕龙` / `DracoNib`, `--features canvas`)**: Series manga & illustration drawing tool (manuscript/storyboard management, 240Hz strokes, vector ink, panels, screentones, anti-halo fill); dedicates 100% of GPU VRAM and tile memory to drawing.
+3. **`S3` Light Novel Publishing (Working Codename: `文心` / `LitteraCore`, `--features novel`)**: Light novel authoring & publishing workbench (5-language prose, shared outline/dictionary autocomplete, curated or custom illustrations, EPUB3/Markdown export); `< 120 MB` standalone RAM (zero GPU canvas overhead).
+
+All three tools share one CPFF v1.0 (`.prj`) folder guarded by **directory write-ownership partitioning + atomic write-rename + cross-app Deep Links (`noemadock://`, `draconib://`, `litteracore://`)**, and every release must pass a dedicated **Phase `S4` (Tri-App Integration & Compatibility Revision Gate)** before its unified Release PR.
+
 ### 3.1 Strategic Role of the Deterministic `ActionBus`
 
 To allow the embedded **Gemma 4** model to drive complex repetitive workflows safely in `v1.1+` without ever risking canvas corruption, all document & batch mutations route through a typed Rust `ActionBus` starting in **`v0.7–v0.8`**:

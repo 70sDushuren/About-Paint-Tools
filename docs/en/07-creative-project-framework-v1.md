@@ -155,6 +155,19 @@ Within a single CPFF project, the **Novel Engine** and **Manga Engine** share on
   - **Novel → Manga AI Drafts** live strictly inside `chapters/chXXX/ai_assist/novel_to_manga/` (`meta.xml` + AI storyboard/rough intermediates marked `role="ai_reference_only"`);
   - **Hard Red Line**: AI bridges read human finals strictly read-only and **MUST NEVER write into `novel/prose/` or `manuscript/`**; text intermediates stay in Git as creative process history while heavy visual roughs route through Git LFS and may be pruned anytime.
 
+### 4.5 Modular Tri-App Write-Ownership Partition, Concurrency & Deep-Link Protocol
+
+To minimize RAM/VRAM footprint on touch & mobile hardware, the suite ships as **three standalone-or-concurrent tools sharing the same CPFF v1.0 folder** (all Chinese, English, and Spanish app names below are **working codenames** pending final pre-release branding sign-off):
+
+| Subproject | Working Codename (`zh-Hans` / `zh-Hant` / `EN & ES`) | URL Scheme | Standalone RAM Budget | Exclusive Write-Owned Paths |
+| :--- | :--- | :--- | :--- | :--- |
+| **`S1` Project Hub** | **创想空间** / 創想空間 / `NoemaDock` | `noemadock://` | `< 200 MB` (no GPU canvas) | `<ProjectName>.prj`, `README*.md`, `LICENSE`, `declarations/`, `outline/`, `bible/`, `i18n/`, `editions/`, `dist/`, `chapters/*/chapter.xml`, `chapters/*/scenes/` |
+| **`S2` Manga Studio** | **雕龙** / 雕龍 / `DracoNib` | `draconib://` | Dedicated GPU VRAM & tile pool | `chapters/*/storyboard/`, `chapters/*/manuscript/`, `chapters/*/script/`, `chapters/*/ai_assist/novel_to_manga/` |
+| **`S3` Novel Atelier** | **文心** / 文心 / `LitteraCore` | `litteracore://` | `< 120 MB` (no GPU canvas) | `chapters/*/novel/prose/`, `chapters/*/novel/illustrations/`, `chapters/*/ai_assist/manga_to_novel/` |
+
+- **Concurrent Safety**: Every tool uses atomic write-and-rename plus kernel-enforced directory write checks (see [`core/manga-core/src/suite.rs`](../../core/manga-core/src/suite.rs)); cross-boundary writes are rejected deterministically while all three tools watch shared folders read-only for live UI refresh.
+- **Cross-App Deep Links**: Enables seamless handoffs such as launching the Manga tool from the Hub directly to Chapter 1 Page 1 (`draconib://open?project=prj-sample-manga-001&chapter=ch001&detail=page=1`) or opening Novel prose (`litteracore://open?project=prj-sample-manga-001&chapter=ch001&detail=locale=zh-Hans`).
+
 ---
 
 ## 5. GitHub / GitLab Compatibility (Git + Git LFS)
@@ -189,4 +202,5 @@ Within a single CPFF project, the **Novel Engine** and **Manga Engine** share on
 ## 6. Automated Tooling & Core Engine Support
 
 1. **Zero-Dependency Validator**: `python3 scripts/prj_validate.py <path/to/ProjectFolder>` (enforced in `.github/workflows/ci.yml` against [`templates/SampleManga`](../../templates/SampleManga/)).
-2. **Rust Core Module**: [`core/manga-core/src/project.rs`](../../core/manga-core/src/project.rs) implements `CreativeProjectManifest`, deterministic XML generation/parsing, and the exact-name + unique-fallback resolver for iPadOS and future desktop/Android shells.
+2. **Rust Core Module**: [`core/manga-core/src/project.rs`](../../core/manga-core/src/project.rs) implements `CreativeProjectManifest`, deterministic XML generation/parsing, and the exact-name + unique-fallback resolver.
+3. **S4 Tri-App Integration Gate**: [`core/manga-core/src/suite.rs`](../../core/manga-core/src/suite.rs) and `cargo run --manifest-path core/Cargo.toml -p manga-linux-shell -- --integration-check` automatically enforce write-ownership isolation, AI red-line isolation, and cross-app deep-link round-trips on every PR.

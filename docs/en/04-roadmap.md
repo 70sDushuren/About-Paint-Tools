@@ -39,6 +39,31 @@ flowchart LR
     V09 --> V10
 ```
 
+### 1.1 Modular Tri-App Suite & Mandatory "3+1" Per-Version PR Release Discipline
+
+> **Codename Notice**: All Chinese, English, and Spanish names for the three tools below are **working codenames** reserved until final pre-release branding sign-off.
+
+To minimize RAM/VRAM footprint on touch and foldable devices while maximizing creator focus, the suite ships as **three independent tools that run either standalone or concurrently over one CPFF v1.0 (`.prj`) folder**. **Every release `vX.Y` is decomposed into 4 mandatory subprojects — unified PR publication happens only after all 4 pass:**
+
+```mermaid
+flowchart LR
+    V["Release Kickoff vX.Y"] --> S1["S1 Hub (NoemaDock)<br/>Project Overview / Import<br/>Dual-Engine & Multi-i18n Release"]
+    V --> S2["S2 Manga (DracoNib)<br/>Series Manga Drawing<br/>Artwork Mgmt & GPU Canvas"]
+    V --> S3["S3 Novel (LitteraCore)<br/>Light Novel Writing<br/>Illustrations & EPUB Publishing"]
+    S1 --> S4["Phase S4: Tri-App Integration & Compatibility Gate<br/>Concurrent Write Isolation · Deep-Link Handoffs<br/>8GB Multi-App RAM Soak · .prj Compatibility"]
+    S2 --> S4
+    S3 --> S4
+    S4 --> PR["Unified Version Release PR -> main"]
+```
+
+| Milestone Range | `S1` Hub (`创想空间` / `NoemaDock`, codename) | `S2` Manga (`雕龙` / `DracoNib`, codename) | `S3` Novel (`文心` / `LitteraCore`, codename) | `S4` Integration & Compatibility Gate → Release PR |
+| :--- | :--- | :--- | :--- | :--- |
+| **`v0.1`–`v0.3`** | `.prj` XML codec, new project wizard, project overview, 5-locale base | Low-latency `256×256` sparse canvas, 240Hz brush/stabilizer, 13-blend cel layers | Lightweight Markdown/prose editor, chapter mount, read-only Outline/Bible sidebar | Verify `manga-core` Cargo feature slicing, `.prj` write isolation, and CI gate |
+| **`v0.4`–`v0.6`** | Batch prose & artwork import, episode/chapter organizer, 5-locale dictionary & bubble audit | Anti-halo close-gap fill, vector ink + intersection eraser, rulers, panels, tones, strip slicer | Multilingual novel chapters, glossary autocomplete, `<DivergenceNote>` divergence markers | Verify Manga script ↔ Hub dictionary sync and zero Novel/Manga cross-overwrite |
+| **`v0.7`–`v0.9`** | Multi-edition publisher, Git+LFS sync, Wave 1 Apple Trio project handoff | `.mnga`/PSD, `ActionBus`, Pencil Pro, Touch MacBook & iPhone Duo canvas | Novel illustration manager (`manga-pick` or `novel-custom`), EPUB3/MD export, iPhone Duo cover writer | **Wave 1 Apple Trio S4 Gate**: live hot-reload, Deep-Link handoff, 8GB multi-app soak → Joint Beta PR |
+| **`v1.0`** | Official UI, Dual-Engine dashboard, local Gemma 4 model-pack manager | Official drawing UI, translucent Novel → Manga AI rough reference overlay | Official novel atelier, side-by-side Manga → Novel AI prose reference (`ai_assist/` isolated) | **`v1.0` GA Release Gate**: AI red-line audit, decoupled finals QA, Apple Trio GA PR |
+| **`v1.1`–`v1.4`** | Wave 2 (`v1.1` Android / `v1.2` Win / `v1.3` Linux) release hub, multi-volume manager & continuity dashboard | Smart Flatting, offline LT, Gemma 4 batch macros, cleanup vectorization, 3D pose, Vision Critic, ComfyUI | Voice continuity dictation, 5-locale novel polish, multi-volume typography & Hi-Res illustration link | Per-release S4 cross-platform tri-app integration (Android Fold / Win 2-in-1 / Linux Wayland) → Unified PR |
+
 ---
 
 ## 2. Pre-1.0 Milestones (`v0.1` – `v0.9`)

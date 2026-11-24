@@ -25,6 +25,12 @@
     <string name="project_open_prj">開啟創作項目（.prj）</string>
     <string name="project_storyboard_short">大樣</string>
     <string name="settings_language">介面語言</string>
+    <string name="suite_hub_name">創想空間</string>
+    <string name="suite_hub_subtitle">創作項目概覽及多語發佈中心（暫定代號）</string>
+    <string name="suite_manga_name">雕龍</string>
+    <string name="suite_manga_subtitle">系列漫畫繪製及畫稿管理（暫定代號）</string>
+    <string name="suite_novel_name">文心</string>
+    <string name="suite_novel_subtitle">輕小說撰寫及出版工坊（暫定代號）</string>
     <string name="tool_brush_short">畫筆</string>
     <string name="tool_clipping_mask_full">剪裁遮罩</string>
     <string name="tool_clipping_mask_short">剪裁</string>

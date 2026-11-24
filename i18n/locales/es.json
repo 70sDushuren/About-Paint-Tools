@@ -42,6 +42,12 @@
     "novel.final_badge.full": { "value": "Final humano independiente (la IA nunca sobrescribe)", "status": "tuned", "locked": true },
     "novel.illustration.short": { "value": "Ilustración", "status": "tuned", "locked": true, "max_chars": 14 },
     "ai.bridge.manga_to_novel": { "value": "Generar borrador IA de novela (solo ref.)", "status": "tuned", "locked": true },
-    "ai.bridge.novel_to_manga": { "value": "Generar boceto IA de manga (solo ref.)", "status": "tuned", "locked": true }
+    "ai.bridge.novel_to_manga": { "value": "Generar boceto IA de manga (solo ref.)", "status": "tuned", "locked": true },
+    "suite.hub.name": { "value": "NoemaDock", "status": "auto", "locked": false, "max_chars": 16 },
+    "suite.hub.subtitle": { "value": "Espacio creativo y publicación (nombre clave)", "status": "auto", "locked": false },
+    "suite.manga.name": { "value": "DracoNib", "status": "auto", "locked": false, "max_chars": 16 },
+    "suite.manga.subtitle": { "value": "Estudio de manga e ilustración (nombre clave)", "status": "auto", "locked": false },
+    "suite.novel.name": { "value": "LitteraCore", "status": "auto", "locked": false, "max_chars": 16 },
+    "suite.novel.subtitle": { "value": "Taller de novela ligera (nombre clave)", "status": "auto", "locked": false }
   }
 }

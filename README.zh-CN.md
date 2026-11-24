@@ -19,29 +19,34 @@
 - **ibisPaint X / MediBang Paint** 轻快易用、填色顺手，但免费版广告与会员墙割裂体验且全闭源。
 - **Krita** 是最强的开源绘画软件，但因采用 **GPLv3 协议** 与 Apple App Store 条款冲突，至今无法登陆 iPadOS / iOS。
 
-**About-Paint-Tools** 从第一行代码起即采用宽松的 **MIT 开源协议**，确立首阶段 **黑白页漫（日漫/同人本）× 全彩条漫/二次元插画 双线并重**，并分阶段覆盖 **六大触控与折叠屏硬件平台**（第一波次 `v0.9`→`v1.0`：**iPad · 触摸屏 MacBook · iPhone Duo**；第二波次 `v1.1`–`v1.3`：**Android Pad/折叠屏手机 · 触摸屏 Windows · 触摸屏 Linux**），融合三大核心价值：
-1. **硬件原生的触控、折叠屏与手写笔手感**（目标延迟 `≤ 9ms`，覆盖 iPadOS 240Hz Apple Pencil Pro、触摸屏 MacBook 直触+快捷键、iPhone Duo 与 Android 折叠屏铰链感知双联、Windows Ink 与 Wayland `zwp_tablet_v2`）。
-2. **双线并重的专业漫画与赛璐璐工作流 + 小说 × 漫画双引擎并进**（黑白页漫：B4 600DPI 模板、矢量线稿 + 交点橡皮、分格文件夹、GPU 程序化网点；全彩条漫/插画：12+ 混合模式、闭口识别防白边填色、超长条漫预览与一键切片、多层 PSD 互通；**小说 × 漫画双引擎**：共用同一套 `.prj` 故事圣经、大纲与 5 语专有名词字典，人工小说终稿与漫画原稿 100% 独立解耦，轻小说插图支持自选漫画页或单独定制设计）。
-3. **「创作者主导」的内嵌本地 AI 驱动中心（Gemma 4 E2B/E4B + 端侧视觉）**——基于 **Apache 2.0 协议的 Gemma 4 轻量版**在设备本地离线驱动 **`v1.0` 小说 ↔ 漫画双向 AI 参考稿**（严格隔离在 `ai_assist/` 内并标记 `role="ai_reference_only"`，绝不覆盖人工终稿）、**智能场记（支持手不离笔语音速记）**、**分镜/剧情策划与 5 语言润色**以及**复杂重复批处理工作流（Function Calling → `ActionBus`）**，配合端侧语义铺底色、离线 LT 转线与赛璐璐二分阴影——**坚持本地优先、画作零上传、绝不用于训练**。
+**About-Paint-Tools** 从第一行代码起即采用宽松的 **MIT 开源协议**，确立首阶段 **黑白页漫（日漫/同人本）× 全彩条漫/二次元插画 双线并重**，并分阶段覆盖 **六大触控与折叠屏硬件平台**（第一波次 `v0.9`→`v1.0`：**iPad · 触摸屏 MacBook · iPhone Duo**；第二波次 `v1.1`–`v1.3`：**Android Pad/折叠屏手机 · 触摸屏 Windows · 触摸屏 Linux**）。
+
+为优化移动与触控设备的系统资源占用，本项目基于同一套 CPFF v1.0（`.prj`）文件体系，拆分为**三个既可单独低耗运行、又可同屏并发协同的独立工具** *(以下中/英/西语名称均暂留置为**开发代号**，待正式发版前确认最终品牌名后 PR 定稿)*：
+- **`S1` 创想空间（代号：`NoemaDock`）**：项目概览与管理中心——文案与画稿导入、漫画 × 轻小说双引擎分集连载、Git/LFS 协作与多语种/多版式成品发布（单独运行内存 `< 200 MB`）。
+- **`S2` 雕龙（代号：`DracoNib`）**：系列漫画与插画绘制工具——独占 GPU 显存与瓦片池，覆盖 240Hz Apple Pencil Pro / S-Pen / Windows Ink / Wayland `zwp_tablet_v2`、矢量线稿 + 交点橡皮、分格、网点、防白边闭口填色与条漫切片。
+- **`S3` 文心（代号：`LitteraCore`）**：轻小说撰写与出版管理工具——5 语正文写作、共享故事圣经/专有名词词典联想、自选漫画页或单独定制插图、EPUB3/Markdown 出版导出（零 GPU 画布负载，单独运行内存 `< 120 MB`）。
+- **每版本强制 `S4` 集成兼容门禁**：每个版本（`v0.1`–`v1.5+`）均拆分为 `S1`、`S2`、`S3` 三个独立子项目 + 独立的 **`S4` 三工具集成与兼容性修订阶段**，全部验收通过后再统一 PR 发布。
+- **「创作者主导」内嵌本地 AI（Gemma 4 E2B/E4B + 端侧视觉）**：离线 **Gemma 4（Apache 2.0）** 驱动 **`v1.0` 小说 ↔ 漫画双向 AI 参考稿**（严格隔离在 `ai_assist/` 内并标记 `role="ai_reference_only"`，绝不覆盖人工终稿）、语音场记、分镜策划与 `ActionBus` 批处理宏——**坚持本地优先、画作零上传、绝不用于训练**。
 
 ---
 
 ## 技术架构概览
 
-为确保**「不同硬件上的用户体验为先」**（守住各平台原生触控与手写笔延迟，同时保持 80%+ 核心代码在 Rust 端单一维护），本项目采用**「六端薄原生壳 + 共享 Rust 核心引擎」**架构：
+为确保**「不同硬件上的用户体验为先」**（守住各平台原生触控与手写笔延迟，同时保持 80%+ 核心代码在 Rust 端单一维护），本项目采用**「六端薄原生壳 × 三独立模块化应用 × 共享 Rust 核心引擎」**架构：
 
 ```mermaid
 flowchart TD
-    subgraph UI["六大硬件原生触控与折叠壳层"]
+    subgraph UI["六大硬件原生触控与折叠壳层（三独立应用：S1 创想空间 · S2 雕龙 · S3 文心）"]
         Apple["波次一（v0.9 -> v1.0）：apps/apple/<br/>iPadOS（240Hz Pencil Pro）· 触摸屏 MacBook · iPhone Duo 折叠双形态"]
         Wave2["波次二（v1.1 - v1.3）：跨生态触控/折叠壳<br/>Android Pad/折叠屏（Compose/Vulkan）· Windows触摸本（WinUI 3/DX12）· Linux触摸本（Rust GTK4/Wayland）"]
     end
 
-    subgraph Bridge["零拷贝 FFI 与 Rust 原生直连"]
+    subgraph Bridge["零拷贝 FFI 与 Rust 原生直连（按 Feature 裁剪：hub / canvas / novel）"]
         FFI["C-ABI staticlib/cdylib（Apple/Android/Win）· Rust Crate 直连（Linux）"]
     end
 
     subgraph Core["共享跨平台核心引擎（Rust, MIT 协议）"]
+        Suite["suite.rs（三工具写权分治 / Deep-Link 协议 / S4 集成门禁）"]
         Platform["platform.rs（6平台姿态 / 折叠铰链 / 自适应布局引擎）"]
         Bus["ActionBus（确定性命令总线）<br/>事务批处理宏 / 单步 UndoGroup"]
         Input["笔迹管线<br/>压感曲线 / 拉绳防抖 / 预测点合并"]
@@ -59,6 +64,7 @@ flowchart TD
 
     Apple --> FFI
     Wave2 --> FFI
+    FFI --> Suite
     FFI --> Platform
     FFI --> Input
     FFI --> Bus
@@ -78,6 +84,8 @@ flowchart TD
 
 ## 分阶段版本路线图
 
+> 以下每个版本均严格按 **`S1`（创想空间）+ `S2`（雕龙）+ `S3`（文心）+ `S4`（三工具集成兼容修订）→ 统一版本 PR 发布** 推进，详见 [06. 开发任务细化清单](./docs/zh-CN/06-development-tasks.md)。
+
 - **波次一 — Pre-1.0 系列（`v0.1` – `v0.9`）——双线内核 + Apple 三端（iPad · 触摸屏 MacBook · iPhone Duo）**
   - `v0.1`：`256×256` 稀疏分块画布内核、240Hz Apple Pencil 输入、B4 600DPI & 条漫画布预设、双基准（`en`/`zh-Hans`）i18n 基座
   - `v0.2`：笔刷盖章引擎、压感/倾斜/笔杆旋转曲线、实时拉绳防抖、8 支双线核心笔刷预设（G 笔/圆笔/平涂笔等）
@@ -88,8 +96,8 @@ flowchart TD
   - `v0.7`：CPFF v1.0 `.prj` 创作工程（Git + Git LFS）、开源 `.mnga`（含场记扩展表）、多层 PSD 互通、延时回放、**确定性 `ActionBus`**
   - `v0.8`：Apple Pencil Pro 轻捏/悬停、**触摸屏 MacBook** 屏幕直触与快捷键融合、**iPhone Duo** 折叠双形态、**5 语言应用内即时切换**
   - `v0.9`：**Wave 1 Apple 三端联合 Beta（iPad · 触摸屏 MacBook · iPhone Duo）**、B4 600DPI & `1600×25600` 磁盘换页压测、5 语言防截断 QA
-- **1.x 正式版系列（`v1.0` – `v1.5+`）——双引擎工作台 + 本地 Gemma 4 + Wave 2 全平台兼容**
-  - `v1.0`：**Apple 三端同步正式版**——全新设计系统与**三模式工作区** + **轻小说创作引擎**（共用 `.prj`、终稿解耦、自选/定制插图、EPUB3）+ **内嵌本地 Gemma 4 双向 AI 参考稿**（严格隔离于 `ai_assist/`）
+- **1.x 正式版系列（`v1.0` – `v1.5+`）——三工具正式版 + 本地 Gemma 4 + Wave 2 全平台兼容**
+  - `v1.0`：**Apple 三端同步正式版**——三独立工具正式发布（代号：`创想空间` · `雕龙` · `文心`）+ **轻小说创作出版引擎**（共用 `.prj`、终稿解耦、自选/定制插图、EPUB3）+ **内嵌本地 Gemma 4 双向 AI 参考稿**（严格隔离于 `ai_assist/`）
   - `v1.1`：**Android Pad / 折叠屏兼容版（`apps/android/`）**（Compose + WindowManager 折叠/Tabletop + S-Pen/星闪笔 Vulkan）+ Gemma 4 语音场记 + 端侧铺底色 & 离线 LT 转线
   - `v1.2`：**触摸屏 Windows 兼容版（`apps/windows/`）**（WinUI 3 + Windows Ink + 2-in-1 平板模式 + DX12）+ Gemma 4 Function-Calling 批处理驱动 + 清稿矢量化 & 赛璐璐二分
   - `v1.3`：**触摸屏 Linux 兼容版（`apps/linux/`）**（Rust 原生直连 + GTK4/Wayland `zwp_tablet_v2` + Vulkan）+ 3D 二次元人偶 + 多页/条漫分集/轻小说多卷管理
@@ -127,14 +135,14 @@ About-Paint-Tools/
 ├── templates/
 │   └── SampleManga/             # CPFF v1.0 双引擎标准示例创作工程（SampleManga.prj + Git LFS）
 ├── i18n/
-│   ├── glossary.json            # 二次元绘画与小说专业术语 5 语词典
+│   ├── glossary.json            # 二次元绘画、轻小说与三工具代号 5 语词典
 │   └── locales/                 # en, zh-Hans（双基准）+ zh-Hant, yue-Hant, es
 ├── scripts/
 │   ├── i18n_check.py            # CI 词条完整性、占位符与西语长度预警校验
 │   ├── i18n_sync.py             # 术语锁定同步 + Apple .xcstrings 与 Android strings.xml 导出
 │   └── prj_validate.py          # CPFF v1.0 .prj XML、AI 红线隔离与 Git LFS 校验器
-├── core/                        # Rust 跨平台画布、姿态与创作工程核心引擎（MIT）
-│   └── manga-core/              # 瓦片、图层、填色、矢量、分格、ActionBus、platform、.prj
+├── core/                        # Rust 跨平台画布、套件、姿态与创作工程核心引擎（MIT）
+│   └── manga-core/              # 按 Feature 裁剪（hub / canvas / novel）+ suite.rs + platform.rs
 └── apps/
     ├── apple/                   # 波次一（v0.9→v1.0）：iPadOS / 触摸屏 MacBook / iPhone Duo 统一壳
     ├── android/                 # 波次二（v1.1）：Android Pad / 折叠屏手机（Compose + WindowManager + Vulkan）
@@ -153,10 +161,13 @@ python3 scripts/i18n_check.py && python3 scripts/i18n_sync.py --check-xcstrings 
 # 2. 校验 CPFF v1.0 双引擎示例创作工程（SampleManga.prj + AI 隔离红线 + Git LFS）
 python3 scripts/prj_validate.py templates/SampleManga
 
-# 3. 校验 C-ABI 头文件、Rust 全工作区单测（manga-core + manga-linux-shell）及 Linux 壳自检
+# 3. 校验 C-ABI 头文件、Rust 全工作区单测、三工具 Feature 裁剪及 S4 集成兼容门禁
 gcc -std=c11 -Wall -Wextra -Werror -fsyntax-only core/manga-core/include/manga_core.h
 cargo test --manifest-path core/Cargo.toml --workspace --all-targets
-cargo run --manifest-path core/Cargo.toml -p manga-linux-shell -- --self-check
+cargo check --manifest-path core/Cargo.toml -p manga-core --no-default-features --features hub
+cargo check --manifest-path core/Cargo.toml -p manga-core --no-default-features --features canvas
+cargo check --manifest-path core/Cargo.toml -p manga-core --no-default-features --features novel
+cargo run --manifest-path core/Cargo.toml -p manga-linux-shell -- --integration-check
 ```
 
 ---

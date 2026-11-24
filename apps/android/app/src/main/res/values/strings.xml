@@ -25,6 +25,12 @@
     <string name="project_open_prj">Open Project (.prj)</string>
     <string name="project_storyboard_short">Rough</string>
     <string name="settings_language">App Language</string>
+    <string name="suite_hub_name">NoemaDock</string>
+    <string name="suite_hub_subtitle">Creative Project &amp; Publishing Hub (Codename)</string>
+    <string name="suite_manga_name">DracoNib</string>
+    <string name="suite_manga_subtitle">Manga &amp; Illustration Studio (Codename)</string>
+    <string name="suite_novel_name">LitteraCore</string>
+    <string name="suite_novel_subtitle">Light Novel Authoring &amp; Publishing (Codename)</string>
     <string name="tool_brush_short">Brush</string>
     <string name="tool_clipping_mask_full">Clipping Mask</string>
     <string name="tool_clipping_mask_short">Clip</string>

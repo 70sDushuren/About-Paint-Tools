@@ -14,6 +14,7 @@ use crate::panel::{PanelId, PanelLayout};
 use crate::platform::{recommend_workspace_layout, FoldPosture, TargetPlatform};
 use crate::preset::CanvasPreset;
 use crate::stroke::StrokePoint;
+use crate::suite::{can_write_relative_path, SuiteApp};
 use crate::vector::VectorNode;
 
 /// C-compatible stylus input struct matching `CMangaStrokePoint` in `manga_core.h`.
@@ -533,6 +534,34 @@ pub extern "C" fn manga_platform_release_wave(platform_code: u32) -> u8 {
         .unwrap_or(0)
 }
 
+// ============================================================================
+// Tri-App Suite (Working Codenames: Hub / Manga / Novel) Boundary C-ABI
+// ============================================================================
+
+/// Returns `1` if `app_code` is allowed to write `rel_path_utf8` under CPFF v1.0 write ownership, else `0`.
+///
+/// # Safety
+/// `rel_path_utf8` must be null or a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn manga_suite_can_write_path(
+    app_code: u32,
+    rel_path_utf8: *const c_char,
+) -> u8 {
+    let Some(app) = SuiteApp::from_u32(app_code) else {
+        return 0;
+    };
+    let rel = unsafe { cstr_to_string(rel_path_utf8, "") };
+    u8::from(can_write_relative_path(app, &rel).is_ok())
+}
+
+/// Returns standalone RAM budget in MB for `app_code` (`0` if unknown).
+#[no_mangle]
+pub extern "C" fn manga_suite_ram_budget_mb(app_code: u32) -> u32 {
+    SuiteApp::from_u32(app_code)
+        .map(|a| a.metadata().standalone_ram_budget_mb)
+        .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -653,5 +682,19 @@ mod tests {
             844.0,
         );
         assert_eq!(duo_unfolded, WorkspaceLayoutHint::DualPaneAcrossHinge as u32);
+    }
+
+    #[test]
+    fn c_abi_suite_write_ownership_and_ram_budget_match_contract() {
+        unsafe {
+            let novel_path = CString::new("chapters/ch001/novel/prose/zh-Hans.md").unwrap();
+            let manga_path = CString::new("chapters/ch001/manuscript/p001.mnga").unwrap();
+            assert_eq!(manga_suite_can_write_path(SuiteApp::Novel as u32, novel_path.as_ptr()), 1);
+            assert_eq!(manga_suite_can_write_path(SuiteApp::Manga as u32, novel_path.as_ptr()), 0);
+            assert_eq!(manga_suite_can_write_path(SuiteApp::Manga as u32, manga_path.as_ptr()), 1);
+            assert_eq!(manga_suite_can_write_path(SuiteApp::Novel as u32, manga_path.as_ptr()), 0);
+            assert_eq!(manga_suite_ram_budget_mb(SuiteApp::Novel as u32), 120);
+            assert_eq!(manga_suite_ram_budget_mb(SuiteApp::Hub as u32), 200);
+        }
     }
 }

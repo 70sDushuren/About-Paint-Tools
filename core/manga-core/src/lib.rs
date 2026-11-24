@@ -20,6 +20,7 @@ pub mod project;
 pub mod ruler;
 pub mod screentone;
 pub mod stroke;
+pub mod suite;
 pub mod tile;
 pub mod undo;
 pub mod vector;
@@ -47,6 +48,10 @@ pub use project::{
 pub use ruler::RulerKind;
 pub use screentone::{ScreentoneSpec, TonePattern};
 pub use stroke::{RopeStabilizer, StrokePoint};
+pub use suite::{
+    can_write_relative_path, run_tri_app_compatibility_check, DeepLinkAction, SuiteApp,
+    SuiteAppMetadata, TriAppIntegrationReport,
+};
 pub use tile::{TileCoord, TileData, TileLayer, TILE_SIZE};
 pub use undo::{TileDiff, TileUndoStack};
 pub use vector::{Aabb, VectorLayer, VectorNode, VectorStroke, VectorStrokeId};
