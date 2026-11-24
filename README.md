@@ -19,10 +19,10 @@ Today's iPad anime & manga creators face an awkward gap:
 - **ibisPaint X / MediBang Paint** excel at accessibility and fast flatting, yet rely on ads/paywalls and closed ecosystems.
 - **Krita** is the leading open-source painting suite, but its **GPLv3 license** conflicts with Apple App Store distribution terms, leaving a major open-source vacuum on iPadOS.
 
-**About-Paint-Tools** is designed from day one under the permissive **MIT License** to unite:
+**About-Paint-Tools** is designed from day one under the permissive **MIT License** to serve **both B&W Page Manga (Japanese Manga / Doujinshi) and Full-Color Webtoon / Anime Illustration equally**, uniting:
 1. **Procreate-grade iPad touch & Apple Pencil Pro ergonomics** (`≤ 9ms` latency target, 240Hz coalesced & predicted touches, Squeeze radial menu, Hover preview, Barrel Roll).
-2. **CSP & ibisPaint-grade anime/manga production primitives** (vector lineart + intersection eraser, close-gap expand fill, panel folders, procedural GPU screentones, reference layers, PSD interoperability).
-3. **Artist-in-the-Loop, Local-First AI Assistant Suite** (semantic flatting, offline photo-to-manga LT conversion, style-preserving sketch cleanup, 3D light-guided cel shading, character consistency checks — **zero forced cloud uploads, zero unauthorized model training**).
+2. **Dual-track anime/manga production primitives** (B&W Page Manga: B4 600DPI print templates, vector lineart + intersection eraser, panel folders, procedural GPU screentones; Full-Color Webtoon & Illustration: cel blend modes, close-gap anti-halo expand fill, vertical strip preview & slicer, layered PSD interop).
+3. **Artist-in-the-Loop Embedded Local AI (Gemma 4 E2B/E4B + Vision)** — offline **Gemma 4 (Apache 2.0)** driving **Script Supervision / Continuity Logging (with hands-free voice dictation)**, **Story & Storyboard Planning**, and **Function-Calling Batch Workflow Macros** via a deterministic `ActionBus`, paired with specialized on-device Smart Flatting, offline LT conversion, and cel-shading assists — **zero forced cloud uploads, zero unauthorized model training**.
 
 ---
 
@@ -42,51 +42,56 @@ flowchart TD
     end
 
     subgraph Core["Shared Cross-Platform Engine (Rust, MIT)"]
+        Bus["ActionBus (Deterministic Command Bus)<br/>Transactional Macros / Single UndoGroup"]
         Input["Stroke Pipeline<br/>Pressure Curves / Rope Stabilizer / Prediction"]
         Canvas["Tiled Canvas Manager<br/>256x256 Sparse Tiles / Disk Paging / CoW Undo"]
-        Vector["Vector & Manga Core<br/>Bézier Centerlines / Intersection Eraser / Panels"]
+        Vector["Dual-Track Manga & Color Core<br/>Vector Ink / Panels / Tones / Anti-Halo Fill / Slicer"]
         Render["GPU Compositor (wgpu + WGSL)<br/>Metal / Vulkan / DX12 Backends"]
-        IO["Open Format & Interop<br/>.mnga Archive / PSD Import-Export / Timelapse"]
+        IO["Open Format & Interop<br/>.mnga Archive (+Continuity DB) / PSD / Timelapse"]
     end
 
-    subgraph AI["Artist-in-the-Loop AI Abstraction"]
-        LocalAI["On-Device Inference<br/>iPad: CoreML / Core AI (ANE)<br/>Cross-Platform: ONNX Runtime (MIT)"]
+    subgraph AI["Artist-in-the-Loop Local AI"]
+        Gemma["Embedded Local LLM (Gemma 4 E2B/E4B, Apache 2.0)<br/>Continuity · Planning · Voice · Function Calling"]
+        Vision["Specialized On-Device Vision (CoreML / ONNX)<br/>Smart Flatting · Offline LT · Cel Normals · Pose"]
         BridgeAI["Open Workflow Bridge (BYOK)<br/>Local ComfyUI / Custom API Endpoints"]
     end
 
     iPad --> FFI
     Future -.-> FFI
     FFI --> Input
-    FFI --> Canvas
+    FFI --> Bus
+    Gemma --> Bus
+    Vision --> Bus
+    BridgeAI --> Bus
+    Bus --> Canvas
+    Bus --> Vector
     Input --> Canvas
     Input --> Vector
     Canvas --> Render
     Vector --> Render
     Canvas --> IO
-    Core --> LocalAI
-    Core --> BridgeAI
 ```
 
 ---
 
 ## Phased Roadmap Summary
 
-- **Pre-1.0 Series (`v0.1` – `v0.9`) — Rock-Solid iPad Manga Toolset Foundation**
-  - `v0.1`: Low-latency `256×256` sparse tile canvas, 240Hz Apple Pencil input, dual-source `en`/`zh-Hans` i18n base
-  - `v0.2`: Brush stamping engine, pressure/tilt/barrel-roll curves, real-time rope stabilizer, 8 anime presets (G-Pen, Maru, Flatting, etc.)
-  - `v0.3`: Layer tree, clipping masks, alpha lock, reference layers, blend modes, tile-level CoW undo/redo
+- **Pre-1.0 Series (`v0.1` – `v0.9`) — Dual-Track B&W Page Manga × Full-Color Webtoon/Illustration Core**
+  - `v0.1`: Low-latency `256×256` sparse tile canvas, 240Hz Apple Pencil input, B4 600DPI & Webtoon canvas presets, dual-source `en`/`zh-Hans` i18n base
+  - `v0.2`: Brush stamping engine, pressure/tilt/barrel-roll curves, real-time rope stabilizer, 8 dual-track anime presets (G-Pen, Maru, Flatting, etc.)
+  - `v0.3`: Layer tree, clipping masks, alpha lock, reference layers, 12+ cel blend modes, tile-level CoW undo/redo
   - `v0.4`: Lasso/wand selection, **close-gap + expand-edge flood fill (anti-white-halo)**, free transform & liquify
   - `v0.5`: **Vector lineart layers**, **vector intersection eraser**, symmetry & 1/2/3-point perspective rulers
-  - `v0.6`: Panel frame folders, non-destructive GPU screentones, CJK vertical & EN/ES horizontal speech bubbles
-  - `v0.7`: Open `.mnga` file format, layered PSD import/export, timelapse recording, Files/iCloud sync
+  - `v0.6`: Panel frame folders, non-destructive GPU screentones, CJK vertical & EN/ES horizontal bubbles, **Webtoon strip preview & slicer**
+  - `v0.7`: Open `.mnga` file format (+ continuity tables), layered PSD import/export, timelapse, **deterministic `ActionBus`**
   - `v0.8`: Apple Pencil Pro Squeeze radial menu, Hover cursor, reference window, **5-language live switching**
-  - `v0.9`: B4 600DPI tile disk paging stress test, 5-language Split View UI layout QA, public TestFlight Beta
-- **1.x Series (`v1.0` – `v1.5+`) — Pro UI Overhaul, Artist-Friendly AI Suite & Multi-Platform**
-  - `v1.0`: Complete Design System & dual-mode workspace (*Focus Illustration* vs *Manga Studio*) + full 5-language polish
-  - `v1.1`: On-device semantic smart flatting + offline photo-to-manga LT line/screentone extraction
-  - `v1.2`: Style-preserving sketch-to-vector cleanup + 3D light-sphere cel-shading assist
-  - `v1.3`: Lightweight 3D anime pose mannequin + multi-page chapter & Webtoon slice export
-  - `v1.4`: Character color sheet manager + AI consistency critic + local ComfyUI/BYOK bridge
+  - `v0.9`: B4 600DPI & `1600×25600` Webtoon disk paging soak test, 5-language Split View UI layout QA, public TestFlight Beta
+- **1.x Series (`v1.0` – `v1.5+`) — Pro UI Overhaul, Embedded Gemma 4 Local AI & Multi-Platform**
+  - `v1.0`: Complete Design System & dual-mode workspace (*Focus Illustration/Webtoon* vs *Manga Studio*) + full 5-language polish
+  - `v1.1`: **Embedded Gemma 4 E2B/E4B** (Script Supervisor with voice dictation + Story/Storyboard Planner + 5-language dialogue localization) + Smart Flatting & offline LT conversion
+  - `v1.2`: **Gemma 4 Function-Calling Workflow Driver** (batch macros over `ActionBus`) + style-preserving sketch-to-vector cleanup + 3D light-sphere cel shading
+  - `v1.3`: Lightweight 3D anime pose mannequin + multi-page chapter spreads & multi-episode Webtoon studio
+  - `v1.4`: **Gemma 4 Vision Continuity Critic** + local ComfyUI/BYOK workflow bridge
   - `v1.5+`: macOS, Android tablet, and Windows native shells + community Lua/WASM plugin API
 
 ---
@@ -99,9 +104,10 @@ All project documents are maintained in 1:1 mirrored **English** and **Simplifie
 | :--- | :--- | :--- |
 | 01. Market Research & Competitor Analysis | [01-market-research.md](./docs/en/01-market-research.md) | [01-market-research.md](./docs/zh-CN/01-market-research.md) |
 | 02. Technical Architecture & Platform RFC | [02-architecture-and-tech-stack.md](./docs/en/02-architecture-and-tech-stack.md) | [02-architecture-and-tech-stack.md](./docs/zh-CN/02-architecture-and-tech-stack.md) |
-| 03. AI-Assisted Creator Toolset Spec | [03-ai-assistant-spec.md](./docs/en/03-ai-assistant-spec.md) | [03-ai-assistant-spec.md](./docs/zh-CN/03-ai-assistant-spec.md) |
+| 03. AI-Assisted Creator Toolset Spec (Gemma 4) | [03-ai-assistant-spec.md](./docs/en/03-ai-assistant-spec.md) | [03-ai-assistant-spec.md](./docs/zh-CN/03-ai-assistant-spec.md) |
 | 04. Phased Development Roadmap (`0.1`–`1.x`) | [04-roadmap.md](./docs/en/04-roadmap.md) | [04-roadmap.md](./docs/zh-CN/04-roadmap.md) |
 | 05. 5-Language i18n & Layout Guide | [05-i18n-and-l10n-guide.md](./docs/en/05-i18n-and-l10n-guide.md) | [05-i18n-and-l10n-guide.md](./docs/zh-CN/05-i18n-and-l10n-guide.md) |
+| 06. Detailed Engineering Task Breakdown (WBS) | [06-development-tasks.md](./docs/en/06-development-tasks.md) | [06-development-tasks.md](./docs/zh-CN/06-development-tasks.md) |
 
 ---
 

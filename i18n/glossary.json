@@ -110,6 +110,51 @@
       "yue-Hant": "智能鋪底色",
       "es": "Color base IA",
       "note": "On-device AI semantic flatting assistant (v1.1+)"
+    },
+    {
+      "id": "bw_page_manga",
+      "en": "B&W Page Manga",
+      "zh-Hans": "黑白页漫",
+      "zh-Hant": "黑白頁漫",
+      "yue-Hant": "黑白頁漫",
+      "es": "Manga B/N",
+      "note": "Print-ready B4/A4 manga track"
+    },
+    {
+      "id": "color_webtoon",
+      "en": "Color Webtoon",
+      "zh-Hans": "全彩条漫",
+      "zh-Hant": "全彩條漫",
+      "yue-Hant": "全彩條漫",
+      "es": "Webtoon color",
+      "note": "Vertical long-strip full-color comic track"
+    },
+    {
+      "id": "script_supervisor",
+      "en": "Continuity Log",
+      "zh-Hans": "智能场记",
+      "zh-Hant": "智慧場記",
+      "yue-Hant": "智能場記",
+      "es": "Registro de guion",
+      "note": "Embedded Gemma 4 script supervisor & continuity tracker"
+    },
+    {
+      "id": "story_planner",
+      "en": "Story Planner",
+      "zh-Hans": "分镜策划",
+      "zh-Hant": "分鏡策劃",
+      "yue-Hant": "分鏡策劃",
+      "es": "Planificador",
+      "note": "Embedded Gemma 4 storyboard & plot planner"
+    },
+    {
+      "id": "workflow_driver",
+      "en": "AI Macro Driver",
+      "zh-Hans": "AI 批处理驱动",
+      "zh-Hant": "AI 批次驅動",
+      "yue-Hant": "AI 批處理驅動",
+      "es": "Macros IA",
+      "note": "Gemma 4 Function-Calling workflow engine over ActionBus"
     }
   ]
 }

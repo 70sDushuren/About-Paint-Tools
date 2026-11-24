@@ -25,6 +25,12 @@
     "workspace.focus": { "value": "Modo enfoque", "status": "auto", "locked": false },
     "workspace.manga": { "value": "Estudio manga", "status": "auto", "locked": false },
     "settings.language": { "value": "Idioma de la app", "status": "tuned", "locked": true },
+    "preset.bw_manga": { "value": "Manga B/N (B4 600DPI)", "status": "tuned", "locked": true },
+    "preset.webtoon": { "value": "Tira Webtoon color", "status": "tuned", "locked": true },
+    "ai.continuity.short": { "value": "Continuidad", "status": "tuned", "locked": true, "max_chars": 14 },
+    "ai.planner.short": { "value": "Guion/Plan", "status": "tuned", "locked": true, "max_chars": 14 },
+    "ai.macro.short": { "value": "Macros IA", "status": "tuned", "locked": true, "max_chars": 12 },
+    "ai.voice_note.full": { "value": "Nota de voz de continuidad (Gemma 4 local)", "status": "tuned", "locked": true },
     "ai.pledge.badge": { "value": "Local sin conexión · Sin entrenar con tus obras", "status": "tuned", "locked": true }
   }
 }

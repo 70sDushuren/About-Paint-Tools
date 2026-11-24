@@ -24,6 +24,12 @@
     "workspace.focus": { "value": "Focus Mode", "status": "source", "locked": true },
     "workspace.manga": { "value": "Manga Studio", "status": "source", "locked": true },
     "settings.language": { "value": "App Language", "status": "source", "locked": true },
+    "preset.bw_manga": { "value": "B&W Manga (B4 600DPI)", "status": "source", "locked": true },
+    "preset.webtoon": { "value": "Color Webtoon Strip", "status": "source", "locked": true },
+    "ai.continuity.short": { "value": "Continuity", "status": "source", "locked": true, "max_chars": 14 },
+    "ai.planner.short": { "value": "Planner", "status": "source", "locked": true, "max_chars": 14 },
+    "ai.macro.short": { "value": "Macros", "status": "source", "locked": true, "max_chars": 12 },
+    "ai.voice_note.full": { "value": "Voice Continuity Note (Local Gemma 4)", "status": "source", "locked": true },
     "ai.pledge.badge": { "value": "On-Device Offline · Zero Artwork Training", "status": "source", "locked": true }
   }
 }

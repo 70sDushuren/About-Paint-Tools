@@ -24,6 +24,12 @@
     "workspace.focus": { "value": "专注插画模式", "status": "source", "locked": true },
     "workspace.manga": { "value": "漫画工作台", "status": "source", "locked": true },
     "settings.language": { "value": "应用语言", "status": "source", "locked": true },
+    "preset.bw_manga": { "value": "黑白页漫（B4 600DPI）", "status": "source", "locked": true },
+    "preset.webtoon": { "value": "全彩条漫长画布", "status": "source", "locked": true },
+    "ai.continuity.short": { "value": "场记", "status": "source", "locked": true, "max_chars": 14 },
+    "ai.planner.short": { "value": "策划", "status": "source", "locked": true, "max_chars": 14 },
+    "ai.macro.short": { "value": "批处理", "status": "source", "locked": true, "max_chars": 12 },
+    "ai.voice_note.full": { "value": "语音场记速记（本地 Gemma 4）", "status": "source", "locked": true },
     "ai.pledge.badge": { "value": "端侧离线 · 零画作上传训练", "status": "source", "locked": true }
   }
 }

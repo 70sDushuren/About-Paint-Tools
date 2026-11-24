@@ -25,6 +25,12 @@
     "workspace.focus": { "value": "專注插畫模式", "status": "auto", "locked": false },
     "workspace.manga": { "value": "漫畫工作台", "status": "auto", "locked": false },
     "settings.language": { "value": "應用程式語言", "status": "tuned", "locked": true },
+    "preset.bw_manga": { "value": "黑白頁漫（B4 600DPI）", "status": "auto", "locked": false },
+    "preset.webtoon": { "value": "全彩條漫長畫布", "status": "auto", "locked": false },
+    "ai.continuity.short": { "value": "場記", "status": "auto", "locked": false, "max_chars": 14 },
+    "ai.planner.short": { "value": "策劃", "status": "auto", "locked": false, "max_chars": 14 },
+    "ai.macro.short": { "value": "批次作業", "status": "tuned", "locked": true, "max_chars": 12 },
+    "ai.voice_note.full": { "value": "語音場記速記（本機 Gemma 4）", "status": "tuned", "locked": true },
     "ai.pledge.badge": { "value": "本機離線 · 零作品上傳訓練", "status": "tuned", "locked": true }
   }
 }
