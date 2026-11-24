@@ -9,10 +9,27 @@ public enum CanvasPresetKind: UInt32, CaseIterable, Sendable {
     case illustration4K = 4
 }
 
+/// Swift-side mirror of `MangaBlendMode` in `core/manga-core/include/manga_core.h`.
+public enum LayerBlendMode: UInt32, CaseIterable, Sendable {
+    case normal = 0
+    case multiply = 1
+    case screen = 2
+    case overlay = 3
+    case glowDodge = 4
+    case linearBurn = 5
+    case hardLight = 6
+    case softLight = 7
+    case darken = 8
+    case lighten = 9
+    case colorBurn = 10
+    case colorDodge = 11
+    case add = 12
+}
+
 #if canImport(MangaCoreFFI)
 import MangaCoreFFI
 
-/// Type-safe RAII wrapper over the Rust `MangaCanvasHandle` C-ABI.
+/// Type-safe RAII wrapper over the Rust `MangaCanvasHandle` C-ABI (single-canvas low-latency path).
 public final class MangaCanvasEngine {
     private var handle: OpaquePointer
 
@@ -86,6 +103,118 @@ public final class MangaCanvasEngine {
     @discardableResult
     public func redo() -> Bool {
         manga_canvas_redo(handle) != 0
+    }
+}
+
+/// Type-safe RAII wrapper over `MangaProjectHandle` (multi-layer, Close-Gap fill,
+/// Vector Intersection Eraser, Panel slicing, and transactional `ActionBus` macros).
+public final class MangaProjectEngine {
+    private var handle: OpaquePointer
+
+    public init?(preset: CanvasPresetKind) {
+        guard let ptr = manga_project_create_preset(preset.rawValue) else {
+            return nil
+        }
+        self.handle = ptr
+    }
+
+    deinit {
+        manga_project_destroy(handle)
+    }
+
+    public var layerCount: Int { Int(manga_project_layer_count(handle)) }
+    public var vectorStrokeCount: Int { Int(manga_project_vector_stroke_count(handle)) }
+    public var panelCount: Int { Int(manga_project_panel_count(handle)) }
+
+    @discardableResult
+    public func addRasterLayer(
+        name: String,
+        blendMode: LayerBlendMode = .normal,
+        clippingMask: Bool = false,
+        isReference: Bool = false
+    ) -> UInt64 {
+        name.withCString { cName in
+            manga_project_add_raster_layer(
+                handle,
+                cName,
+                blendMode.rawValue,
+                clippingMask ? 1 : 0,
+                isReference ? 1 : 0
+            )
+        }
+    }
+
+    @discardableResult
+    public func batchTintLayers(
+        prefix: String,
+        rgba: (UInt8, UInt8, UInt8, UInt8),
+        opacity: Float,
+        lock: Bool
+    ) -> Int {
+        prefix.withCString { cPrefix in
+            Int(
+                manga_project_batch_tint_layers(
+                    handle,
+                    cPrefix,
+                    rgba.0,
+                    rgba.1,
+                    rgba.2,
+                    rgba.3,
+                    opacity,
+                    lock ? 1 : 0
+                )
+            )
+        }
+    }
+
+    @discardableResult
+    public func closeGapFill(
+        layerId: UInt64,
+        seedX: UInt32,
+        seedY: UInt32,
+        rgba: (UInt8, UInt8, UInt8, UInt8),
+        closeGapPx: UInt8 = 3,
+        expandPx: UInt8 = 1
+    ) -> Int {
+        Int(
+            manga_project_close_gap_fill(
+                handle,
+                layerId,
+                seedX,
+                seedY,
+                rgba.0,
+                rgba.1,
+                rgba.2,
+                rgba.3,
+                closeGapPx,
+                expandPx
+            )
+        )
+    }
+
+    @discardableResult
+    public func eraseVectorToIntersection(hitX: Float, hitY: Float, hitRadius: Float) -> Bool {
+        manga_project_vector_erase_intersection(handle, hitX, hitY, hitRadius) != 0
+    }
+
+    @discardableResult
+    public func slicePanel(
+        panelId: UInt64,
+        from a: (Float, Float),
+        to b: (Float, Float),
+        gutterPx: Float
+    ) -> Int {
+        Int(manga_project_slice_panel(handle, panelId, a.0, a.1, b.0, b.1, gutterPx))
+    }
+
+    @discardableResult
+    public func undoAction() -> Bool {
+        manga_project_undo_action(handle) != 0
+    }
+
+    @discardableResult
+    public func redoAction() -> Bool {
+        manga_project_redo_action(handle) != 0
     }
 }
 #endif

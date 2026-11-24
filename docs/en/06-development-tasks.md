@@ -70,16 +70,16 @@ This document decomposes [04. Phased Development Roadmap](./04-roadmap.md) into 
 | :--- | :--- | :--- | :--- | :--- |
 | `T0.5-01` | `[B&W Manga]` | `core/manga-vector` | Variable-width centerline representation + GPU raster cache (lossless zoom & local width adjustment) | ✅ Core `VectorStroke` / lossless scale / local width edit (`vector.rs`) landed; `vello` GPU integration pending |
 | `T0.5-02` | `[B&W Manga]` | `core/manga-vector` | **Vector Intersection Eraser**: exact intersection trimming (scale to 50k strokes with `rstar`) | ✅ `VectorLayer::erase_to_intersection` (X-overshoot & H-bridge splitting) landed & unit-tested |
-| `T0.5-03` | `[Dual]` | `core/manga-core` | Ruler snapping pipeline: symmetry, parallel, 1/2/3-point perspective, concentric, and focus/speed lines | Smooth vanishing-point stroke lock with instant toggle |
+| `T0.5-03` | `[Dual]` | `core/manga-core` | Ruler snapping pipeline: symmetry, parallel, 1/2/3-point perspective, concentric, and focus/speed lines | ✅ `ruler.rs` (symmetry mirror, parallel, 1/2/3-point perspective rays, focus lines) landed & unit-tested |
 
 ### `v0.6` — Panel Frames, GPU Screentones, Multilingual Bubbles & Webtoon Slicer
 
 | Task ID | Tag | Module | Engineering Scope | Acceptance Criteria |
 | :--- | :--- | :--- | :--- | :--- |
-| `T0.6-01` | `[B&W Manga]` | `core/manga-core` | Panel Frame Folders: straight/diagonal cuts, configurable gutters, automatic per-panel mask clipping | Strokes never bleed past panel gutters; borders remain editable |
-| `T0.6-02` | `[B&W Manga]` | `core/manga-gpu` | WGSL procedural screentones (dots/lines/noise, live LPI, angle, density, local erase mask) | Moiré-free viewport preview + crisp 600DPI binary print export |
+| `T0.6-01` | `[B&W Manga]` | `core/manga-core` | Panel Frame Folders: straight/diagonal cuts, configurable gutters, automatic per-panel mask clipping | ✅ `panel.rs` (Sutherland-Hodgman straight/diagonal slicing, gutters & point masking) landed & exposed via C-ABI |
+| `T0.6-02` | `[B&W Manga]` | `core/manga-gpu` | Procedural screentones (dots/lines/crosshatch/noise, live LPI, angle, density, 600DPI binary print) | ⏳ `screentone.rs` area-preserving halftone math landed & unit-tested; WGSL port pending |
 | `T0.6-03` | `[Dual]` | `apps/ipad` + `core` | Speech bubble presets + CoreText **vertical CJK (punctuation compression) & horizontal EN/ES** with locale-switchable text layers | Single page toggles cleanly across EN/CN/ES bubble sets |
-| `T0.6-04` | `[Color Webtoon]` | `core/manga-io` | Webtoon mobile viewport frame preview + automated height slicing (e.g., `800×1280`) lossless batch export | Zero seam artifacts on sliced strips |
+| `T0.6-04` | `[Color Webtoon]` | `core/manga-io` | Webtoon mobile viewport frame preview + automated height slicing (e.g., `800×1280`) lossless batch export | ✅ `webtoon.rs` (slice calculator & zero-seam RGBA8 renderer) landed; PNG encoder wiring pending |
 
 ### `v0.7` — Open `.mnga` Format, Layered PSD Interop & `ActionBus`
 
