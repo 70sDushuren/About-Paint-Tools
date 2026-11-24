@@ -13,6 +13,17 @@ This document decomposes [04. Phased Development Roadmap](./04-roadmap.md) into 
 - `[Local AI]`: Embedded local Gemma 4 (E2B/E4B) Script Supervisor, Story Planner, Function-Calling driver, and on-device vision tools
 - `[i18n]`: 5-language (`en`, `zh-Hans`, `zh-Hant`, `yue-Hant`, `es`) localization & adaptive layout QA
 
+### MIT-Compatible Graphics Library Integration Map (see [02. Architecture RFC](./02-architecture-and-tech-stack.md#4-high-performance-open-source-graphics-libraries-rust--c--mit-compliance))
+
+| Milestone | Key Permissive Crates / Libs | Accelerated Tasks |
+| :--- | :--- | :--- |
+| `v0.1` | `wgpu`, `glam`, `swift-bridge` / `uniffi` | `T0.1-02`, `T0.1-03` |
+| `v0.2–v0.4` | `rayon`, `tiny-skia`, `fast_image_resize` (brush dynamics reference: ISC `libmypaint`) | `T0.2-01`, `T0.4-02`, `T0.4-03` |
+| `v0.5` | `vello` (GPU vectors), `kurbo` (Bézier intersections/offsets), `rstar` (R\*-tree index) | `T0.5-01`, `T0.5-02` |
+| `v0.6` | `i_overlay` (panel polygon slicing & booleans), `parley` + `harfrust` (text shaping) | `T0.6-01`, `T0.6-03` |
+| `v0.7–v0.9` | `rusqlite`, `zstd` / `lz4_flex`, `psd`, `moxcms` (or C `lcms2` for print CMYK) | `T0.7-01`, `T0.7-02`, `T0.9-01` |
+| `v1.1–v1.3` | `LiteRT-LM` + **Gemma 4 E2B/E4B** (Apache 2.0), `gltf` (3D anime mannequin) | `T1.1-01`–`T1.2-01`, `T1.3-01` |
+
 ---
 
 ## 2. Pre-1.0 Engineering Tasks (`v0.1` – `v0.9`)

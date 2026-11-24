@@ -97,12 +97,44 @@ flowchart TD
 
 ---
 
-## 4. MIT 开源协议依赖合规清单（含模型权重边界）
+## 4. 高性能开源图形学库选型（Rust / C++）与 MIT 协议合规评估
+
+在严格不污染 **MIT 开源许可** 且满足 **iPadOS App Store 审核规范** 的前提下，采用成熟的高性能 Rust/C++ 图形学库可大幅缩短 `v0.1–v1.3` 核心引擎研发周期，避免重复造轮子。
+
+### 4.1 首选纯 Rust 高性能图形学与几何库（无 C++ 交叉编译负担）
+
+| 能力域 | 推荐库（Crate） | 精确开源协议 | 适用里程碑 | 提效价值与核心用途 |
+| :--- | :--- | :--- | :--- | :--- |
+| **跨平台 GPU 后端** | `wgpu` | **MIT OR Apache-2.0** | `v0.1+` | iPadOS/macOS 零损耗直调 Metal，Android 走 Vulkan，Windows 走 DX12；统一 WGSL 着色器负责瓦片合成、笔刷盖章、混合模式与程序化网点 |
+| **GPU 计算着色器 2D 矢量渲染** | `vello`（+ `vello_cpu` / `vello_hybrid`） | **MIT OR Apache-2.0** | `v0.5–v0.6` | Linebender 出品，原生运行在 `wgpu` 之上且在 Apple Silicon GPU 上表现极佳；直接渲染 400% 无损缩放的**矢量线稿层、分格框线、漫画气泡与 SVG 素材** |
+| **2D 贝塞尔曲线与几何计算** | `kurbo` | **MIT OR Apache-2.0** | `v0.5` | 高精度二/三次 Bézier 拟合、曲线求交、路径偏置（Stroke Expansion）与解析包围盒，直接加速**可变线宽矢量线稿与交点计算** |
+| **2D 多边形布尔与切割** | `i_overlay`（+ `i_curve`） | **MIT** | `v0.6` | 数值极其稳健的高性能多边形布尔（并/交/差）与**折线切分多边形**引擎，直接用于**漫画分格框斜切/合并**、复杂选区布尔与气泡融合 |
+| **空间索引（碰撞与交点加速）** | `rstar` | **MIT OR Apache-2.0** | `v0.5` | R\*-tree 空间索引，将 50,000+ 根矢量头发线稿上的**矢量交点橡皮擦**与套索命中查询压至 `O(log N)` |
+| **SIMD 线性代数与多线程并行** | `glam` + `rayon` | **MIT OR Apache-2.0** | `v0.1+` | `glam` 负责视口变换/透视尺/3D 人偶矩阵；`rayon` 负责多核并行冷瓦片压缩、批量填色与条漫切片导出 |
+| **CPU 2D 兜底与 SIMD 缩放** | `tiny-skia` + `fast_image_resize` | **BSD-3-Clause** / **MIT OR Apache-2.0** | `v0.1–v0.9` | `tiny-skia` 用于轻量选区蒙版/自动化黄金图回归测试；`fast_image_resize` 利用 ARM NEON SIMD 极速生成缩略图与条漫导出缩放 |
+| **印刷级色彩管理（ICC / CMYK）** | `moxcms` | **BSD-3-Clause OR Apache-2.0** | `v0.7–v0.9` | 纯 Rust SIMD 色彩管理，支持 `RGBX ↔ CMYK` 与同人本印刷软打样（Soft Proofing） |
+| **跨平台文字塑形** | `parley` + `harfrust` | **MIT OR Apache-2.0** | `v0.6` / `v1.5+` | 纯 Rust HarfBuzz 移植版，配合 iPadOS 原生 `CoreText` 兼顾中/日文竖排标点挤压与未来多端一致排版 |
+| **瓦片压缩、持久化与 PSD** | `zstd` / `lz4_flex` + `rusqlite` + `psd` | **MIT / BSD-3 / Apache-2.0** | `v0.7` | `zstd`/`lz4_flex` 实现亚毫秒级冷瓦片磁盘换页；`rusqlite` 支撑 `.mnga` 与场记表；`psd`（`chinedufn/psd`）加速 PSD 读取并补齐 Clean-room MIT 写入器 |
+| **3D 二次元人偶加载** | `gltf` | **MIT OR Apache-2.0** | `v1.3` | 解析带骨骼权重的轻量 `.glb/.gltf` 二次元比例人偶与室内背景模型，直接送入 `wgpu` 渲染 |
+| **Rust ↔ Swift FFI 桥接** | `swift-bridge` 或 `uniffi` | **MIT OR Apache-2.0** / **MPL-2.0** | `v0.1+` | `swift-bridge` 零开销专精 Rust↔Swift；`uniffi`（文件级 MPL-2.0，兼容 MIT 应用）可同时生成 Swift 与未来 Android Kotlin 绑定 |
+
+### 4.2 C / C++ 图形学库对比评估（哪些可借用，哪些必须避坑）
+
+| C / C++ 开源库 | 协议 | 评估结论 | 工程与合规原因说明 |
+| :--- | :--- | :--- | :--- |
+| **`LittleCMS (lcms2)`**（C） | **MIT** | ✅ **可选兜底** | 印刷色彩管理行业老牌标准；若 `moxcms` 遇到冷门印刷 ICC Profile 边界情况，可无痛替换或作为对照基准 |
+| **`libmypaint`**（C） | **ISC（MIT 兼容）** | ✅ **强烈推荐参考/复用笔刷物理公式** | ⚠️ 注意区分：MyPaint 桌面 GUI 是 GPLv2+（禁用），但独立内核 **`libmypaint` 为 ISC 协议**，其压感/速度/涂抹混色数学模型对 `v0.2` 笔刷引擎极具参考价值 |
+| **`ThorVG`**（C++） | **MIT** | ⚠️ **仅限轻量 SVG/Lottie 贴纸** | 轻巧且有 Swift 封装，但在 iPadOS Metal 原生渲染深度上不如 `wgpu + vello` 统一管线 |
+| **`Skia`**（C++） | **BSD-3-Clause** | ⚠️ **不推荐作为主引擎** | 虽协议合规，但二进制体积庞大（15–25MB+）、GN/Ninja 跨平台编译链极重，且与自研 `wgpu` 分块画布/自定义网点着色器高度重叠 |
+| **`Blend2D`**（C++） | **Zlib** | ❌ **iPadOS 必须避坑** | 桌面 CPU 渲染极快，但核心加速依赖 **AsmJit 运行时 JIT 编译**——**iPadOS App Store 严格禁止 W^X 运行时 JIT**；退回无 JIT 路径后失去性能优势，且 Apple Silicon GPU 上 `wgpu + vello` 远快于纯 CPU 渲染 |
+| **`Krita` / `GEGL` / `Cairo` / `GPL FFmpeg`** | **GPLv3 / LGPL** | ❌ **绝对禁区** | 与 MIT 协议及 Apple App Store 分发条款根本冲突，严禁以任何形式引入源码或静态链接 |
+
+### 4.3 MIT 协议合规与模型权重红线汇总
 
 | 合规分类 | 允许 / 禁止协议 | 推荐开源组件与模型示例 |
 | :--- | :--- | :--- |
-| **✅ 严格允许** | MIT、Apache-2.0、BSD-2/3、Zlib、ISC、MPL-2.0（文件级） | Rust `wgpu`, `kurbo`, `tiny-skia`, `zstd`, `rusqlite`, `uniffi`；`ONNX Runtime`（MIT）；**`LiteRT-LM` & `Gemma 4 E2B / E4B` 权重（Apache 2.0）**；Apple 原生框架（Metal / UIKit / SwiftUI / CoreML / Core AI） |
-| **❌ 严禁引入** | GPLv2、GPLv3、AGPL、静态链接 LGPL、限制性商用模型协议 | Krita 源码、MyPaint GPL 组件、GPL 编解码版 FFmpeg、闭源笔刷商业引擎、含商业收入门槛限制的闭源权重 |
+| **✅ 严格允许** | MIT、Apache-2.0、BSD-2/3、Zlib、ISC、MPL-2.0（文件级） | 上述第 4.1/4.2 节标记 ✅ 的全部 Rust/C 库；`ONNX Runtime`（MIT）；**`LiteRT-LM` & `Gemma 4 E2B / E4B` 权重（Apache 2.0）**；Apple 原生框架（Metal / UIKit / SwiftUI / CoreText / CoreML / Core AI） |
+| **❌ 严禁引入** | GPLv2、GPLv3、AGPL、静态链接 LGPL、限制性商用模型协议 | Krita 源码、MyPaint GUI（GPL 部分）、GPL 编解码版 FFmpeg、闭源笔刷商业引擎、含商业收入门槛限制的闭源权重 |
 
 > **分发架构**：Gemma 4 模型权重以**可选按需下载资源包（Model Pack）**分发，不打入 App Store 主安装包体积，保留完整 Apache 2.0 声明与用户一键卸载权。
 

@@ -97,12 +97,44 @@ To allow the embedded **Gemma 4** model to drive complex repetitive workflows sa
 
 ---
 
-## 4. MIT Dependency & Model-Weight Compliance Policy
+## 4. High-Performance Open-Source Graphics Libraries (Rust / C++) & MIT Compliance
+
+Leveraging battle-tested, permissively licensed Rust and C/C++ computer graphics libraries accelerates `v0.1–v1.3` delivery dramatically while keeping the **MIT License** and **iPadOS App Store compliance** 100% intact.
+
+### 4.1 Preferred Pure-Rust Graphics & Geometry Crates (Zero C++ Cross-Compile Overhead)
+
+| Domain | Recommended Crate(s) | Exact License | Target Milestones | Engineering Leverage & Role |
+| :--- | :--- | :--- | :--- | :--- |
+| **Cross-Platform GPU Backend** | `wgpu` | **MIT OR Apache-2.0** | `v0.1+` | Direct Metal on iPadOS/macOS, Vulkan on Android, DX12 on Windows; unified WGSL shaders for tile compositing, brush stamping, blend modes, and procedural screentones |
+| **GPU Compute 2D Vector Renderer** | `vello` (+ `vello_cpu` / `vello_hybrid`) | **MIT OR Apache-2.0** | `v0.5–v0.6` | Built by Linebender directly on `wgpu` with standout performance on Apple Silicon GPUs; powers razor-sharp 400%-zoomable **vector lineart, panel borders, speech bubbles, and SVG overlays** |
+| **2D Bézier Curve Geometry** | `kurbo` | **MIT OR Apache-2.0** | `v0.5` | High-precision quadratic/cubic Bézier fitting, curve-line intersection, stroke expansion/offsetting, and analytical bounds for **variable-width vector ink & intersection erasing** |
+| **2D Polygon Booleans & Slicing** | `i_overlay` (+ `i_curve`) | **MIT** | `v0.6` | Numerically robust boolean ops (union/intersect/diff) and **polyline-slices-polygon** engine — ideal for **diagonal manga panel frame cuts**, boolean selections, and merged speech bubbles |
+| **Spatial Indexing** | `rstar` | **MIT OR Apache-2.0** | `v0.5` | R\*-tree spatial index keeping **Vector Intersection Eraser** and lasso hit-testing at `O(log N)` across 50,000+ hair ink strokes |
+| **SIMD Math & Parallelism** | `glam` + `rayon` | **MIT OR Apache-2.0** | `v0.1+` | `glam` for viewport, perspective rulers, and 3D mannequin transforms; `rayon` for multi-core tile compression, batch fill, and Webtoon strip slicing |
+| **CPU 2D Fallback & SIMD Resize** | `tiny-skia` + `fast_image_resize` | **BSD-3-Clause** / **MIT OR Apache-2.0** | `v0.1–v0.9` | `tiny-skia` for deterministic CPU masks & golden-image tests; `fast_image_resize` (ARM NEON SIMD) for instant thumbnails and Webtoon export scaling |
+| **Print Color Management (ICC / CMYK)** | `moxcms` | **BSD-3-Clause OR Apache-2.0** | `v0.7–v0.9` | Pure-Rust SIMD ICC profile conversion (`RGBX ↔ CMYK`) and print soft-proofing for doujinshi/manga printing |
+| **Cross-Platform Text Shaping** | `parley` + `harfrust` | **MIT OR Apache-2.0** | `v0.6` / `v1.5+` | Pure-Rust HarfBuzz port complementing native Apple `CoreText` (vertical CJK punctuation squeeze on iPadOS + consistent shaping on future platforms) |
+| **Tile Compression, Storage & PSD** | `zstd` / `lz4_flex` + `rusqlite` + `psd` | **MIT / BSD-3 / Apache-2.0** | `v0.7` | Sub-millisecond cold-tile disk paging (`zstd`/`lz4_flex`), `.mnga` & continuity tables (`rusqlite`), PSD reading (`chinedufn/psd`) paired with a clean-room MIT PSD writer |
+| **3D Anime Mannequin Loading** | `gltf` | **MIT OR Apache-2.0** | `v1.3` | Loads rigged lightweight `.glb/.gltf` anime-proportioned figures and room props directly into `wgpu` |
+| **Rust ↔ Swift FFI Bridge** | `swift-bridge` or `uniffi` | **MIT OR Apache-2.0** / **MPL-2.0** | `v0.1+` | `swift-bridge` for zero-overhead Rust↔Swift; `uniffi` (file-level MPL-2.0, MIT-app compatible) to auto-generate both Swift and future Android Kotlin bindings |
+
+### 4.2 C / C++ Graphics Library Evaluation (Adopt vs. Pitfalls to Avoid on iPadOS)
+
+| C / C++ Library | License | Verdict | Engineering & Legal Rationale |
+| :--- | :--- | :--- | :--- |
+| **`LittleCMS (lcms2)`** (C) | **MIT** | ✅ **Optional Print Fallback** | Industry-standard ICC/CMYK color engine; drop-in fallback or golden reference if `moxcms` hits exotic print ICC profiles |
+| **`libmypaint`** (C) | **ISC (MIT-compatible)** | ✅ **Recommended Brush Math Reference** | ⚠️ Crucial distinction: MyPaint's GUI is GPLv2+ (prohibited), **but standalone `libmypaint` is ISC-licensed** — its pressure/speed/smudge dab physics are an excellent permissive reference for `v0.2` |
+| **`ThorVG`** (C++) | **MIT** | ⚠️ **SVG/Lottie Stickers Only** | Lightweight with Swift bindings, but less cohesive on iPadOS Metal than unifying everything on `wgpu + vello` |
+| **`Skia`** (C++) | **BSD-3-Clause** | ⚠️ **Not Recommended as Primary Engine** | Permissive license, but adds ~15–25MB binary bloat, heavy GN/Ninja cross-compilation, and duplicates our custom `wgpu` tiled canvas and procedural halftone shaders |
+| **`Blend2D`** (C++) | **Zlib** | ❌ **Avoid on iPadOS** | Blazing desktop CPU renderer, **but relies on AsmJit runtime JIT compilation — strictly prohibited on the iPadOS App Store (W^X restriction)**. Without JIT it loses its primary edge, and `wgpu + vello` far outperforms CPU rendering on Apple Silicon GPUs |
+| **`Krita` / `GEGL` / `Cairo` / `GPL FFmpeg`** | **GPLv3 / LGPL** | ❌ **Strictly Prohibited** | Incompatible with MIT licensing and Apple App Store distribution terms |
+
+### 4.3 MIT Dependency & Model-Weight Compliance Summary
 
 | Policy | Licenses | Approved Components & Weights |
 | :--- | :--- | :--- |
-| **✅ Permitted** | MIT, Apache-2.0, BSD-2/3, Zlib, ISC, MPL-2.0 (file-level) | Rust `wgpu`, `kurbo`, `tiny-skia`, `zstd`, `rusqlite`, `uniffi`; `ONNX Runtime` (MIT); **`LiteRT-LM` & `Gemma 4 E2B / E4B` weights (Apache 2.0)**; Apple frameworks (Metal, UIKit, SwiftUI, CoreML, Core AI) |
-| **❌ Prohibited** | GPLv2, GPLv3, AGPL, static-linked LGPL on iOS, restrictive commercial model terms | Krita source, GPL MyPaint modules, GPL FFmpeg builds, closed brush SDKs, revenue-capped proprietary weights |
+| **✅ Permitted** | MIT, Apache-2.0, BSD-2/3, Zlib, ISC, MPL-2.0 (file-level) | All ✅ Rust/C libraries in Sections 4.1–4.2; `ONNX Runtime` (MIT); **`LiteRT-LM` & `Gemma 4 E2B / E4B` weights (Apache 2.0)**; Apple frameworks (Metal, UIKit, SwiftUI, CoreText, CoreML, Core AI) |
+| **❌ Prohibited** | GPLv2, GPLv3, AGPL, static-linked LGPL on iOS, restrictive commercial model terms | Krita source, GPL MyPaint GUI modules, GPL FFmpeg builds, closed brush SDKs, revenue-capped proprietary weights |
 
 > **Distribution Model**: Gemma 4 weights ship as **opt-in downloadable Model Packs**, keeping the App Store binary lean, preserving full Apache 2.0 attribution, and allowing one-tap deletion at any time.
 

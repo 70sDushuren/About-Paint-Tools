@@ -13,6 +13,17 @@
 - `[本地AI]`：内嵌本地 Gemma 4（E2B/E4B）场记/策划/Function Calling 驱动与端侧视觉辅助
 - `[i18n]`：5 语言（`en` / `zh-Hans` / `zh-Hant` / `yue-Hant` / `es`）国际化与布局适配
 
+### 推荐 MIT 兼容图形学库按版本引入映射（详见 [02. 架构 RFC](./02-architecture-and-tech-stack.md#4-高性能开源图形学库选型rust--c与-mit-协议合规评估)）
+
+| 引入版本 | 核心引入库（均兼容 MIT 协议） | 直接加速的任务 ID |
+| :--- | :--- | :--- |
+| `v0.1` | `wgpu`、`glam`、`swift-bridge` / `uniffi` | `T0.1-02`、`T0.1-03` |
+| `v0.2–v0.4` | `rayon`、`tiny-skia`、`fast_image_resize`（笔刷物理参考 ISC `libmypaint`） | `T0.2-01`、`T0.4-02`、`T0.4-03` |
+| `v0.5` | `vello`（GPU 矢量）、`kurbo`（贝塞尔求交/偏置）、`rstar`（R\*-tree 空间索引） | `T0.5-01`、`T0.5-02` |
+| `v0.6` | `i_overlay`（分格多边形斜切与布尔）、`parley` + `harfrust`（跨端塑形） | `T0.6-01`、`T0.6-03` |
+| `v0.7–v0.9` | `rusqlite`、`zstd` / `lz4_flex`、`psd`、`moxcms`（或 C `lcms2` CMYK 校色） | `T0.7-01`、`T0.7-02`、`T0.9-01` |
+| `v1.1–v1.3` | `LiteRT-LM` + **Gemma 4 E2B/E4B**（Apache 2.0）、`gltf`（3D 二次元人偶） | `T1.1-01`–`T1.2-01`、`T1.3-01` |
+
 ---
 
 ## 2. Pre-1.0 细化工程任务（`v0.1` – `v0.9`）

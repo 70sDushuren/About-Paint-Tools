@@ -12,4 +12,10 @@ crate-type = ["rlib", "staticlib"]
 
 [dependencies]
 # Zero external dependencies in v0.1 foundation for fast offline verification.
-# Planned MIT/Apache-2.0 crates for upcoming milestones: wgpu, kurbo, zstd, uniffi.
+# Curated MIT/Apache-2.0/BSD-3 graphics & core crates by milestone (see docs/en/02-architecture-and-tech-stack.md):
+# - v0.1: wgpu, glam, swift-bridge / uniffi
+# - v0.2-v0.4: rayon, tiny-skia, fast_image_resize
+# - v0.5: vello, kurbo, rstar
+# - v0.6: i_overlay, parley, harfrust
+# - v0.7-v0.9: rusqlite, zstd / lz4_flex, psd, moxcms
+# - v1.3: gltf
