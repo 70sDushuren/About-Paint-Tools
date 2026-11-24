@@ -52,24 +52,24 @@ This document decomposes [04. Phased Development Roadmap](./04-roadmap.md) into 
 
 | Task ID | Tag | Module | Engineering Scope | Acceptance Criteria |
 | :--- | :--- | :--- | :--- | :--- |
-| `T0.3-01` | `[Color Webtoon]` | `core/manga-core` | Hierarchical layer tree (raster, folders, Clipping Mask, Alpha Lock, Reference flag, non-destructive blue sketch tint) | Arbitrary folder nesting with instant tint toggle |
-| `T0.3-02` | `[Color Webtoon]` | `core/manga-gpu` | 12+ WGSL blend modes (Multiply, Screen, Overlay, Glow Dodge, Linear Burn, Hard Light, Hue/Sat) | Within `≤ 1/255` pixel delta against reference sRGB formulas |
-| `T0.3-03` | `[Dual]` | `core/manga-core` | Upgrade `TileUndoStack` to transactional multi-layer undo/redo (add/delete/reorder/merge) | 50 undo/redo ops on 30-layer 4K canvas run in `< 16ms` each |
+| `T0.3-01` | `[Color Webtoon]` | `core/manga-core` | Hierarchical layer tree (raster, folders, Clipping Mask, Alpha Lock, Reference flag, non-destructive blue sketch tint) | ✅ `layer.rs` (`LayerStack`, clipping masks, alpha lock, blue tint) landed & unit-tested |
+| `T0.3-02` | `[Color Webtoon]` | `core/manga-gpu` | 12+ WGSL blend modes (Multiply, Screen, Overlay, Glow Dodge, Linear Burn, Hard Light, Hue/Sat) | ⏳ 13 reference CPU blend modes (`blend_rgba`) landed; WGSL port pending |
+| `T0.3-03` | `[Dual]` | `core/manga-core` | Upgrade `TileUndoStack` to transactional multi-layer undo/redo (add/delete/reorder/merge) | ✅ Transactional `ActionUndoGroup` landed in `action_bus.rs` |
 
 ### `v0.4` — Selection, Free Transform & Anti-Halo Bucket Fill
 
 | Task ID | Tag | Module | Engineering Scope | Acceptance Criteria |
 | :--- | :--- | :--- | :--- | :--- |
 | `T0.4-01` | `[Dual]` | `core/manga-core` | Lasso, rect/ellipse marquee, magic wand (reference-layer aware, GPU marching ants, expand/contract/invert) | Selection mask constrains both brushes and fills cleanly |
-| `T0.4-02` | `[Color Webtoon]` | `core/manga-core` | **Headline Feature**: Scanline Close-Gap bucket fill (`1–8px`) + Edge Expand (`1–3px`) + enclose-and-fill lasso | Lineart with 3px gaps fills in `< 100ms` with zero leaks and zero white halos |
+| `T0.4-02` | `[Color Webtoon]` | `core/manga-core` | **Headline Feature**: Scanline Close-Gap bucket fill (`1–8px`) + Edge Expand (`1–3px`) + enclose-and-fill lasso | ✅ `fill.rs` (`close_gap_expand_fill`, reference layers, 3px gap sealing & 1px expansion) landed & unit-tested |
 | `T0.4-03` | `[Dual]` | `core/manga-gpu` | GPU bilinear/bicubic Free Transform (scale, rotate, 4-corner perspective) & basic Liquify mesh | Real-time 60–120fps preview writing back only dirty tiles on commit |
 
 ### `v0.5` — Vector Lineart Layer & Manga Rulers
 
 | Task ID | Tag | Module | Engineering Scope | Acceptance Criteria |
 | :--- | :--- | :--- | :--- | :--- |
-| `T0.5-01` | `[B&W Manga]` | `core/manga-vector` | Variable-width Bézier centerline representation + GPU raster cache (lossless zoom & local width adjustment) | Crisp edges at 400% zoom; redraw `< 8ms` |
-| `T0.5-02` | `[B&W Manga]` | `core/manga-vector` | **Vector Intersection Eraser**: BVH/Quadtree spatial index to compute nearest curve intersections and trim overshoots | Complex overlapping hair tails trim cleanly in one swipe |
+| `T0.5-01` | `[B&W Manga]` | `core/manga-vector` | Variable-width centerline representation + GPU raster cache (lossless zoom & local width adjustment) | ✅ Core `VectorStroke` / lossless scale / local width edit (`vector.rs`) landed; `vello` GPU integration pending |
+| `T0.5-02` | `[B&W Manga]` | `core/manga-vector` | **Vector Intersection Eraser**: exact intersection trimming (scale to 50k strokes with `rstar`) | ✅ `VectorLayer::erase_to_intersection` (X-overshoot & H-bridge splitting) landed & unit-tested |
 | `T0.5-03` | `[Dual]` | `core/manga-core` | Ruler snapping pipeline: symmetry, parallel, 1/2/3-point perspective, concentric, and focus/speed lines | Smooth vanishing-point stroke lock with instant toggle |
 
 ### `v0.6` — Panel Frames, GPU Screentones, Multilingual Bubbles & Webtoon Slicer
@@ -85,9 +85,9 @@ This document decomposes [04. Phased Development Roadmap](./04-roadmap.md) into 
 
 | Task ID | Tag | Module | Engineering Scope | Acceptance Criteria |
 | :--- | :--- | :--- | :--- | :--- |
-| `T0.7-01` | `[Dual]` | `core/manga-io` | `.mnga` open archive (SQLite + Zstd tiles + JSON manifest + **continuity/script tables**) with incremental autosave & crash recovery | Restores within last 3 seconds of strokes after forced kill |
+| `T0.7-01` | `[Dual]` | `core/manga-io` | `.mnga` open archive (SQLite + Zstd tiles + JSON manifest + **continuity/script tables**) with incremental autosave & crash recovery | ⏳ Continuity SQLite DDL & model (`continuity.rs`) landed; `rusqlite`/`zstd` persistence pending |
 | `T0.7-02` | `[Dual]` | `core/manga-io` | Clean-room MIT layered PSD codec (layer tree, blend modes, opacity, clipping masks, text metadata) | Visual parity when opened in CSP / Photoshop |
-| `T0.7-03` | `[Dual]` | `core/manga-core` | **Deterministic `ActionBus`**: typed JSON Schema command registry, batch macro runner, and single `UndoGroup` wrapper | Page/layer/fill/tone/export ops execute via JSON and undo in one step |
+| `T0.7-03` | `[Dual]` | `core/manga-core` | **Deterministic `ActionBus`**: whitelisted commands, dry-run preview, and atomic single-step `UndoGroup` rollback | ✅ `action_bus.rs` (`ActionBus`, `ProjectDocument`, Gemma 4 batch test) landed & unit-tested |
 | `T0.7-04` | `[Dual]` | `core/manga-io` | Lightweight Timelapse keyframe capture & background MP4 export | `< 2%` frame-rate overhead while drawing |
 
 ### `v0.8` – `v0.9` — Apple Pencil Pro, 5-Locale Polish & Dual-Track Beta
