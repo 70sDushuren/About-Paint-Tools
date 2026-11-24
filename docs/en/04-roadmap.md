@@ -10,30 +10,30 @@ Phase `0.x` formally treats **both anime comic workflows as equal first-class ci
 
 - **Track A — B&W Page Manga (Japanese Manga / Doujinshi)**: B4/A4 600DPI print templates (bleed/crop guides), G-Pen taper & rope stabilizer, vector lineart + vector intersection eraser, panel frame folders, non-destructive GPU screentones, and CJK vertical speech bubbles.
 - **Track B — Full-Color Webtoon & Anime Illustration**: Vertical long-strip & 4K illustration presets, full cel-shading blend modes, clipping mask / alpha lock / reference layer workflow, close-gap + edge-expand anti-halo bucket fill, and seamless platform strip slicing.
-- **Pre-1.0 Series (`v0.1` – `v0.9`)**: Delivers a complete, ultra-responsive iPad framework covering both tracks, while introducing the deterministic `ActionBus` and continuity metadata schema in `v0.7–v0.8` to prepare cleanly for `1.x` local AI orchestration.
-- **1.x Series (`v1.0` – `v1.5+`)**: Ships a ground-up **UI/UX design upgrade** in `v1.0`, integrates the **embedded local Gemma 4 (E2B/E4B) Continuity, Story Planning & Workflow Driver** alongside specialized vision tools in `v1.1–v1.4`, and expands to macOS, Android tablets, and Windows in `v1.5+`.
+- **Pre-1.0 Series (`v0.1` – `v0.9`)**: Delivers a complete, ultra-responsive dual-track engine and completes **Wave 1 Apple Trio parity in `v0.8–v0.9` (iPad · Touchscreen MacBook · iPhone Duo foldable)**, alongside deterministic `ActionBus`, CPFF v1.0 `.prj`, and the shared `platform.rs` posture engine.
+- **1.x Series (`v1.0` – `v1.5+`)**: Launches `v1.0` simultaneously across all three Wave 1 Apple targets (**Pro UI + Novel × Manga Dual-Engine Studio + Embedded Gemma 4 Bidirectional AI Reference Drafts**), then rolls out **Wave 2 cross-ecosystem touch & foldable builds**: **`v1.1` Android Pad / Foldable Phone** → **`v1.2` Touchscreen Windows Notebook / 2-in-1 Pad** → **`v1.3` Touchscreen Linux Notebook / Pad**, paired with specialized vision AI and plugin ecosystems.
 
 > For granular engineering work packages, task IDs, module ownership, and DoD checklists, see [06. Detailed Engineering Task Breakdown](./06-development-tasks.md).
 
 ```mermaid
 flowchart LR
-    subgraph Pre1["Pre-1.0 Series (v0.1 - v0.9): Dual-Track B&W Manga & Color Webtoon Core"]
+    subgraph Pre1["Pre-1.0 (v0.1 - v0.9): Dual Core + Apple Trio (iPad / Touch MacBook / iPhone Duo)"]
         V01["v0.1 Dual Canvas Core"] --> V02["v0.2 Brush & Stabilizer"]
         V02 --> V03["v0.3 Cel Layer Stack"]
         V03 --> V04["v0.4 Selection & Anti-Halo Fill"]
         V04 --> V05["v0.5 Vector Ink & Rulers"]
         V05 --> V06["v0.6 Panels / Tones / Slicer"]
-        V06 --> V07["v0.7 .mnga / PSD / ActionBus"]
-        V07 --> V08["v0.8 Pencil Pro & 5-i18n"]
-        V08 --> V09["v0.9 Dual Stress Beta"]
+        V06 --> V07["v0.7 .prj / .mnga / ActionBus"]
+        V07 --> V08["v0.8 Apple Trio Input & 5-i18n"]
+        V08 --> V09["v0.9 Apple Trio Joint Beta"]
     end
 
-    subgraph V1X["1.x Series: Pro UI Overhaul + Embedded Gemma 4 AI + Cross-Platform"]
-        V10["v1.0 Pro UI Overhaul"] --> V11["v1.1 Gemma4 Log/Plan + Flat/LT"]
-        V11 --> V12["v1.2 Gemma4 Macros + Clean/Shade"]
-        V12 --> V13["v1.3 3D Pose & Multi-Page"]
+    subgraph V1X["1.x Series: Dual-Engine + Gemma 4 + Android / Windows / Linux Expansion"]
+        V10["v1.0 Dual-Engine + Apple Trio Launch"] --> V11["v1.1 Android Pad/Fold + Flat/LT"]
+        V11 --> V12["v1.2 Windows Touch + Gemma4 Macros"]
+        V12 --> V13["v1.3 Linux Touch + 3D Pose"]
         V13 --> V14["v1.4 Vision Critic + ComfyUI"]
-        V14 --> V15["v1.5+ Multi-Platform"]
+        V14 --> V15["v1.5+ 6-Platform Parity & Plugins"]
     end
 
     V09 --> V10
@@ -43,7 +43,7 @@ flowchart LR
 
 ## 2. Pre-1.0 Milestones (`v0.1` – `v0.9`)
 
-| Version | Milestone Theme | Key Deliverables (Dual-Track) | Definition of Done |
+| Version | Milestone Theme | Key Deliverables (Dual-Track + Wave 1 Apple Trio) | Definition of Done |
 | :--- | :--- | :--- | :--- |
 | **`v0.1`** | **Hello Stroke: Dual Canvas Core & i18n Base** | • Sparse `256×256` tile core (`core/manga-core`) + `wgpu` (Metal) compositor<br>• UIKit 240Hz `coalescedTouches` + `predictedTouches` + Palm Rejection<br>• **Dual Canvas Presets**: B4/A4 600DPI print page (bleed/crop guides) + `800×12800` Webtoon strip / 4K illustration<br>• Dual-source (`en`/`zh-Hans`) i18n catalog & CI check | Sustained 120fps (`< 8.33ms`) on physical ProMotion iPad Pro; zero palm misfires |
 | **`v0.2`** | **Anime Brush Engine & Rope Stabilizer** | • GPU brush stamping + pressure/tilt/velocity/Barrel Roll curves<br>• Dual smoothing (weighted average + Rope Stabilizer)<br>• 8 dual-track presets: G-Pen, Maru Pen (B&W ink), Pencil, Solid Flatting Brush, Soft Airbrush, Wet Blend (Color/Art), Hard/Soft Eraser | Smooth jitter-free slow arcs; crisp G-Pen tapers and clean solid flatting strokes |
@@ -52,18 +52,18 @@ flowchart LR
 | **`v0.5`** | **Vector Lineart Layer & Manga Rulers** | • **B&W Core**: Variable-width Bézier vector lineart (lossless zoom, localized width edit)<br>• **Vector Intersection Eraser** (single-swipe removal of hair/cloth overshoots)<br>• Symmetry, parallel, 1/2/3-point perspective (with snapping), and speed/focus line rulers | 400% zoomed vector ink remains razor-sharp; intersecting overshoots trim cleanly |
 | **`v0.6`** | **Panels, GPU Screentones, Bubbles & Strip Slicer** | • **B&W Loop**: Panel Frame Folders (diagonal/grid auto-masking) + non-destructive GPU procedural screentones (live LPI/angle)<br>• **Multilingual Bubbles**: CJK vertical (punctuation squeeze) + EN/ES horizontal (full diacritics) with locale-switchable bubble groups<br>• **Webtoon Tools**: Mobile viewport preview frame + one-tap height-based strip slicer | End-to-end creation of both a 4-panel B&W manga page and a sliced 5-panel color Webtoon |
 | **`v0.7`** | **CPFF v1.0 `.prj` Projects, `.mnga`, PSD & `ActionBus`** | • **Creative Project File Framework V1.0**: same-name `.prj` XML manifest, outline/scenes/multilingual dictionary/editions & Git/Git LFS compatibility (see [07. CPFF v1.0](./07-creative-project-framework-v1.md))<br>• `.mnga` open canvas archive + layered PSD import/export + Timelapse MP4<br>• **Deterministic `ActionBus`**: unified transactional command bus for batch macros (foundation for `1.x` Gemma 4) | Projects push cleanly to GitHub/GitLab; exported PSDs render faithfully in CSP/PS; `ActionBus` macros revert in one undo step |
-| **`v0.8`** | **Touch Ergonomics, Pencil Pro & 5-Language Pipeline** | • 2-finger undo, 3-finger redo, long-press eyedropper, floating Reference Window<br>• Apple Pencil Pro Squeeze radial menu + Hover cursor outline preview<br>• Bluetooth keyboard & one-handed controller shortcut mapping<br>• **Live 5-Language Switcher** (`en`/`zh-Hans`/`zh-Hant`/`yue-Hant`/`es`) + glossary-locked sync script | 80% of frequent tool switches without touching top chrome; zero missing keys across 5 locales |
-| **`v0.9`** | **Pre-1.0 Dual Stress Testing, L10n QA & Public Beta** | • **B&W Stress**: B4 600DPI 50+ layers with disk tile paging<br>• **Webtoon Stress**: `1600×25600` multi-layer scroll & slice memory soak<br>• 5-language (focus: ES/Cantonese/Traditional) 11-inch portrait + Split View zero-truncation QA<br>• Bilingual `CONTRIBUTING` & public TestFlight Beta | 2+ hours zero-crash soak on 8GB iPad across both heavy B&W and Webtoon projects; zero UI overflow |
+| **`v0.8`** | **Apple Trio Touch/Foldable Ergonomics & 5-Language Pipeline** | • **iPad**: 2/3-finger undo/redo, Apple Pencil Pro Squeeze radial menu & Hover outline, Reference Window<br>• **Touchscreen MacBook**: direct screen multi-touch palm rejection + trackpad gestures + full desktop keyboard shortcut fusion<br>• **iPhone Duo**: folded one-handed Light Novel/voice continuity/quick sketch ↔ unfolded hinge-aware dual-pane canvas<br>• **Live 5-Language Switcher** (`en`/`zh-Hans`/`zh-Hant`/`yue-Hant`/`es`) | 80% of frequent tool switches without touching top chrome; zero missing keys across all 3 Apple targets |
+| **`v0.9`** | **Pre-1.0 Apple Trio Joint Beta (iPad · Touch MacBook · iPhone Duo)** | • **Simultaneous Wave 1 Builds**: release Beta PR artifacts for **iPad**, **Touchscreen MacBook**, and **iPhone Duo**<br>• **Dual-Track Stress**: B4 600DPI 50+ layers & `1600×25600` Webtoon disk tile paging soak<br>• 5-language zero-truncation QA across iPad Split View, Mac touch display, and iPhone Duo folded/unfolded postures | 2+ hours zero-crash soak across all 3 Apple form factors; zero UI overflow; public TestFlight / Beta |
 
 ---
 
 ## 3. 1.x Release Series (`v1.0` – `v1.5+`)
 
-| Version | Milestone Theme | Headline Innovations |
+| Version | Milestone Theme | Headline Innovations, Local AI & Wave 2 Cross-Platform Delivery |
 | :--- | :--- | :--- |
-| **`v1.0`** | **Pro UI Overhaul + Dual-Engine Novel × Manga Studio & Official Launch** | • **Ground-up Design System & Three-Mode Workspace**: *Focus Illustration/Webtoon* ↔ *Manga Studio* ↔ **Novel × Manga Dual-Engine Studio** (shared outline/dictionary sidebar + human prose editor + side-by-side AI reference/panel pane), finalized 5-language polish<br>• **Built-in Light Novel Engine**: Markdown/rich prose editing, 5-language novel chapters & **EPUB/Markdown edition export** (with self-selected manga pages or separately designed custom illustrations)<br>• **Embedded Local Gemma 4 (E2B/E4B, Apache 2.0) + Bidirectional AI Reference Drafts**: one-tap Manga → Novel AI reference prose & Novel → Manga AI storyboard/rough intermediates strictly isolated inside `ai_assist/` (`role="ai_reference_only"`), **keeping human Novel and Manga finals 100% decoupled** |
-| **`v1.1`** | **Gemma 4 Voice Continuity + Smart Flatting / LT** | • **Offline Intelligent Script Supervisor (hands-free voice dictation + intentional divergence awareness)** & **5-language dialogue/prose localization**<br>• Specialized Vision: **On-device Semantic Multi-Layer Smart Flatting (Color track)** + **Offline Photo-to-Manga LT Conversion (B&W track)** |
-| **`v1.2`** | **Gemma 4 Workflow Driver + Cleanup / Cel Shade** | • **Gemma 4 Function-Calling Action Driver**: natural text/voice commands drive `ActionBus` batch macros (multi-page scaffolding, batch sketch tinting, LPI updates, 5-language Webtoon slice exports) with preview confirmation + single undo<br>• Specialized Vision: **Style-Preserving Sketch-to-Vector Cleanup** + **3D Light-Sphere Cel Shading Assist** |
-| **`v1.3`** | **3D Anime Mannequin & Multi-Page/Episode Studio** | • Lightweight anime-proportioned 3D pose figure (photo/stick-figure capture + hand presets + perspective ruler lock, optionally staging Novel → Manga AI drafts)<br>• Full Multi-Page spread/binding view and multi-episode Webtoon project manager |
-| **`v1.4`** | **Multimodal Continuity Critic & ComfyUI Bridge** | • **Gemma 4 Vision Continuity Critic**: compares panel thumbnails against Character Reference Sheets & continuity logs (respecting `<DivergenceNote>`), dropping non-destructive review pins<br>• **LAN ComfyUI / BYOK Open Workflow Bridge** (optional Novel → Manga rough image generation, strictly isolated in `ai_assist/novel_to_manga/`) |
-| **`v1.5+`** | **Cross-Platform Shells & Open Plugin Ecosystem** | Reuse Rust/`wgpu` core and LiteRT-LM AI abstraction to ship native shells for **macOS**, **Android Tablets (S-Pen/M-Pencil low latency)**, and **Windows (Windows Ink)**; open Lua/WASM plugin API |
+| **`v1.0`** | **Apple Trio Official Launch + Dual-Engine Novel × Manga Studio** | • **Simultaneous GA Release across iPad, Touchscreen MacBook, and iPhone Duo**<br>• **Ground-up Design System & Three-Mode Workspace**: *Focus Illustration/Webtoon* ↔ *Manga Studio* ↔ **Novel × Manga Dual-Engine Studio** (naturally split across iPhone Duo's unfolded hinge), finalized 5-language polish<br>• **Built-in Light Novel Engine + Embedded Gemma 4 (E2B/E4B) Bidirectional AI Reference Drafts**: strictly isolated inside `ai_assist/` (`role="ai_reference_only"`), **keeping human Novel and Manga finals 100% decoupled**, with self-selected or custom-designed novel illustrations for EPUB/Markdown |
+| **`v1.1`** | **Android Pad / Foldable Edition + Gemma 4 Continuity & Flat/LT** | • **First Wave 2 Cross-Ecosystem Target**: ship **`apps/android/` (Android Pad & Foldable Phones)** — Jetpack Compose + `WindowManager` (`FoldingFeature` dual-pane & half-open Tabletop mode) + S-Pen/NearLink M-Pencil/USI 2.0 low-latency FrontBuffer + Vulkan `wgpu` + 5-locale `strings.xml`<br>• **Offline Intelligent Script Supervisor (voice dictation + `<DivergenceNote>` awareness)** + **Smart Flatting** + **Offline Photo-to-Manga LT Conversion** |
+| **`v1.2`** | **Touchscreen Windows Edition + Gemma 4 Workflow Driver & Cleanup** | • **Second Wave 2 Target**: ship **`apps/windows/` (Touchscreen Windows Notebook / 2-in-1 Pad)** — WinUI 3 + `WM_POINTER`/Windows Ink palm rejection + automatic 2-in-1 tablet-mode hit targets + DirectX 12 `wgpu` + MSIX/Portable builds<br>• **Gemma 4 Function-Calling Action Driver (`ActionBus` preview + single undo)** + **Sketch-to-Vector Cleanup** + **3D Light-Sphere Cel Shading** |
+| **`v1.3`** | **Touchscreen Linux Edition + 3D Mannequin & Serialized Studio** | • **Third Wave 2 Target**: ship **`apps/linux/` (Touchscreen Linux Notebook / Pad)** — native Rust linking directly to `manga-core` + GTK4/Wayland `zwp_tablet_v2` + `libinput` multi-touch + Vulkan `wgpu` + Flatpak/AppImage<br>• Lightweight anime 3D pose mannequin (staging Novel → Manga roughs) + Multi-Page spreads, multi-episode Webtoon & multi-volume novel management |
+| **`v1.4`** | **Multimodal Continuity Critic & ComfyUI Bridge** | • **Gemma 4 Vision Continuity Critic** (respects `<DivergenceNote>`, emits non-destructive review pins)<br>• **LAN ComfyUI / BYOK Open Workflow Bridge** (available across all 6 platforms; optional Novel → Manga visual roughs isolated in `ai_assist/`) |
+| **`v1.5+`** | **Six-Platform Parity & Open Plugin Ecosystem** | Seamless `.prj` Git handoff across iPad, Touchscreen MacBook, iPhone Duo, Android Pad/Foldable, Touchscreen Windows, and Touchscreen Linux; open Lua/WASM community plugin API |

@@ -35,32 +35,41 @@
 
 ---
 
-## 3. 核心架构分层设计（含确定性命令总线与内嵌 Gemma 4 引擎）
+## 3. 核心架构分层设计（六端薄原生壳 × 共享 Rust/`wgpu` 内核 × 内嵌 Gemma 4）
 
 ```mermaid
 flowchart TD
-    subgraph Shell["iPadOS 原生表现与输入壳（apps/ipad）"]
-        View["SwiftUI 双模工作区 / 5语言 UI / 场记与策划侧栏"]
-        Touch["UIKit 画布宿主<br/>240Hz coalescedTouches + predictedTouches<br/>Apple Pencil Pro Squeeze / Hover / Roll"]
-        Voice["可选语音速记入口<br/>直喂 Gemma 4 音频编码器（手不离笔）"]
+    subgraph Wave1["第一波次：Apple 三端统一壳（apps/apple，v0.9 Beta -> v1.0）"]
+        View["SwiftUI 三模式自适应壳 / 5语言 UI / 场记与双引擎对照"]
+        Touch["iPadOS 240Hz Pencil Pro · macOS Touch 屏幕直触<br/>iPhone Duo 折叠态/展开双联与铰链避让"]
+        Voice["手不离笔语音速记入口<br/>直喂 Gemma 4 音频编码器"]
     end
 
-    subgraph Engine["Rust 跨平台核心引擎（core/manga-core）"]
+    subgraph Wave2["第二波次：跨生态触控/折叠壳（v1.1 - v1.3）"]
+        Cross["apps/android (v1.1): Compose + WindowManager折叠 + S-Pen/星闪笔<br/>apps/windows (v1.2): WinUI 3 + Windows Ink + 2-in-1平板模式<br/>apps/linux (v1.3): Rust原生 + GTK4/Wayland zwp_tablet_v2"]
+    end
+
+    subgraph Engine["Rust 跨平台核心引擎（core/manga-core：rlib + staticlib + cdylib）"]
+        Platform["platform.rs<br/>6平台能力 / 折叠铰链姿态 / 确定性自适应布局引擎"]
         Bus["ActionBus（确定性命令总线）<br/>事务批处理 / 宏预览 / 一键整组撤回"]
         Stroke["StrokePipeline<br/>压感映射 / 拉绳防抖"]
         Tiles["SparseTileStore<br/>256x256 稀疏瓦片 / CoW 撤销 / 磁盘换页"]
         Manga["双线核心内核<br/>黑白页漫：矢量线稿/交点橡皮/分格/网点<br/>全彩条漫：防白边闭口填色/混合模式/长条切片"]
         GPU["WGPU Compositor<br/>Metal / Vulkan / DX12 统一 WGSL 着色器"]
-        Doc["DocumentIO<br/>.mnga（SQLite+Zstd+场记元数据）/ PSD 编解码"]
+        Doc["DocumentIO & CPFF v1.0<br/>.prj 双引擎 / .mnga（SQLite+Zstd+场记）/ PSD / EPUB3"]
     end
 
     subgraph LocalAI["本地端侧 AI 运行时（离线优先，Apache 2.0 / MIT 兼容）"]
-        Gemma["内嵌多模态总控模型<br/>Gemma 4 E2B（8GB iPad）/ E4B（16GB iPad Pro）<br/>LiteRT-LM / CoreML（文本+视觉+语音+Function Calling）"]
+        Gemma["内嵌多模态总控模型<br/>Gemma 4 E2B（8GB）/ E4B（16GB+）<br/>LiteRT-LM / CoreML（双向参考稿 + 场记 + Function Calling）"]
         Vision["专项视觉辅助模型<br/>MobileSAM 铺色 / 边缘深度 LT 转换 / 法线二分 / 姿态估计"]
     end
 
     Touch --> Stroke
     View --> Bus
+    View --> Platform
+    Cross --> Stroke
+    Cross --> Bus
+    Cross --> Platform
     Voice --> Gemma
     Gemma -- "结构化 Function Calling" --> Bus
     Vision -- "输出标准可编辑图层" --> Bus
@@ -72,6 +81,17 @@ flowchart TD
     Manga --> GPU
     Tiles --> Doc
 ```
+
+### 3.0 六大目标触控/折叠平台分阶段适配矩阵
+
+| 波次 / 版本 | 目标运行平台 | 工程目录 | 原生 UI 与手写笔输入栈 | GPU 后端 | 专属形态适配重点 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **波次一 (`v0.9`→`v1.0`)** | **iPad**（iPadOS） | `apps/apple/` (`MangaStudio-iPadOS`) | SwiftUI + UIKit 240Hz `coalesced/predictedTouches` + Pencil Pro | `wgpu` Metal | 120Hz ProMotion、轻捏径向盘、悬停预览、分屏 |
+| **波次一 (`v0.9`→`v1.0`)** | **触摸屏 MacBook**（macOS Touch） | `apps/apple/` (`MangaStudio-macOS-Touch`) | SwiftUI + AppKit Direct `NSTouch` + `tabletPoint` + 完整快捷键 | `wgpu` Metal | 屏幕直触防误触 + 触控板手势 + 桌面菜单栏融合 |
+| **波次一 (`v0.9`→`v1.0`)** | **iPhone Duo**（iOS 折叠屏） | `apps/apple/` (`MangaStudio-iPhoneDuo`) | SwiftUI + UIKit Adaptive + `IphoneDuoPostureAdapter` | `wgpu` Metal | 折叠态单手轻小说/语音场记/速写 ↔ 展开态铰链避让双联分屏 |
+| **波次二 (`v1.1`)** | **Android Pad / 折叠屏手机** | `apps/android/` | Kotlin + Compose + `WindowManager` (`FoldingFeature`) + `FrontBufferedRenderer` | `wgpu` Vulkan | S-Pen/星闪 M-Pencil/USI 2.0、半折 Tabletop 模式、5 语 `strings.xml` |
+| **波次二 (`v1.2`)** | **触摸屏 Windows Notebook / Pad** | `apps/windows/` | WinUI 3 (Windows App SDK) + `WM_POINTER` / Windows Ink + P/Invoke | `wgpu` DX12 | Surface/翻转本 2-in-1 平板模式自动切换大热区、笔尾橡皮 |
+| **波次二 (`v1.3`)** | **触摸屏 Linux Notebook / Pad** | `apps/linux/` | **Rust 原生直连 `manga-core`** + GTK4/Wayland `zwp_tablet_v2` + `libinput` | `wgpu` Vulkan | 零 FFI 损耗、`SW_TABLET_MODE` 2-in-1 切换、Flatpak/AppImage |
 
 ### 3.1 `ActionBus`（确定性命令总线）的战略意义
 

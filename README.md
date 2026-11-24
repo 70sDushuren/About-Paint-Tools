@@ -5,22 +5,22 @@
 **Languages / 文档语言**: **English** | [简体中文](./README.zh-CN.md)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![Platform: iPadOS](https://img.shields.io/badge/Platform-iPadOS%20First-black.svg)](#architecture-overview)
+[![Platforms: 6 Touch & Foldable](https://img.shields.io/badge/Platforms-iPad%20%7C%20MacBook%20Touch%20%7C%20iPhone%20Duo%20%7C%20Android%20%7C%20Win%20%7C%20Linux-black.svg)](#architecture-overview)
 [![Locales: 5](https://img.shields.io/badge/App%20Locales-EN%20%7C%20%E7%AE%80%E4%BD%93%20%7C%20%E7%B9%81%E9%AB%94%20%7C%20%E7%B2%B5%E8%AA%9E%20%7C%20ES-green.svg)](./docs/en/05-i18n-and-l10n-guide.md)
 
 ---
 
 ## Why This Project Exists
 
-Today's iPad anime & manga creators face an awkward gap:
+Today's touch-first anime & manga creators face an awkward gap:
 
 - **Procreate** delivers world-class touch ergonomics and low-latency Metal performance, but lacks native manga fundamentals (true vector lineart layers, vector intersection eraser, panel frame folders, non-destructive screentones, and multi-page management).
-- **Clip Studio Paint (CSP)** is the manga industry standard, but its iPad version is subscription-only with a dense desktop-ported UI.
+- **Clip Studio Paint (CSP)** is the manga industry standard, but its tablet versions are subscription-only with a dense desktop-ported UI.
 - **ibisPaint X / MediBang Paint** excel at accessibility and fast flatting, yet rely on ads/paywalls and closed ecosystems.
-- **Krita** is the leading open-source painting suite, but its **GPLv3 license** conflicts with Apple App Store distribution terms, leaving a major open-source vacuum on iPadOS.
+- **Krita** is the leading open-source painting suite, but its **GPLv3 license** conflicts with Apple App Store distribution terms, leaving a major open-source vacuum on iPadOS / iOS.
 
-**About-Paint-Tools** is designed from day one under the permissive **MIT License** to serve **both B&W Page Manga (Japanese Manga / Doujinshi) and Full-Color Webtoon / Anime Illustration equally**, uniting:
-1. **Procreate-grade iPad touch & Apple Pencil Pro ergonomics** (`≤ 9ms` latency target, 240Hz coalesced & predicted touches, Squeeze radial menu, Hover preview, Barrel Roll).
+**About-Paint-Tools** is designed from day one under the permissive **MIT License** to serve **both B&W Page Manga (Japanese Manga / Doujinshi) and Full-Color Webtoon / Anime Illustration equally**, across **six touch & foldable platforms** (Wave 1 `v0.9`→`v1.0`: **iPad · Touchscreen MacBook · iPhone Duo**; Wave 2 `v1.1`–`v1.3`: **Android Pad/Foldable · Touchscreen Windows · Touchscreen Linux**), uniting:
+1. **Hardware-native touch, foldable & stylus ergonomics** (`≤ 9ms` target latency, iPadOS 240Hz Apple Pencil Pro, Touchscreen MacBook direct touch + shortcuts, iPhone Duo & Android foldable hinge-aware dual-pane, Windows Ink, and Wayland `zwp_tablet_v2`).
 2. **Dual-track anime/manga production primitives & Dual-Engine Novel × Manga Studio** (B&W Page Manga: B4 600DPI print templates, vector lineart + intersection eraser, panel folders, procedural GPU screentones; Full-Color Webtoon & Illustration: cel blend modes, close-gap anti-halo expand fill, vertical strip preview & slicer, layered PSD interop; **Parallel Light Novel & Manga Engine** sharing one `.prj` Story Bible, Outline, and 5-language dictionary while keeping human novel & manga finals 100% decoupled, with self-selected or custom-designed novel illustrations).
 3. **Artist-in-the-Loop Embedded Local AI (Gemma 4 E2B/E4B + Vision)** — offline **Gemma 4 (Apache 2.0)** powering **`v1.0` Bidirectional AI Reference Drafts** (`Manga → Novel` & `Novel → Manga`, strictly isolated in `ai_assist/` as `role="ai_reference_only"` — never overwriting human finals), **Script Supervision / Continuity Logging (with hands-free voice dictation)**, **Story & Storyboard Planning**, and **Function-Calling Batch Workflow Macros** via a deterministic `ActionBus`, paired with specialized on-device Smart Flatting, offline LT conversion, and cel-shading assists — **zero forced cloud uploads, zero unauthorized model training**.
 
@@ -28,20 +28,21 @@ Today's iPad anime & manga creators face an awkward gap:
 
 ## Architecture Overview
 
-To deliver **uncompromised hardware-native stylus feel** on iPad today while preserving a clean future path to macOS, Android tablets (S-Pen / M-Pencil), and Windows (Windows Ink), we adopt a **Thin Native Shell + Shared Rust Core Engine** architecture (rather than forcing a single cross-platform UI framework such as Flutter over the drawing canvas):
+To deliver **uncompromised hardware-native stylus & foldable feel** across every form factor while keeping 80%+ of the codebase single-source in Rust, we adopt a **Thin Native Shell + Shared Rust Core Engine** architecture:
 
 ```mermaid
 flowchart TD
-    subgraph UI["Hardware-Native UI & Stylus Input Layer"]
-        iPad["iPadOS / macOS Shell (SwiftUI + UIKit)<br/>240Hz coalesced/predictedTouches<br/>Apple Pencil Pro Squeeze / Hover / Barrel Roll"]
-        Future["Future Targets (v1.5+)<br/>Android (Kotlin/Compose + S-Pen)<br/>Windows (WinUI 3 + Windows Ink)"]
+    subgraph UI["Hardware-Native Touch & Foldable Shells"]
+        Apple["Wave 1 (v0.9 -> v1.0): apps/apple/<br/>iPadOS (240Hz Pencil Pro) · Touchscreen MacBook · iPhone Duo Foldable"]
+        Wave2["Wave 2 (v1.1 - v1.3): Cross-Ecosystem Shells<br/>Android Pad/Foldable (Compose/Vulkan) · Windows Touch (WinUI 3/DX12) · Linux Touch (Rust GTK4/Wayland)"]
     end
 
-    subgraph Bridge["Zero-Copy FFI Bridge"]
-        FFI["C-ABI / UniFFI + Native CAMetalLayer / Surface"]
+    subgraph Bridge["Zero-Copy FFI & Direct Rust Link"]
+        FFI["C-ABI staticlib/cdylib (Apple/Android/Win) · Direct Rust Crate (Linux)"]
     end
 
     subgraph Core["Shared Cross-Platform Engine (Rust, MIT)"]
+        Platform["platform.rs (6-Platform Posture & Hinge Layout Engine)"]
         Bus["ActionBus (Deterministic Command Bus)<br/>Transactional Macros / Single UndoGroup"]
         Input["Stroke Pipeline<br/>Pressure Curves / Rope Stabilizer / Prediction"]
         Canvas["Tiled Canvas Manager<br/>256x256 Sparse Tiles / Disk Paging / CoW Undo"]
@@ -56,8 +57,9 @@ flowchart TD
         BridgeAI["Open Workflow Bridge (BYOK)<br/>Local ComfyUI / Custom API Endpoints"]
     end
 
-    iPad --> FFI
-    Future -.-> FFI
+    Apple --> FFI
+    Wave2 --> FFI
+    FFI --> Platform
     FFI --> Input
     FFI --> Bus
     Gemma --> Bus
@@ -76,23 +78,23 @@ flowchart TD
 
 ## Phased Roadmap Summary
 
-- **Pre-1.0 Series (`v0.1` – `v0.9`) — Dual-Track B&W Page Manga × Full-Color Webtoon/Illustration Core**
+- **Wave 1 — Pre-1.0 Series (`v0.1` – `v0.9`) — Dual-Track Core + Apple Trio (iPad · Touch MacBook · iPhone Duo)**
   - `v0.1`: Low-latency `256×256` sparse tile canvas, 240Hz Apple Pencil input, B4 600DPI & Webtoon canvas presets, dual-source `en`/`zh-Hans` i18n base
   - `v0.2`: Brush stamping engine, pressure/tilt/barrel-roll curves, real-time rope stabilizer, 8 dual-track anime presets (G-Pen, Maru, Flatting, etc.)
   - `v0.3`: Layer tree, clipping masks, alpha lock, reference layers, 12+ cel blend modes, tile-level CoW undo/redo
   - `v0.4`: Lasso/wand selection, **close-gap + expand-edge flood fill (anti-white-halo)**, free transform & liquify
   - `v0.5`: **Vector lineart layers**, **vector intersection eraser**, symmetry & 1/2/3-point perspective rulers
   - `v0.6`: Panel frame folders, non-destructive GPU screentones, CJK vertical & EN/ES horizontal bubbles, **Webtoon strip preview & slicer**
-  - `v0.7`: Open `.mnga` file format (+ continuity tables), layered PSD import/export, timelapse, **deterministic `ActionBus`**
-  - `v0.8`: Apple Pencil Pro Squeeze radial menu, Hover cursor, reference window, **5-language live switching**
-  - `v0.9`: B4 600DPI & `1600×25600` Webtoon disk paging soak test, 5-language Split View UI layout QA, public TestFlight Beta
-- **1.x Series (`v1.0` – `v1.5+`) — Dual-Engine Novel × Manga Studio, Embedded Gemma 4 Local AI & Multi-Platform**
-  - `v1.0`: Complete Design System & **Three-Mode Workspace** (*Focus Illustration/Webtoon* · *Manga Studio* · *Novel × Manga Dual Studio*) + **Light Novel Authoring Engine** (shared `.prj` Story Bible/Outline/Dictionary, decoupled finals, self-selected or custom-designed novel illustrations, EPUB3/Markdown) + **Embedded Gemma 4 E2B/E4B Bidirectional AI Reference Drafts** (`Manga → Novel` & `Novel → Manga` strictly isolated in `ai_assist/`) + full 5-language polish
-  - `v1.1`: **Gemma 4 Script Supervisor & Story Planner** (hands-free voice continuity dictation, intentional `<DivergenceNote>` awareness, 5-language dialogue & prose localization) + Smart Flatting & offline LT conversion
-  - `v1.2`: **Gemma 4 Function-Calling Workflow Driver** (batch macros over `ActionBus`) + style-preserving sketch-to-vector cleanup + 3D light-sphere cel shading
-  - `v1.3`: Lightweight 3D anime pose mannequin (with Novel → Manga auto-pose roughs) + multi-page chapter spreads, multi-episode Webtoon & multi-volume light novel studio
-  - `v1.4`: **Gemma 4 Vision Continuity Critic** + local ComfyUI/BYOK workflow bridge (including optional Novel → Manga visual rough generation into `ai_assist/`)
-  - `v1.5+`: macOS, Android tablet, and Windows native shells + community Lua/WASM plugin API
+  - `v0.7`: CPFF v1.0 `.prj` projects (Git + Git LFS), open `.mnga` format (+ continuity tables), layered PSD, timelapse, **deterministic `ActionBus`**
+  - `v0.8`: Apple Pencil Pro Squeeze/Hover, **Touchscreen MacBook** direct touch + shortcuts, **iPhone Duo** foldable posture, **5-language live switching**
+  - `v0.9`: **Wave 1 Apple Trio Joint Beta (iPad · Touchscreen MacBook · iPhone Duo)**, B4 600DPI & `1600×25600` disk paging soak, 5-language layout QA
+- **1.x Series (`v1.0` – `v1.5+`) — Dual-Engine Studio, Embedded Gemma 4 Local AI & Wave 2 Cross-Platform**
+  - `v1.0`: **Apple Trio Official Launch** — Design System & **Three-Mode Workspace** + **Light Novel Authoring Engine** (shared `.prj`, decoupled finals, self-selected/custom illustrations, EPUB3) + **Embedded Gemma 4 Bidirectional AI Reference Drafts** (strictly isolated in `ai_assist/`)
+  - `v1.1`: **Android Pad / Foldable Edition (`apps/android/`)** (Compose + WindowManager Tabletop/Dual-Pane + S-Pen/M-Pencil Vulkan) + Gemma 4 Voice Continuity + Smart Flatting & offline LT conversion
+  - `v1.2`: **Touchscreen Windows Edition (`apps/windows/`)** (WinUI 3 + Windows Ink + 2-in-1 Tablet Mode + DX12) + Gemma 4 Function-Calling Workflow Driver + Sketch Cleanup & 3D Cel Shading
+  - `v1.3`: **Touchscreen Linux Edition (`apps/linux/`)** (Native Rust + GTK4/Wayland `zwp_tablet_v2` + Vulkan) + 3D anime pose mannequin + multi-page/episode/volume studio
+  - `v1.4`: **Gemma 4 Vision Continuity Critic** + LAN ComfyUI/BYOK workflow bridge
+  - `v1.5+`: Six-platform `.prj` parity & open Lua/WASM community plugin API
 
 ---
 
@@ -123,18 +125,21 @@ About-Paint-Tools/
 │   ├── en/                      # Canonical English documentation (01–07)
 │   └── zh-CN/                   # Canonical Simplified Chinese documentation (01–07)
 ├── templates/
-│   └── SampleManga/             # Reference CPFF v1.0 project (SampleManga.prj + Git LFS)
+│   └── SampleManga/             # Reference CPFF v1.0 dual-engine project (SampleManga.prj + Git LFS)
 ├── i18n/
-│   ├── glossary.json            # 5-language art & manga terminology glossary
+│   ├── glossary.json            # 5-language art, manga & novel terminology glossary
 │   └── locales/                 # en, zh-Hans (sources) + zh-Hant, yue-Hant, es
 ├── scripts/
 │   ├── i18n_check.py            # CI parity, placeholder & UI length guardrails
-│   ├── i18n_sync.py             # Glossary-locked sync & Xcode .xcstrings exporter
-│   └── prj_validate.py          # CPFF v1.0 .prj XML & Git LFS validator
-├── core/                        # Rust cross-platform canvas & project core (MIT)
-│   └── manga-core/              # Tiles, layers, fill, vectors, panels, ActionBus, .prj
+│   ├── i18n_sync.py             # Sync & export Apple .xcstrings + Android strings.xml
+│   └── prj_validate.py          # CPFF v1.0 .prj XML, AI red-line & Git LFS validator
+├── core/                        # Rust cross-platform canvas, posture & project core (MIT)
+│   └── manga-core/              # Tiles, layers, fill, vectors, panels, ActionBus, platform, .prj
 └── apps/
-    └── ipad/                    # iPadOS native SwiftUI/UIKit shell & FFI bridge
+    ├── apple/                   # Wave 1 (v0.9→v1.0): Unified iPadOS, macOS Touch & iPhone Duo shell
+    ├── android/                 # Wave 2 (v1.1): Android Pad & Foldable (Compose + WindowManager + Vulkan)
+    ├── windows/                 # Wave 2 (v1.2): Touchscreen Windows Notebook/Pad (WinUI 3 + DX12)
+    └── linux/                   # Wave 2 (v1.3): Touchscreen Linux Notebook/Pad (Native Rust GTK4/Wayland)
 ```
 
 ---
@@ -142,14 +147,16 @@ About-Paint-Tools/
 ## Quick Verification
 
 ```bash
-# 1. Validate 5-language localization, .xcstrings sync, and bilingual docs
-python3 scripts/i18n_check.py && python3 scripts/i18n_sync.py --check-xcstrings
+# 1. Validate 5-language localization, Apple .xcstrings & Android strings.xml sync, and bilingual docs
+python3 scripts/i18n_check.py && python3 scripts/i18n_sync.py --check-xcstrings --check-android
 
-# 2. Validate reference CPFF v1.0 creative project (SampleManga.prj + Git LFS)
+# 2. Validate reference CPFF v1.0 dual-engine project (SampleManga.prj + AI isolation + Git LFS)
 python3 scripts/prj_validate.py templates/SampleManga
 
-# 3. Run Rust core unit tests
-cargo test --manifest-path core/Cargo.toml --all-targets
+# 3. Verify C-ABI header, Rust workspace tests (manga-core + manga-linux-shell), and Linux self-check
+gcc -std=c11 -Wall -Wextra -Werror -fsyntax-only core/manga-core/include/manga_core.h
+cargo test --manifest-path core/Cargo.toml --workspace --all-targets
+cargo run --manifest-path core/Cargo.toml -p manga-linux-shell -- --self-check
 ```
 
 ---

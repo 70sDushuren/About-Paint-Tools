@@ -1,5 +1,5 @@
 [workspace]
-members = ["manga-core"]
+members = ["manga-core", "../apps/linux"]
 resolver = "2"
 
 [workspace.package]

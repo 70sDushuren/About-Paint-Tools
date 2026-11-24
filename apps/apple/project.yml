@@ -1,0 +1,58 @@
+name: MangaStudioApple
+options:
+  bundleIdPrefix: org.aboutpainttools
+  deploymentTarget:
+    iOS: "18.0"
+    macOS: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    HEADER_SEARCH_PATHS:
+      - "$(SRCROOT)/../../core/manga-core/include"
+    OTHER_LDFLAGS:
+      - "-lmanga_core"
+
+targets:
+  MangaStudio-iPadOS:
+    type: application
+    platform: iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.aboutpainttools.mangastudio.ipad
+        TARGETED_DEVICE_FAMILY: "2"
+        LIBRARY_SEARCH_PATHS:
+          - "$(SRCROOT)/../../core/target/aarch64-apple-ios/release"
+    sources:
+      - path: Shared/Sources
+      - path: Shared/Resources
+      - path: iPadOS
+
+  MangaStudio-macOS-Touch:
+    type: application
+    platform: macOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.aboutpainttools.mangastudio.macos
+        LIBRARY_SEARCH_PATHS:
+          - "$(SRCROOT)/../../core/target/aarch64-apple-darwin/release"
+    sources:
+      - path: Shared/Sources
+      - path: Shared/Resources
+      - path: macOS-Touch
+
+  MangaStudio-iPhoneDuo:
+    type: application
+    platform: iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.aboutpainttools.mangastudio.iphonedua
+        TARGETED_DEVICE_FAMILY: "1,2"
+        LIBRARY_SEARCH_PATHS:
+          - "$(SRCROOT)/../../core/target/aarch64-apple-ios/release"
+    sources:
+      - path: Shared/Sources
+      - path: Shared/Resources
+      - path: iPadOS
+      - path: iPhoneDuo

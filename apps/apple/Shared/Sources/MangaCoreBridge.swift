@@ -1,5 +1,38 @@
 import Foundation
 
+/// Hardware-native stylus/touch sample mirrored 1:1 with `manga_core::StrokePoint`
+/// and shared across iPadOS (UIKit), macOS Touch (AppKit), and iPhone Duo.
+public struct NativeStrokeSample: Sendable {
+    public let x: Float
+    public let y: Float
+    public let pressure: Float
+    public let altitude: Float
+    public let azimuth: Float
+    public let rollAngle: Float
+    public let timestampMs: Double
+    public let isPredicted: Bool
+
+    public init(
+        x: Float,
+        y: Float,
+        pressure: Float,
+        altitude: Float,
+        azimuth: Float,
+        rollAngle: Float,
+        timestampMs: Double,
+        isPredicted: Bool
+    ) {
+        self.x = x
+        self.y = y
+        self.pressure = pressure
+        self.altitude = altitude
+        self.azimuth = azimuth
+        self.rollAngle = rollAngle
+        self.timestampMs = timestampMs
+        self.isPredicted = isPredicted
+    }
+}
+
 /// Swift-side mirror of `MangaCanvasPreset` in `core/manga-core/include/manga_core.h`.
 public enum CanvasPresetKind: UInt32, CaseIterable, Sendable {
     case b4PrintManga600Dpi = 0
@@ -26,8 +59,54 @@ public enum LayerBlendMode: UInt32, CaseIterable, Sendable {
     case add = 12
 }
 
+/// Swift-side mirror of `MangaTargetPlatform` in `manga_core.h`.
+public enum TargetPlatformKind: UInt32, CaseIterable, Sendable {
+    case ipadOs = 0
+    case macOsTouch = 1
+    case iphoneDuo = 2
+    case androidPadFoldable = 3
+    case windowsTouch = 4
+    case linuxTouch = 5
+}
+
+/// Swift-side mirror of `MangaFoldPosture` in `manga_core.h`.
+public enum FoldPostureKind: UInt32, CaseIterable, Sendable {
+    case flat = 0
+    case foldedCompact = 1
+    case unfoldedDualPane = 2
+    case tabletopHalfOpen = 3
+    case convertibleTabletMode = 4
+}
+
+/// Swift-side mirror of `MangaWorkspaceLayout` in `manga_core.h`.
+public enum WorkspaceLayoutHintKind: UInt32, CaseIterable, Sendable {
+    case singlePaneCompact = 0
+    case tabletTouchStudio = 1
+    case dualPaneAcrossHinge = 2
+    case tabletopCanvasTopControlsBottom = 3
+    case desktopTouchHybrid = 4
+}
+
 #if canImport(MangaCoreFFI)
 import MangaCoreFFI
+
+/// Queries Rust `manga-core` for deterministic cross-platform layout decisions.
+public enum MangaPlatformLayoutEngine {
+    public static func recommendLayout(
+        platform: TargetPlatformKind,
+        posture: FoldPostureKind,
+        widthDp: Float,
+        heightDp: Float
+    ) -> WorkspaceLayoutHintKind {
+        let code = manga_platform_recommend_layout(
+            platform.rawValue,
+            posture.rawValue,
+            widthDp,
+            heightDp
+        )
+        return WorkspaceLayoutHintKind(rawValue: code) ?? .tabletTouchStudio
+    }
+}
 
 /// Type-safe RAII wrapper over the Rust `MangaCanvasHandle` C-ABI (single-canvas low-latency path).
 public final class MangaCanvasEngine {

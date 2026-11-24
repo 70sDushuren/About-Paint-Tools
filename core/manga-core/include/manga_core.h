@@ -156,10 +156,46 @@ size_t manga_project_slice_panel(
     float gutter_px
 );
 
+typedef enum MangaTargetPlatform {
+    MANGA_PLATFORM_IPADOS               = 0,
+    MANGA_PLATFORM_MACOS_TOUCH          = 1,
+    MANGA_PLATFORM_IPHONE_DUO           = 2,
+    MANGA_PLATFORM_ANDROID_PAD_FOLDABLE = 3,
+    MANGA_PLATFORM_WINDOWS_TOUCH        = 4,
+    MANGA_PLATFORM_LINUX_TOUCH          = 5,
+} MangaTargetPlatform;
+
+typedef enum MangaFoldPosture {
+    MANGA_POSTURE_FLAT                    = 0,
+    MANGA_POSTURE_FOLDED_COMPACT          = 1,
+    MANGA_POSTURE_UNFOLDED_DUAL_PANE      = 2,
+    MANGA_POSTURE_TABLETOP_HALF_OPEN      = 3,
+    MANGA_POSTURE_CONVERTIBLE_TABLET_MODE = 4,
+} MangaFoldPosture;
+
+typedef enum MangaWorkspaceLayout {
+    MANGA_LAYOUT_SINGLE_PANE_COMPACT               = 0,
+    MANGA_LAYOUT_TABLET_TOUCH_STUDIO               = 1,
+    MANGA_LAYOUT_DUAL_PANE_ACROSS_HINGE            = 2,
+    MANGA_LAYOUT_TABLETOP_CANVAS_TOP_CONTROLS_BOT  = 3,
+    MANGA_LAYOUT_DESKTOP_TOUCH_HYBRID              = 4,
+} MangaWorkspaceLayout;
+
 size_t manga_project_panel_count(const MangaProjectHandle *handle);
 
 uint8_t manga_project_undo_action(MangaProjectHandle *handle);
 uint8_t manga_project_redo_action(MangaProjectHandle *handle);
+
+/* --- Cross-Platform Posture & Adaptive Workspace Layout API --- */
+
+uint32_t manga_platform_recommend_layout(
+    uint32_t platform_code,
+    uint32_t posture_code,
+    float width_dp,
+    float height_dp
+);
+
+uint8_t manga_platform_release_wave(uint32_t platform_code);
 
 #ifdef __cplusplus
 }

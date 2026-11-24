@@ -35,32 +35,41 @@ Evaluating technology stacks for an iPad manga studio (especially **Pure Native 
 
 ---
 
-## 3. Layered System Architecture (with Deterministic `ActionBus` & Embedded Gemma 4)
+## 3. Layered System Architecture (6 Native Touch/Foldable Shells × Shared Rust/`wgpu` Core × Gemma 4)
 
 ```mermaid
 flowchart TD
-    subgraph Shell["iPadOS Native UI & Input Shell (apps/ipad)"]
-        View["SwiftUI Dual Workspaces / 5-Locale UI / Continuity & Planner Panels"]
-        Touch["UIKit Canvas Host<br/>240Hz coalescedTouches + predictedTouches<br/>Apple Pencil Pro Squeeze / Hover / Roll"]
+    subgraph Wave1["Wave 1: Unified Apple Multi-Device Shell (apps/apple, v0.9 Beta -> v1.0)"]
+        View["SwiftUI Adaptive 3-Mode Workspace / 5-Locale UI / Dual-Engine Split"]
+        Touch["iPadOS 240Hz Pencil Pro · macOS Direct Touch<br/>iPhone Duo Folded/Unfolded Hinge-Aware Adaptation"]
         Voice["Hands-Free Voice Memo Input<br/>Direct to Gemma 4 Audio Encoder"]
     end
 
-    subgraph Engine["Shared Rust Core Engine (core/manga-core)"]
+    subgraph Wave2["Wave 2: Cross-Ecosystem Touch & Foldable Shells (v1.1 - v1.3)"]
+        Cross["apps/android (v1.1): Compose + WindowManager Fold + S-Pen/M-Pencil<br/>apps/windows (v1.2): WinUI 3 + Windows Ink + 2-in-1 Tablet Mode<br/>apps/linux (v1.3): Native Rust + GTK4/Wayland zwp_tablet_v2"]
+    end
+
+    subgraph Engine["Shared Rust Core Engine (core/manga-core: rlib + staticlib + cdylib)"]
+        Platform["platform.rs<br/>6-Platform Capabilities / Fold Posture / Adaptive Layout Engine"]
         Bus["ActionBus (Deterministic Command Bus)<br/>Transactional Macros / Plan Preview / Single UndoGroup"]
         Stroke["StrokePipeline<br/>Pressure Curves / Rope Stabilizer"]
         Tiles["SparseTileStore<br/>256x256 Tiles / CoW Undo / Disk Paging"]
         Manga["Dual-Track Production Core<br/>B&W Manga: Vector Ink / Intersection Eraser / Panels / Tones<br/>Color Webtoon: Close-Gap Expand Fill / Blends / Strip Slicer"]
         GPU["WGPU Compositor<br/>Metal / Vulkan / DX12 Unified WGSL Shaders"]
-        Doc["DocumentIO<br/>.mnga (SQLite+Zstd+Continuity Tables) / PSD Codec"]
+        Doc["DocumentIO & CPFF v1.0<br/>.prj Dual-Engine / .mnga (+Continuity DB) / PSD / EPUB3"]
     end
 
     subgraph LocalAI["Embedded On-Device AI Runtime (Offline-First, Apache 2.0 / MIT)"]
-        Gemma["Embedded Multimodal Orchestrator<br/>Gemma 4 E2B (8GB iPad) / E4B (16GB iPad Pro)<br/>LiteRT-LM / CoreML (Text + Vision + Audio + Function Calling)"]
+        Gemma["Embedded Multimodal Orchestrator<br/>Gemma 4 E2B (8GB) / E4B (16GB+)<br/>LiteRT-LM / CoreML (Dual Ref Drafts + Continuity + Function Calling)"]
         Vision["Specialized Vision Models<br/>MobileSAM Flatting / LT Conversion / Cel Normals / Pose"]
     end
 
     Touch --> Stroke
     View --> Bus
+    View --> Platform
+    Cross --> Stroke
+    Cross --> Bus
+    Cross --> Platform
     Voice --> Gemma
     Gemma -- "Structured Function Calling" --> Bus
     Vision -- "Standard Editable Layers" --> Bus
@@ -72,6 +81,17 @@ flowchart TD
     Manga --> GPU
     Tiles --> Doc
 ```
+
+### 3.0 Six-Platform Touch & Foldable Hardware Delivery Matrix
+
+| Wave / Milestone | Target Runtime Platform | Shell Directory | Native UI & Stylus Stack | GPU Backend | Key Form-Factor Adaptations |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Wave 1 (`v0.9`→`v1.0`)** | **iPad** (iPadOS) | `apps/apple/` (`MangaStudio-iPadOS`) | SwiftUI + UIKit 240Hz `coalesced/predictedTouches` + Pencil Pro | `wgpu` Metal | 120Hz ProMotion, Squeeze radial menu, Hover outline, Split View |
+| **Wave 1 (`v0.9`→`v1.0`)** | **Touchscreen MacBook** (macOS Touch) | `apps/apple/` (`MangaStudio-macOS-Touch`) | SwiftUI + AppKit Direct `NSTouch` + `tabletPoint` + keyboard shortcuts | `wgpu` Metal | Direct screen touch palm rejection + trackpad gestures + desktop menu bar |
+| **Wave 1 (`v0.9`→`v1.0`)** | **iPhone Duo** (iOS Foldable) | `apps/apple/` (`MangaStudio-iPhoneDuo`) | SwiftUI + UIKit Adaptive + `IphoneDuoPostureAdapter` | `wgpu` Metal | Folded one-handed novel/voice continuity/quick sketch ↔ unfolded hinge-aware dual pane |
+| **Wave 2 (`v1.1`)** | **Android Pad / Foldable Phone** | `apps/android/` | Kotlin + Compose + `WindowManager` (`FoldingFeature`) + `FrontBufferedRenderer` | `wgpu` Vulkan | S-Pen / NearLink M-Pencil / USI 2.0, half-open Tabletop mode, 5-locale `strings.xml` |
+| **Wave 2 (`v1.2`)** | **Touchscreen Windows Notebook / Pad** | `apps/windows/` | WinUI 3 (Windows App SDK) + `WM_POINTER` / Windows Ink + P/Invoke | `wgpu` DX12 | Surface/convertible 2-in-1 auto tablet-mode hit targets, eraser tail |
+| **Wave 2 (`v1.3`)** | **Touchscreen Linux Notebook / Pad** | `apps/linux/` | **Native Rust (`manga-core` direct link)** + GTK4/Wayland `zwp_tablet_v2` + `libinput` | `wgpu` Vulkan | Zero FFI overhead, `SW_TABLET_MODE` 2-in-1 switch, Flatpak / AppImage |
 
 ### 3.1 Strategic Role of the Deterministic `ActionBus`
 

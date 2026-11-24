@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Auto-generated from i18n/locales/zh-Hant.json by scripts/i18n_sync.py. Do not edit manually. -->
+<resources>
+    <string name="action_export_psd">匯出多圖層 PSD</string>
+    <string name="action_redo">重做</string>
+    <string name="action_undo">復原</string>
+    <string name="ai_bridge_manga_to_novel">產生小說 AI 參考稿（僅供對照）</string>
+    <string name="ai_bridge_novel_to_manga">產生漫畫 AI 中間稿（僅供參考）</string>
+    <string name="ai_continuity_short">場記</string>
+    <string name="ai_macro_short">批次作業</string>
+    <string name="ai_planner_short">策劃</string>
+    <string name="ai_pledge_badge">本機離線 · 零作品上傳訓練</string>
+    <string name="ai_voice_note_full">語音場記速記（本機 Gemma 4）</string>
+    <string name="app_name">MangaCanvas</string>
+    <string name="novel_engine_short">小說</string>
+    <string name="novel_final_badge_full">人工獨立完稿（AI 永不覆寫）</string>
+    <string name="novel_illustration_short">小說插圖</string>
+    <string name="panel_layers_title">圖層（{count}）</string>
+    <string name="panel_opacity_label">不透明度 {percent}%</string>
+    <string name="preset_bw_manga">黑白頁漫（B4 600DPI）</string>
+    <string name="preset_webtoon">全彩條漫長畫布</string>
+    <string name="project_edition_short">發行版</string>
+    <string name="project_fanwork_policy_full">同人與二次創作授權聲明</string>
+    <string name="project_manuscript_short">原稿</string>
+    <string name="project_open_prj">開啟創作專案（.prj）</string>
+    <string name="project_storyboard_short">大樣</string>
+    <string name="settings_language">應用程式語言</string>
+    <string name="tool_brush_short">筆刷</string>
+    <string name="tool_clipping_mask_full">剪裁遮色片</string>
+    <string name="tool_clipping_mask_short">剪裁</string>
+    <string name="tool_close_gap_full">封閉間隙（{px}px）</string>
+    <string name="tool_eraser_short">橡皮擦</string>
+    <string name="tool_eyedropper_short">滴管</string>
+    <string name="tool_fill_short">填色</string>
+    <string name="tool_reference_layer_full">參考圖層</string>
+    <string name="tool_reference_layer_short">參考層</string>
+    <string name="tool_selection_short">選取</string>
+    <string name="tool_stabilizer_full">筆跡防手震修正</string>
+    <string name="tool_stabilizer_short">防手震</string>
+    <string name="tool_vector_eraser_full">向量交點橡皮擦</string>
+    <string name="workspace_dual_studio">小說×漫畫雙引擎</string>
+    <string name="workspace_focus">專注插畫模式</string>
+    <string name="workspace_manga">漫畫工作台</string>
+</resources>

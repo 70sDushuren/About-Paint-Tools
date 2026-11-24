@@ -3,20 +3,8 @@ import Foundation
 #if canImport(UIKit)
 import UIKit
 
-/// Hardware-native stylus sample mirrored 1:1 with `manga_core::StrokePoint`.
-public struct NativeStrokeSample {
-    public let x: Float
-    public let y: Float
-    public let pressure: Float
-    public let altitude: Float
-    public let azimuth: Float
-    public let rollAngle: Float
-    public let timestampMs: Double
-    public let isPredicted: Bool
-}
-
 /// Extracts 240Hz coalesced touches and low-latency predicted touches from UIKit
-/// for direct forwarding into `manga-core` via C-ABI / UniFFI.
+/// (iPadOS & iPhone Duo) for direct forwarding into `manga-core`.
 public enum ApplePencilInputAdapter {
     public static func extractSamples(
         touch: UITouch,

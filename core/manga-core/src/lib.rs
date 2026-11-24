@@ -14,6 +14,7 @@ pub mod ffi;
 pub mod fill;
 pub mod layer;
 pub mod panel;
+pub mod platform;
 pub mod preset;
 pub mod project;
 pub mod ruler;
@@ -33,6 +34,10 @@ pub use continuity::{
 pub use fill::{close_gap_expand_fill, FillOptions, FillResult};
 pub use layer::{blend_rgba, BlendMode, LayerId, LayerKind, LayerNode, LayerStack};
 pub use panel::{PanelFrame, PanelId, PanelLayout, PanelPolygon};
+pub use platform::{
+    recommend_workspace_layout, FoldPosture, HingeBounds, InputCapabilities, TargetPlatform,
+    WorkspaceLayoutHint,
+};
 pub use preset::{CanvasPreset, CanvasSpec, MangaPageGuides, ProductionTrack, WebtoonSliceSpec};
 pub use project::{
     resolve_prj_file, AiBridgeArtifact, ChapterRef, CreativeEngineMode, CreativeProjectManifest,

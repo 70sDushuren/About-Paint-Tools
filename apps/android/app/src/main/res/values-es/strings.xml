@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Auto-generated from i18n/locales/es.json by scripts/i18n_sync.py. Do not edit manually. -->
+<resources>
+    <string name="action_export_psd">Exportar PSD por capas</string>
+    <string name="action_redo">Rehacer</string>
+    <string name="action_undo">Deshacer</string>
+    <string name="ai_bridge_manga_to_novel">Generar borrador IA de novela (solo ref.)</string>
+    <string name="ai_bridge_novel_to_manga">Generar boceto IA de manga (solo ref.)</string>
+    <string name="ai_continuity_short">Continuidad</string>
+    <string name="ai_macro_short">Macros IA</string>
+    <string name="ai_planner_short">Guion/Plan</string>
+    <string name="ai_pledge_badge">Local sin conexión · Sin entrenar con tus obras</string>
+    <string name="ai_voice_note_full">Nota de voz de continuidad (Gemma 4 local)</string>
+    <string name="app_name">MangaCanvas</string>
+    <string name="novel_engine_short">Novela</string>
+    <string name="novel_final_badge_full">Final humano independiente (la IA nunca sobrescribe)</string>
+    <string name="novel_illustration_short">Ilustración</string>
+    <string name="panel_layers_title">Capas ({count})</string>
+    <string name="panel_opacity_label">Opacidad {percent}%</string>
+    <string name="preset_bw_manga">Manga B/N (B4 600DPI)</string>
+    <string name="preset_webtoon">Tira Webtoon color</string>
+    <string name="project_edition_short">Edición</string>
+    <string name="project_fanwork_policy_full">Licencia fanwork y derivados</string>
+    <string name="project_manuscript_short">Manuscrito</string>
+    <string name="project_open_prj">Abrir proyecto (.prj)</string>
+    <string name="project_storyboard_short">Boceto</string>
+    <string name="settings_language">Idioma de la app</string>
+    <string name="tool_brush_short">Pincel</string>
+    <string name="tool_clipping_mask_full">Máscara de recorte</string>
+    <string name="tool_clipping_mask_short">Máscara</string>
+    <string name="tool_close_gap_full">Cerrar huecos ({px}px)</string>
+    <string name="tool_eraser_short">Borrador</string>
+    <string name="tool_eyedropper_short">Cuentagotas</string>
+    <string name="tool_fill_short">Relleno</string>
+    <string name="tool_reference_layer_full">Capa de referencia</string>
+    <string name="tool_reference_layer_short">Ref.</string>
+    <string name="tool_selection_short">Selección</string>
+    <string name="tool_stabilizer_full">Estabilizador de trazo</string>
+    <string name="tool_stabilizer_short">Estabiliz.</string>
+    <string name="tool_vector_eraser_full">Borrador vectorial de intersecciones</string>
+    <string name="workspace_dual_studio">Estudio dual</string>
+    <string name="workspace_focus">Modo enfoque</string>
+    <string name="workspace_manga">Estudio manga</string>
+</resources>

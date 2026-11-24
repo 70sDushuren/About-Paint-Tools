@@ -11,6 +11,7 @@ This document decomposes [04. Phased Development Roadmap](./04-roadmap.md) into 
 - `[B&W Manga]`: Focused on B4 600DPI print sheets, vector ink, panel frames, procedural screentones, and vertical CJK bubbles
 - `[Color Webtoon]`: Focused on cel-shading blend modes, anti-halo close-gap flatting, vertical long strips, and seamless slicing
 - `[Local AI]`: Embedded local Gemma 4 (E2B/E4B) Script Supervisor, Story Planner, Function-Calling driver, and on-device vision tools
+- `[Multi-Platform]`: Six-platform touch/foldable delivery (Wave 1 `v0.9`/`v1.0`: iPad / Touch MacBook / iPhone Duo; Wave 2 `v1.1`–`v1.3`: Android / Windows / Linux)
 - `[i18n]`: 5-language (`en`, `zh-Hans`, `zh-Hant`, `yue-Hant`, `es`) localization & adaptive layout QA
 
 ### MIT-Compatible Graphics Library Integration Map (see [02. Architecture RFC](./02-architecture-and-tech-stack.md#4-high-performance-open-source-graphics-libraries-rust--c--mit-compliance))
@@ -22,7 +23,7 @@ This document decomposes [04. Phased Development Roadmap](./04-roadmap.md) into 
 | `v0.5` | `vello` (GPU vectors), `kurbo` (Bézier intersections/offsets), `rstar` (R\*-tree index) | `T0.5-01`, `T0.5-02` |
 | `v0.6` | `i_overlay` (panel polygon slicing & booleans), `parley` + `harfrust` (text shaping) | `T0.6-01`, `T0.6-03` |
 | `v0.7–v0.9` | `rusqlite`, `zstd` / `lz4_flex`, `psd`, `moxcms` (or C `lcms2` for print CMYK) | `T0.7-01`, `T0.7-02`, `T0.9-01` |
-| `v1.1–v1.3` | `LiteRT-LM` + **Gemma 4 E2B/E4B** (Apache 2.0), `gltf` (3D anime mannequin) | `T1.1-01`–`T1.2-01`, `T1.3-01` |
+| `v1.0–v1.3` | `LiteRT-LM` + **Gemma 4 E2B/E4B** (Apache 2.0), `gltf` (3D figure), `gtk4-rs` (Linux) | `T1.0-04`–`T1.3-03` |
 
 ---
 
@@ -33,11 +34,11 @@ This document decomposes [04. Phased Development Roadmap](./04-roadmap.md) into 
 | Task ID | Tag | Module | Engineering Scope | Status / Acceptance Criteria |
 | :--- | :--- | :--- | :--- | :--- |
 | `T0.1-01` | `[Dual]` | `core/manga-core` | Sparse `256×256` CoW tile store (`TileLayer`), Rope Stabilizer (`RopeStabilizer`), and incremental undo (`TileUndoStack`) | ✅ Landed & unit-tested |
-| `T0.1-02` | `[Dual]` | `core/manga-core` + `apps/ipad` | Expose C-ABI staticlib endpoints (`ffi.rs`, `include/manga_core.h`) & Swift RAII bridge (`MangaCoreBridge.swift`) | ✅ Rust C-ABI, C header, Swift bridge & FFI lifecycle test landed |
+| `T0.1-02` | `[Dual]` | `core/manga-core` + `apps/apple` | Expose C-ABI static/dynamic endpoints (`ffi.rs`, `include/manga_core.h`, `platform.rs`) & Swift RAII bridge (`MangaCoreBridge.swift`) | ✅ Rust C-ABI (`staticlib` + `cdylib`), C header, Swift bridge & FFI lifecycle test landed |
 | `T0.1-03` | `[Dual]` | `core/manga-gpu` | Implement `wgpu` (Metal backend) dirty-tile texture upload & fullscreen viewport compositor shader | ⏳ Pending macOS/Xcode Metal device integration |
-| `T0.1-04` | `[Dual]` | `apps/ipad` | Implement UIKit `MetalCanvasView` host capturing 240Hz `coalescedTouches`, `predictedTouches` overlay, and Palm Rejection | ⏳ `ApplePencilInputAdapter.swift` ready; pending Metal view wiring |
-| `T0.1-05` | `[Dual]` | `core` + `apps/ipad` | **Dual New-Canvas Presets** (B4/A4 600DPI guides, 800/1600 Webtoon, 4K) & `CanvasSession` viewport/stroke loop | ✅ Rust `preset.rs` + `canvas.rs` landed & unit-tested |
-| `T0.1-06` | `[i18n]` | `i18n/` + `scripts/` | 5-language glossary, seed catalogs, `i18n_check.py`, plus `scripts/i18n_sync.py` exporting `Localizable.xcstrings` | ✅ Landed & enforced in GitHub Actions CI |
+| `T0.1-04` | `[Dual]` | `apps/apple` | Implement UIKit `MetalCanvasView` host capturing 240Hz `coalescedTouches`, `predictedTouches` overlay, and Palm Rejection | ⏳ `ApplePencilInputAdapter.swift` ready; pending Metal view wiring |
+| `T0.1-05` | `[Dual]` | `core` + `apps/apple` | **Dual New-Canvas Presets** (B4/A4 600DPI guides, 800/1600 Webtoon, 4K) & `CanvasSession` viewport/stroke loop | ✅ Rust `preset.rs` + `canvas.rs` landed & unit-tested |
+| `T0.1-06` | `[i18n]` | `i18n/` + `scripts/` | 5-language glossary, seed catalogs, `i18n_check.py`, plus `scripts/i18n_sync.py` exporting Apple `.xcstrings` + Android `strings.xml` | ✅ Landed & enforced in GitHub Actions CI |
 
 ### `v0.2` — Anime Brush Engine & Stabilization
 
@@ -78,7 +79,7 @@ This document decomposes [04. Phased Development Roadmap](./04-roadmap.md) into 
 | :--- | :--- | :--- | :--- | :--- |
 | `T0.6-01` | `[B&W Manga]` | `core/manga-core` | Panel Frame Folders: straight/diagonal cuts, configurable gutters, automatic per-panel mask clipping | ✅ `panel.rs` (Sutherland-Hodgman straight/diagonal slicing, gutters & point masking) landed & exposed via C-ABI |
 | `T0.6-02` | `[B&W Manga]` | `core/manga-gpu` | Procedural screentones (dots/lines/crosshatch/noise, live LPI, angle, density, 600DPI binary print) | ⏳ `screentone.rs` area-preserving halftone math landed & unit-tested; WGSL port pending |
-| `T0.6-03` | `[Dual]` | `apps/ipad` + `core` | Speech bubble presets + CoreText **vertical CJK (punctuation compression) & horizontal EN/ES** with locale-switchable text layers | Single page toggles cleanly across EN/CN/ES bubble sets |
+| `T0.6-03` | `[Dual]` | `apps/apple` + `core` | Speech bubble presets + CoreText **vertical CJK (punctuation compression) & horizontal EN/ES** with locale-switchable text layers | Single page toggles cleanly across EN/CN/ES bubble sets |
 | `T0.6-04` | `[Color Webtoon]` | `core/manga-io` | Webtoon mobile viewport frame preview + automated height slicing (e.g., `800×1280`) lossless batch export | ✅ `webtoon.rs` (slice calculator & zero-seam RGBA8 renderer) landed; PNG encoder wiring pending |
 
 ### `v0.7` — Open `.mnga` Format, Layered PSD Interop & `ActionBus`
@@ -92,53 +93,59 @@ This document decomposes [04. Phased Development Roadmap](./04-roadmap.md) into 
 | `T0.7-05` | `[Dual]` | `core/manga-core` | **CPFF v1.0 Creative Project Framework**: same-name `.prj` XML codec, Git-clone rename fallback, editions & chapters (see [07. CPFF v1.0](./07-creative-project-framework-v1.md)) | ✅ `project.rs` + `templates/SampleManga/` landed & unit-tested |
 | `T0.7-06` | `[Dual]` | `scripts/` + `templates/` | GitHub / GitLab repo scaffold (`.gitattributes` Git LFS / `.gitignore` / declarations) & `scripts/prj_validate.py` | ✅ Landed & enforced in GitHub Actions CI |
 
-### `v0.8` – `v0.9` — Apple Pencil Pro, 5-Locale Polish & Dual-Track Beta
+### `v0.8` – `v0.9` — Wave 1 Apple Trio Touch/Foldable Ergonomics (iPad · Touch MacBook · iPhone Duo) & Beta
 
 | Task ID | Tag | Module | Engineering Scope | Acceptance Criteria |
 | :--- | :--- | :--- | :--- | :--- |
-| `T0.8-01` | `[Dual]` | `apps/ipad` | Procreate-grade gestures (2/3-finger undo/redo, long-press picker) + Apple Pencil Pro Squeeze radial menu & Hover cursor outline | 80% of frequent actions performed without touching top toolbar |
-| `T0.8-02` | `[Dual]` | `apps/ipad` | Floating Reference Window (eyedropper-enabled) + Bluetooth keyboard & one-handed gamepad remapping | Import/export custom keymap profiles |
-| `T0.8-03` | `[i18n]` | `apps/ipad` + `i18n/` | In-app 5-language live switcher (with `zh-HK → yue-Hant` fallback) + glossary-locked auto-sync script | Instant live switching without restart; zero missing keys |
-| `T0.9-01` | `[Dual]` | `core/manga-core` | LRU Zstd disk tile paging & iPadOS Jetsam memory-pressure eviction handler | 2h zero-crash soak on 8GB iPad for both B4 600DPI (50 layers) & `1600×25600` Webtoon |
-| `T0.9-02` | `[i18n]` | `apps/ipad` | 11-inch portrait & 1/3 Split View screenshot QA across ES / Cantonese / Traditional + `locked: true` layout tuning | Zero truncated buttons or overlapping text across all 5 locales |
+| `T0.8-01` | `[Dual]` | `apps/apple` | iPad gestures (2/3-finger undo/redo, long-press picker) + Apple Pencil Pro Squeeze radial menu & Hover cursor outline | 80% of frequent actions performed without touching top toolbar |
+| `T0.8-02` | `[Dual]` | `apps/apple` | Floating Reference Window (eyedropper-enabled) + Bluetooth keyboard & one-handed gamepad remapping | Import/export custom keymap profiles |
+| `T0.8-03` | `[i18n]` | `apps/apple` + `i18n/` | In-app 5-language live switcher (with `zh-HK → yue-Hant` fallback) + glossary-locked auto-sync script | Instant live switching without restart; zero missing keys |
+| `T0.8-04` | `[Multi-Platform]` | `apps/apple/macOS-Touch` | **Touchscreen MacBook Adaptation**: AppKit direct screen multi-touch palm rejection + `tabletPoint` stylus + trackpad gestures + full keyboard shortcut fusion | ✅ Input adapter scaffold (`MacTouchInputAdapter.swift` + `project.yml`) landed; pending device bring-up |
+| `T0.8-05` | `[Multi-Platform]` | `apps/apple/iPhoneDuo` | **iPhone Duo Foldable Adaptation**: folded one-handed novel/voice continuity/quick sketch ↔ unfolded hinge-aware dual-pane studio | ✅ Posture scaffold (`IphoneDuoPostureAdapter.swift` + `platform.rs`) landed; pending device bring-up |
+| `T0.9-01` | `[Dual]` | `core/manga-core` | LRU Zstd disk tile paging & Jetsam memory-pressure eviction handler | 2h zero-crash soak on 8GB iPad for both B4 600DPI (50 layers) & `1600×25600` Webtoon |
+| `T0.9-02` | `[i18n]` | `apps/apple` | 5-language zero-truncation screenshot QA across iPad 11" Split View, Touch MacBook, and iPhone Duo folded/unfolded postures | Zero truncated buttons or overlapping text across all 3 Apple form factors |
+| `T0.9-03` | `[Multi-Platform]` | `apps/apple` | **Wave 1 Apple Trio Joint Beta Packaging**: release `.ipa` (iPad & iPhone Duo) and `.dmg` (Touch MacBook) Beta PR artifacts + cross-device `.prj` Git handoff QA | Simultaneous Beta across all 3 Apple targets with 100% `.prj` parity |
 
 ---
 
-## 3. 1.x Engineering Tasks (UI Overhaul + Embedded Gemma 4 + AI Suite)
+## 3. 1.x Engineering Tasks (Dual-Engine + Embedded Gemma 4 + Wave 2 Cross-Platform)
 
-### `v1.0` — Pro UI Overhaul + Dual-Engine Novel × Manga Parallel Studio (Core Foundation)
+### `v1.0` — Pro UI Overhaul + Dual-Engine Novel × Manga Studio (Apple Trio Official Launch)
 
 | Task ID | Tag | Module | Engineering Scope | Acceptance Criteria |
 | :--- | :--- | :--- | :--- | :--- |
-| `T1.0-01` | `[Dual]` | `apps/ipad` | Complete Design System (OLED Dark / Studio Gray / Light themes, left/right-handed layout, crisp custom icon set) | Visual design & 5-language layout audit sign-off |
-| `T1.0-02` | `[Dual]` | `apps/ipad` | **Three-Mode Workspace**: *Focus Illustration/Webtoon* ↔ *Manga Studio* ↔ **Novel × Manga Dual-Engine Studio** | `< 100ms` mode transition preserving viewport, brush & editor cursor |
-| `T1.0-03` | `[Dual]` | `apps/ipad` + `core/manga-core` | **Built-in Light Novel Engine**: Markdown/rich prose editor, word stats, shared outline/dictionary autocomplete, 5-language novel chapters & EPUB/MD export (supporting curated manga picks or custom `novel/illustrations/`) | Single `.prj` exports independent EPUB & manga editions with `<DivergenceNote>` support |
-| `T1.0-04` | `[Local AI]` | `ai/local-llm` | **Integrate LiteRT-LM / CoreML Runtime in `v1.0`**: opt-in download/verification for **Gemma 4 E2B (8GB) / E4B (16GB)**, 120s idle auto-unload & memory-warning eviction | Fully offline inference; `0 MB` RAM when unloaded |
+| `T1.0-01` | `[Dual]` | `apps/apple` | Complete Design System (OLED Dark / Studio Gray / Light themes, left/right-handed layout, crisp custom icon set) | Visual design & 5-language layout audit sign-off |
+| `T1.0-02` | `[Dual]` | `apps/apple` | **Three-Mode Workspace**: *Focus Illustration/Webtoon* ↔ *Manga Studio* ↔ **Novel × Manga Dual-Engine Studio** (responsive across iPad, Touch MacBook & iPhone Duo hinge) | `< 100ms` mode transition preserving viewport, brush & editor cursor |
+| `T1.0-03` | `[Dual]` | `apps/apple` + `core/manga-core` | **Built-in Light Novel Engine**: Markdown/rich prose editor, word stats, shared outline/dictionary autocomplete, 5-language novel chapters & EPUB/MD export (supporting curated manga picks or custom `novel/illustrations/`) | Single `.prj` exports independent EPUB & manga editions with `<DivergenceNote>` support |
+| `T1.0-04` | `[Local AI]` | `ai/local-llm` | **Integrate LiteRT-LM / CoreML Runtime in `v1.0`**: opt-in download/verification for **Gemma 4 E2B (8GB) / E4B (16GB+)**, 120s idle auto-unload & memory-warning eviction | Fully offline inference; `0 MB` RAM when unloaded |
 | `T1.0-05` | `[Local AI]` | `ai/dual-bridge` | **Manga → Novel AI Reference Draft & Split Writer**: Gemma 4 reads manga panels + `script.xml` read-only and outputs reference prose to `ai_assist/manga_to_novel/` (`role="ai_reference_only"`), displayed alongside an independent human editor | Never writes into `novel/prose/`; AI intermediates preserved for reference history |
 | `T1.0-06` | `[Local AI]` | `ai/dual-bridge` | **Novel → Manga AI Storyboard/Rough Draft & Overlay**: Gemma 4 reads novel prose read-only and outputs storyboard/panel drafts to `ai_assist/novel_to_manga/` as an optional translucent reference overlay; human manuscript may diverge completely | Never writes into `manuscript/`; dual guard in validator & Rust core |
 
-### `v1.1` — Gemma 4 Voice Continuity + On-Device Flatting / LT Conversion
+### `v1.1` — Android Pad / Foldable Edition + Gemma 4 Voice Continuity & Flatting / LT
 
 | Task ID | Tag | Module | Engineering Scope | Acceptance Criteria |
 | :--- | :--- | :--- | :--- | :--- |
 | `T1.1-01` | `[Local AI]` | `ai/script-supervisor` | **Intelligent Continuity Log**: wired to `.mnga` / `.prj` logs, respecting `<DivergenceNote>` intentional adaptations & **Gemma 4 voice dictation structuring** | Voice memos parsed into structured page/panel logs within 3s |
 | `T1.1-02` | `[Local AI]` | `ai/story-planner` | **5-Language Dialogue & Novel Localization Polish**: honors `i18n/dictionary.xml` glossary while strictly protecting `locked="true"` human lines | `100%` glossary adherence; zero overwrites of locked entries |
-| `T1.1-03` | `[Color Webtoon]` | `ai/vision` | **On-Device Semantic Smart Flatting**: quantized CoreML `MobileSAM`/`SAM2-Tiny` multi-layer skin/hair/outfit fill with anti-halo expansion | Typical single-character anime lineart flatted in 3–6s offline |
+| `T1.1-03` | `[Color Webtoon]` | `ai/vision` | **On-Device Semantic Smart Flatting**: quantized `MobileSAM`/`SAM2-Tiny` multi-layer skin/hair/outfit fill with anti-halo expansion | Typical single-character anime lineart flatted in 3–6s offline |
 | `T1.1-04` | `[B&W Manga]` | `ai/vision` | **Offline Photo/3D-to-Manga LT Conversion**: splits into editable lineart + procedural LPI screentone + solid shadow layers | 2K photo converted offline in `< 5s` with 3 fully editable layers |
+| `T1.1-05` | `[Multi-Platform]` | `apps/android` | **Android Pad / Foldable Phone Edition**: Kotlin + Jetpack Compose + `WindowManager` (`FoldingFeature` dual-pane & Tabletop mode) + S-Pen/M-Pencil/USI `FrontBufferedRenderer` + Vulkan `wgpu` + `libmanga_core.so` | ⏳ Gradle scaffold, JNI contract, foldable adapter & 5-locale `strings.xml` landed; pending `v1.1` device bring-up |
 
-### `v1.2` — Gemma 4 Workflow Driver + Sketch Cleanup & Cel Shading
+### `v1.2` — Touchscreen Windows Edition + Gemma 4 Workflow Driver & Cleanup / Cel Shade
 
 | Task ID | Tag | Module | Engineering Scope | Acceptance Criteria |
 | :--- | :--- | :--- | :--- | :--- |
 | `T1.2-01` | `[Local AI]` | `ai/workflow-driver` | **Gemma 4 Function-Calling Action Driver**: binds whitelisted `ActionBus` schemas for text/voice → `ActionPlan` preview → atomic single-undo execution | `≥ 95%` accuracy across 10 core manga batch tasks with 100% single-step rollback |
 | `T1.2-02` | `[Dual]` | `ai/vision` | **Style-Preserving Sketch Cleanup → Vector Layer** + real-time `< 4px` Gap Radar overlay | Outputs standard editable vector layer compatible with intersection eraser |
 | `T1.2-03` | `[Color Webtoon]` | `ai/vision` | **3D Light-Sphere Cel Shading Assist**: on-device normal estimation + live sphere drag preview + non-destructive `Multiply` & rim-light bake | Preview runs `≥ 30fps`; baked layers leave base flats untouched |
+| `T1.2-04` | `[Multi-Platform]` | `apps/windows` | **Touchscreen Windows Notebook / 2-in-1 Pad Edition**: WinUI 3 + `WM_POINTER`/Windows Ink palm rejection + automatic 2-in-1 tablet-mode hit targets + DX12 `wgpu` + `manga_core.dll` P/Invoke | ⏳ `.csproj`, P/Invoke bindings & Windows Ink adapter scaffold landed; pending `v1.2` DX12 host & MSIX packaging |
 
-### `v1.3` – `v1.4` — 3D Mannequin, Multi-Page Studio, Vision Critic & ComfyUI Bridge
+### `v1.3` – `v1.4` — Touchscreen Linux Edition, 3D Mannequin, Vision Critic & ComfyUI Bridge
 
 | Task ID | Tag | Module | Engineering Scope | Acceptance Criteria |
 | :--- | :--- | :--- | :--- | :--- |
-| `T1.3-01` | `[Dual]` | `apps/ipad` + `ai/vision` | Lightweight anime-proportioned 3D pose mannequin + photo/stick-figure pose capture + perspective ruler focal sync | 5–8 head ratio presets + hand pose library |
-| `T1.3-02` | `[Dual]` | `core` + `apps/ipad` | Full Multi-Page chapter spread/binding manager & multi-episode Webtoon workspace | 32-page chapter switching responds in `< 150ms` |
+| `T1.3-01` | `[Dual]` | `apps/*` + `ai/vision` | Lightweight anime-proportioned 3D pose mannequin + photo/stick-figure pose capture + perspective ruler focal sync | 5–8 head ratio presets + hand pose library |
+| `T1.3-02` | `[Dual]` | `core` + `apps/*` | Full Multi-Page chapter spread/binding manager, multi-episode Webtoon & multi-volume novel studio | 32-page chapter switching responds in `< 150ms` |
+| `T1.3-03` | `[Multi-Platform]` | `apps/linux` | **Touchscreen Linux Notebook / Pad Edition**: native Rust linking directly to `manga-core` + GTK4/Wayland `zwp_tablet_v2` + `libinput` multi-touch + Vulkan `wgpu` + Flatpak/AppImage | ⏳ `manga-linux-shell` crate wired into Cargo Workspace & CI-tested; pending `v1.3` GTK4/Vulkan windowing |
 | `T1.4-01` | `[Local AI]` | `ai/script-supervisor` | **Gemma 4 Vision Continuity Critic**: compares panel thumbnails with Character Reference Sheets & continuity DB, emitting dismissible pins | Flags missing accessories/eye-color mismatches without mutating canvas |
-| `T1.4-02` | `[Local AI]` | `ai/bridge` | LAN **ComfyUI / OpenAI-Compatible BYOK Bridge** (selection export → remote run → new layer import) | Full custom workflow JSON mapping over LAN |
+| `T1.4-02` | `[Local AI]` | `ai/bridge` | LAN **ComfyUI / OpenAI-Compatible BYOK Bridge** (selection export → remote run → new layer or `ai_assist/` reference import) | Full custom workflow JSON mapping over LAN |

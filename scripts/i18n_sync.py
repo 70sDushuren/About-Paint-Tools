@@ -23,7 +23,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 LOCALES_DIR = ROOT / "i18n" / "locales"
 GLOSSARY_PATH = ROOT / "i18n" / "glossary.json"
-DEFAULT_XCSTRINGS = ROOT / "apps" / "ipad" / "Resources" / "Localizable.xcstrings"
+DEFAULT_XCSTRINGS = ROOT / "apps" / "apple" / "Shared" / "Resources" / "Localizable.xcstrings"
+DEFAULT_ANDROID_RES = ROOT / "apps" / "android" / "app" / "src" / "main" / "res"
+
+ANDROID_LOCALE_DIRS = {
+    "en": "values",
+    "zh-Hans": "values-zh-rCN",
+    "zh-Hant": "values-zh-rTW",
+    "yue-Hant": "values-zh-rHK",
+    "es": "values-es",
+}
 
 SOURCE_LOCALES = ("en", "zh-Hans")
 TARGET_LOCALES = ("zh-Hant", "yue-Hant", "es")
@@ -109,7 +118,7 @@ def build_xcstrings_payload() -> dict:
             }
             localizations[loc] = loc_payload
 
-            # Mirror yue-Hant to zh-HK so iPadOS Hong Kong devices seamlessly fall back.
+            # Mirror yue-Hant to zh-HK so Apple Hong Kong devices seamlessly fall back.
             if loc == "yue-Hant":
                 localizations["zh-HK"] = loc_payload
 
@@ -155,15 +164,89 @@ def check_xcstrings(out_path: Path) -> int:
     return 0
 
 
+def _android_escape(text: str) -> str:
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("'", "\\'")
+        .replace('"', '\\"')
+    )
+
+
+def build_android_xml_map() -> dict[str, str]:
+    result: dict[str, str] = {}
+    for loc, folder in ANDROID_LOCALE_DIRS.items():
+        catalog = load_json(LOCALES_DIR / f"{loc}.json")
+        lines = [
+            '<?xml version="1.0" encoding="utf-8"?>',
+            f'<!-- Auto-generated from i18n/locales/{loc}.json by scripts/i18n_sync.py. Do not edit manually. -->',
+            "<resources>",
+        ]
+        for key in sorted(catalog["strings"].keys()):
+            res_name = key.replace(".", "_")
+            val = _android_escape(catalog["strings"][key]["value"])
+            lines.append(f'    <string name="{res_name}">{val}</string>')
+        lines.append("</resources>")
+        result[folder] = "\n".join(lines) + "\n"
+    return result
+
+
+def export_android(res_dir: Path) -> int:
+    xml_map = build_android_xml_map()
+    for folder, content in xml_map.items():
+        target = res_dir / folder / "strings.xml"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+    key_count = len(load_json(LOCALES_DIR / "en.json")["strings"])
+    print(
+        f"Exported {key_count} keys × 5 Android resource bundles -> {res_dir.relative_to(ROOT)}"
+    )
+    return 0
+
+
+def check_android(res_dir: Path) -> int:
+    xml_map = build_android_xml_map()
+    for folder, expected in xml_map.items():
+        target = res_dir / folder / "strings.xml"
+        if not target.exists():
+            print(
+                f"ERROR: Missing {target.relative_to(ROOT)}. Run `python3 scripts/i18n_sync.py --export-android`.",
+                file=sys.stderr,
+            )
+            return 1
+        actual = target.read_text(encoding="utf-8")
+        if actual != expected:
+            print(
+                f"ERROR: {target.relative_to(ROOT)} is out of sync with i18n/locales/*.json. "
+                f"Run `python3 scripts/i18n_sync.py --export-android`.",
+                file=sys.stderr,
+            )
+            return 1
+    print(f"OK: {res_dir.relative_to(ROOT)}/values*/strings.xml (5 locales) are strictly in sync.")
+    return 0
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Sync 5-locale catalogs and export Xcode .xcstrings.")
+    parser = argparse.ArgumentParser(
+        description="Sync 5-locale catalogs and export Apple .xcstrings & Android strings.xml."
+    )
     parser.add_argument("--sync", action="store_true", help="Seed missing keys into derived locales without overwriting locked entries.")
-    parser.add_argument("--export-xcstrings", action="store_true", help="Export Localizable.xcstrings for iPadOS.")
+    parser.add_argument("--export-xcstrings", action="store_true", help="Export Localizable.xcstrings for Apple targets.")
     parser.add_argument("--check-xcstrings", action="store_true", help="Verify Localizable.xcstrings matches i18n/locales/*.json.")
+    parser.add_argument("--export-android", action="store_true", help="Export values*/strings.xml for Android targets.")
+    parser.add_argument("--check-android", action="store_true", help="Verify Android values*/strings.xml match i18n/locales/*.json.")
     parser.add_argument("--out", type=Path, default=DEFAULT_XCSTRINGS, help="Path to Localizable.xcstrings.")
+    parser.add_argument("--android-res", type=Path, default=DEFAULT_ANDROID_RES, help="Path to Android res/ directory.")
     args = parser.parse_args()
 
-    if not (args.sync or args.export_xcstrings or args.check_xcstrings):
+    if not (
+        args.sync
+        or args.export_xcstrings
+        or args.check_xcstrings
+        or args.export_android
+        or args.check_android
+    ):
         parser.print_help()
         return 2
 
@@ -174,6 +257,10 @@ def main() -> int:
         rc |= export_xcstrings(args.out)
     if args.check_xcstrings:
         rc |= check_xcstrings(args.out)
+    if args.export_android:
+        rc |= export_android(args.android_res)
+    if args.check_android:
+        rc |= check_android(args.android_res)
     return rc
 
 

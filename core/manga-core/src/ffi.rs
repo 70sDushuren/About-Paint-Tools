@@ -1,4 +1,5 @@
-//! Zero-dependency C-ABI bridge for iPadOS Swift/UIKit integration.
+//! Zero-dependency C-ABI bridge for Apple (iPadOS / macOS Touch / iPhone Duo),
+//! Android (JNI), Windows (P/Invoke), and Linux integrations.
 //!
 //! Matching C declarations live in `core/manga-core/include/manga_core.h`.
 
@@ -10,6 +11,7 @@ use crate::canvas::CanvasSession;
 use crate::fill::{close_gap_expand_fill, FillOptions};
 use crate::layer::{BlendMode, LayerId};
 use crate::panel::{PanelId, PanelLayout};
+use crate::platform::{recommend_workspace_layout, FoldPosture, TargetPlatform};
 use crate::preset::CanvasPreset;
 use crate::stroke::StrokePoint;
 use crate::vector::VectorNode;
@@ -506,9 +508,35 @@ pub unsafe extern "C" fn manga_project_redo_action(handle: *mut MangaProjectHand
     u8::from(h.bus.redo_last(&mut h.doc))
 }
 
+// ============================================================================
+// Cross-Platform Posture & Adaptive Workspace Layout C-ABI
+// ============================================================================
+
+/// Returns a deterministic `MangaWorkspaceLayout` code for any `(platform, posture, width_dp, height_dp)`.
+#[no_mangle]
+pub extern "C" fn manga_platform_recommend_layout(
+    platform_code: u32,
+    posture_code: u32,
+    width_dp: f32,
+    height_dp: f32,
+) -> u32 {
+    let platform = TargetPlatform::from_u32(platform_code).unwrap_or(TargetPlatform::IpadOs);
+    let posture = FoldPosture::from_u32(posture_code).unwrap_or(FoldPosture::Flat);
+    recommend_workspace_layout(platform, posture, width_dp, height_dp) as u32
+}
+
+/// Returns the release wave (`1` for v0.9/v1.0 Apple trio, `2` for post-v1.0 Android/Windows/Linux, `0` if unknown).
+#[no_mangle]
+pub extern "C" fn manga_platform_release_wave(platform_code: u32) -> u8 {
+    TargetPlatform::from_u32(platform_code)
+        .map(TargetPlatform::release_wave)
+        .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::platform::WorkspaceLayoutHint;
     use std::ffi::CString;
 
     #[test]
@@ -606,5 +634,24 @@ mod tests {
 
             manga_project_destroy(p);
         }
+    }
+
+    #[test]
+    fn c_abi_platform_layout_and_wave_match_contract() {
+        assert_eq!(manga_platform_release_wave(TargetPlatform::IpadOs as u32), 1);
+        assert_eq!(manga_platform_release_wave(TargetPlatform::MacOsTouch as u32), 1);
+        assert_eq!(manga_platform_release_wave(TargetPlatform::IphoneDuo as u32), 1);
+        assert_eq!(manga_platform_release_wave(TargetPlatform::AndroidPadFoldable as u32), 2);
+        assert_eq!(manga_platform_release_wave(TargetPlatform::WindowsTouch as u32), 2);
+        assert_eq!(manga_platform_release_wave(TargetPlatform::LinuxTouch as u32), 2);
+        assert_eq!(manga_platform_release_wave(99), 0);
+
+        let duo_unfolded = manga_platform_recommend_layout(
+            TargetPlatform::IphoneDuo as u32,
+            FoldPosture::UnfoldedDualPane as u32,
+            780.0,
+            844.0,
+        );
+        assert_eq!(duo_unfolded, WorkspaceLayoutHint::DualPaneAcrossHinge as u32);
     }
 }

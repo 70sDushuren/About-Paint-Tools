@@ -8,7 +8,7 @@ description = "MIT-licensed cross-platform sparse tiled canvas, stroke stabiliza
 
 [lib]
 name = "manga_core"
-crate-type = ["rlib", "staticlib"]
+crate-type = ["rlib", "staticlib", "cdylib"]
 
 [dependencies]
 # Zero external dependencies in v0.1 foundation for fast offline verification.
