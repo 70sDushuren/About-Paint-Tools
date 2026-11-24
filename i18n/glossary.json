@@ -1,0 +1,115 @@
+{
+  "version": "0.1.0",
+  "source_locales": ["en", "zh-Hans"],
+  "target_locales": ["zh-Hant", "yue-Hant", "es"],
+  "terms": [
+    {
+      "id": "layer",
+      "en": "Layer",
+      "zh-Hans": "图层",
+      "zh-Hant": "圖層",
+      "yue-Hant": "圖層",
+      "es": "Capa",
+      "note": "Standard canvas layer noun"
+    },
+    {
+      "id": "clipping_mask",
+      "en": "Clipping Mask",
+      "zh-Hans": "剪切蒙版",
+      "zh-Hant": "剪裁遮色片",
+      "yue-Hant": "剪裁遮罩",
+      "es": "Máscara de recorte",
+      "note": "Use short label or icon in narrow toolbars for Spanish"
+    },
+    {
+      "id": "alpha_lock",
+      "en": "Alpha Lock",
+      "zh-Hans": "锁定不透明度",
+      "zh-Hant": "鎖定透明像素",
+      "yue-Hant": "鎖定透明區",
+      "es": "Bloqueo alfa",
+      "note": "Layer alpha channel lock"
+    },
+    {
+      "id": "reference_layer",
+      "en": "Reference Layer",
+      "zh-Hans": "参考图层",
+      "zh-Hant": "參考圖層",
+      "yue-Hant": "參考圖層",
+      "es": "Capa de referencia",
+      "note": "Lineart layer referenced by flood fill and smart flatting"
+    },
+    {
+      "id": "vector_layer",
+      "en": "Vector Layer",
+      "zh-Hans": "矢量图层",
+      "zh-Hant": "向量圖層",
+      "yue-Hant": "向量圖層",
+      "es": "Capa vectorial",
+      "note": "Distinguish 矢量 (zh-Hans) vs 向量 (zh-Hant / yue-Hant)"
+    },
+    {
+      "id": "stabilizer",
+      "en": "Stabilizer",
+      "zh-Hans": "防抖",
+      "zh-Hant": "防手震",
+      "yue-Hant": "防震修正",
+      "es": "Estabilizador",
+      "note": "Real-time stroke smoothing / rope stabilization"
+    },
+    {
+      "id": "screentone",
+      "en": "Screentone",
+      "zh-Hans": "网点纸",
+      "zh-Hant": "網點紙",
+      "yue-Hant": "網點紙",
+      "es": "Trama",
+      "note": "Manga halftone screentone layer"
+    },
+    {
+      "id": "close_gap",
+      "en": "Close Gap",
+      "zh-Hans": "间隙闭合",
+      "zh-Hant": "封閉間隙",
+      "yue-Hant": "填補空隙",
+      "es": "Cerrar huecos",
+      "note": "Anti-leak threshold for anime bucket fill"
+    },
+    {
+      "id": "selection",
+      "en": "Selection",
+      "zh-Hans": "选区",
+      "zh-Hant": "選取範圍",
+      "yue-Hant": "揀選範圍",
+      "es": "Selección",
+      "note": "Cantonese uses natural verb 揀選"
+    },
+    {
+      "id": "eyedropper",
+      "en": "Eyedropper",
+      "zh-Hans": "吸管",
+      "zh-Hant": "滴管",
+      "yue-Hant": "吸色",
+      "es": "Cuentagotas",
+      "note": "Color picker tool"
+    },
+    {
+      "id": "panel_frame",
+      "en": "Panel Frame",
+      "zh-Hans": "分格框",
+      "zh-Hant": "分格框",
+      "yue-Hant": "分格框",
+      "es": "Viñeta",
+      "note": "Comic panel folder with automatic masking"
+    },
+    {
+      "id": "smart_flatting",
+      "en": "Smart Flatting",
+      "zh-Hans": "智能铺底色",
+      "zh-Hant": "智慧平塗底色",
+      "yue-Hant": "智能鋪底色",
+      "es": "Color base IA",
+      "note": "On-device AI semantic flatting assistant (v1.1+)"
+    }
+  ]
+}

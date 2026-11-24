@@ -1,0 +1,17 @@
+# Build artifacts
+/core/target/
+/apps/ipad/.build/
+/apps/ipad/DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

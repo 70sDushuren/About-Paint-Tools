@@ -1,0 +1,29 @@
+{
+  "locale": "en",
+  "role": "canonical_source",
+  "strings": {
+    "app.name": { "value": "MangaCanvas", "status": "source", "locked": true },
+    "action.undo": { "value": "Undo", "status": "source", "locked": true, "max_chars": 12 },
+    "action.redo": { "value": "Redo", "status": "source", "locked": true, "max_chars": 12 },
+    "action.export_psd": { "value": "Export Layered PSD", "status": "source", "locked": true },
+    "tool.brush.short": { "value": "Brush", "status": "source", "locked": true, "max_chars": 10 },
+    "tool.eraser.short": { "value": "Eraser", "status": "source", "locked": true, "max_chars": 10 },
+    "tool.fill.short": { "value": "Fill", "status": "source", "locked": true, "max_chars": 10 },
+    "tool.selection.short": { "value": "Select", "status": "source", "locked": true, "max_chars": 10 },
+    "tool.eyedropper.short": { "value": "Picker", "status": "source", "locked": true, "max_chars": 12 },
+    "tool.clipping_mask.short": { "value": "Clip", "status": "source", "locked": true, "max_chars": 12 },
+    "tool.clipping_mask.full": { "value": "Clipping Mask", "status": "source", "locked": true },
+    "tool.reference_layer.short": { "value": "Ref", "status": "source", "locked": true, "max_chars": 12 },
+    "tool.reference_layer.full": { "value": "Reference Layer", "status": "source", "locked": true },
+    "tool.stabilizer.short": { "value": "Smooth", "status": "source", "locked": true, "max_chars": 14 },
+    "tool.stabilizer.full": { "value": "Stroke Stabilizer", "status": "source", "locked": true },
+    "tool.vector_eraser.full": { "value": "Vector Intersection Eraser", "status": "source", "locked": true },
+    "tool.close_gap.full": { "value": "Close Gap ({px}px)", "status": "source", "locked": true },
+    "panel.layers.title": { "value": "Layers ({count})", "status": "source", "locked": true },
+    "panel.opacity.label": { "value": "Opacity {percent}%", "status": "source", "locked": true },
+    "workspace.focus": { "value": "Focus Mode", "status": "source", "locked": true },
+    "workspace.manga": { "value": "Manga Studio", "status": "source", "locked": true },
+    "settings.language": { "value": "App Language", "status": "source", "locked": true },
+    "ai.pledge.badge": { "value": "On-Device Offline · Zero Artwork Training", "status": "source", "locked": true }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "locale": "es",
+  "role": "derived_target",
+  "preferred_source": "en",
+  "strings": {
+    "app.name": { "value": "MangaCanvas", "status": "auto", "locked": true },
+    "action.undo": { "value": "Deshacer", "status": "auto", "locked": false, "max_chars": 12 },
+    "action.redo": { "value": "Rehacer", "status": "auto", "locked": false, "max_chars": 12 },
+    "action.export_psd": { "value": "Exportar PSD por capas", "status": "auto", "locked": false },
+    "tool.brush.short": { "value": "Pincel", "status": "auto", "locked": false, "max_chars": 10 },
+    "tool.eraser.short": { "value": "Borrador", "status": "tuned", "locked": true, "max_chars": 10 },
+    "tool.fill.short": { "value": "Relleno", "status": "tuned", "locked": true, "max_chars": 10 },
+    "tool.selection.short": { "value": "Selección", "status": "tuned", "locked": true, "max_chars": 10 },
+    "tool.eyedropper.short": { "value": "Cuentagotas", "status": "tuned", "locked": true, "max_chars": 12 },
+    "tool.clipping_mask.short": { "value": "Máscara", "status": "tuned", "locked": true, "max_chars": 12 },
+    "tool.clipping_mask.full": { "value": "Máscara de recorte", "status": "auto", "locked": false },
+    "tool.reference_layer.short": { "value": "Ref.", "status": "tuned", "locked": true, "max_chars": 12 },
+    "tool.reference_layer.full": { "value": "Capa de referencia", "status": "auto", "locked": false },
+    "tool.stabilizer.short": { "value": "Estabiliz.", "status": "tuned", "locked": true, "max_chars": 14 },
+    "tool.stabilizer.full": { "value": "Estabilizador de trazo", "status": "auto", "locked": false },
+    "tool.vector_eraser.full": { "value": "Borrador vectorial de intersecciones", "status": "tuned", "locked": true },
+    "tool.close_gap.full": { "value": "Cerrar huecos ({px}px)", "status": "auto", "locked": false },
+    "panel.layers.title": { "value": "Capas ({count})", "status": "auto", "locked": false },
+    "panel.opacity.label": { "value": "Opacidad {percent}%", "status": "auto", "locked": false },
+    "workspace.focus": { "value": "Modo enfoque", "status": "auto", "locked": false },
+    "workspace.manga": { "value": "Estudio manga", "status": "auto", "locked": false },
+    "settings.language": { "value": "Idioma de la app", "status": "tuned", "locked": true },
+    "ai.pledge.badge": { "value": "Local sin conexión · Sin entrenar con tus obras", "status": "tuned", "locked": true }
+  }
+}

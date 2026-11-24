@@ -1,0 +1,30 @@
+{
+  "locale": "zh-Hant",
+  "role": "derived_target",
+  "preferred_source": "zh-Hans",
+  "strings": {
+    "app.name": { "value": "MangaCanvas", "status": "auto", "locked": true },
+    "action.undo": { "value": "復原", "status": "tuned", "locked": true, "max_chars": 12 },
+    "action.redo": { "value": "重做", "status": "auto", "locked": false, "max_chars": 12 },
+    "action.export_psd": { "value": "匯出多圖層 PSD", "status": "tuned", "locked": true },
+    "tool.brush.short": { "value": "筆刷", "status": "tuned", "locked": true, "max_chars": 10 },
+    "tool.eraser.short": { "value": "橡皮擦", "status": "tuned", "locked": true, "max_chars": 10 },
+    "tool.fill.short": { "value": "填色", "status": "auto", "locked": false, "max_chars": 10 },
+    "tool.selection.short": { "value": "選取", "status": "tuned", "locked": true, "max_chars": 10 },
+    "tool.eyedropper.short": { "value": "滴管", "status": "tuned", "locked": true, "max_chars": 12 },
+    "tool.clipping_mask.short": { "value": "剪裁", "status": "tuned", "locked": true, "max_chars": 12 },
+    "tool.clipping_mask.full": { "value": "剪裁遮色片", "status": "tuned", "locked": true },
+    "tool.reference_layer.short": { "value": "參考層", "status": "auto", "locked": false, "max_chars": 12 },
+    "tool.reference_layer.full": { "value": "參考圖層", "status": "auto", "locked": false },
+    "tool.stabilizer.short": { "value": "防手震", "status": "tuned", "locked": true, "max_chars": 14 },
+    "tool.stabilizer.full": { "value": "筆跡防手震修正", "status": "tuned", "locked": true },
+    "tool.vector_eraser.full": { "value": "向量交點橡皮擦", "status": "tuned", "locked": true },
+    "tool.close_gap.full": { "value": "封閉間隙（{px}px）", "status": "tuned", "locked": true },
+    "panel.layers.title": { "value": "圖層（{count}）", "status": "auto", "locked": false },
+    "panel.opacity.label": { "value": "不透明度 {percent}%", "status": "auto", "locked": false },
+    "workspace.focus": { "value": "專注插畫模式", "status": "auto", "locked": false },
+    "workspace.manga": { "value": "漫畫工作台", "status": "auto", "locked": false },
+    "settings.language": { "value": "應用程式語言", "status": "tuned", "locked": true },
+    "ai.pledge.badge": { "value": "本機離線 · 零作品上傳訓練", "status": "tuned", "locked": true }
+  }
+}

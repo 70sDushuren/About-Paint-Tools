@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  i18n-and-docs:
+    name: 5-Language i18n & Bilingual Docs Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run i18n and bilingual docs validator
+        run: python3 scripts/i18n_check.py
+
+  rust-core:
+    name: Rust Core Engine Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run manga-core unit tests
+        run: cargo test --manifest-path core/Cargo.toml --all-targets

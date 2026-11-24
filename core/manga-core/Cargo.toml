@@ -1,0 +1,15 @@
+[package]
+name = "manga-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "MIT-licensed cross-platform sparse tiled canvas, stroke stabilization, and manga document core."
+
+[lib]
+name = "manga_core"
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+# Zero external dependencies in v0.1 foundation for fast offline verification.
+# Planned MIT/Apache-2.0 crates for upcoming milestones: wgpu, kurbo, zstd, uniffi.
