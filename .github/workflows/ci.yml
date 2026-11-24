@@ -17,6 +17,8 @@ jobs:
           python-version: "3.12"
       - name: Run i18n and bilingual docs validator
         run: python3 scripts/i18n_check.py
+      - name: Verify iPadOS Localizable.xcstrings is in sync
+        run: python3 scripts/i18n_sync.py --check-xcstrings
 
   rust-core:
     name: Rust Core Engine Tests

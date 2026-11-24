@@ -1,0 +1,1208 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "action.export_psd": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Layered PSD"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出多层 PSD"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯出多圖層 PSD"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯出多圖層 PSD"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯出多圖層 PSD"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportar PSD por capas"
+          }
+        }
+      }
+    },
+    "action.redo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redo"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重做"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重做"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重做"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重做"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rehacer"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 12 chars"
+    },
+    "action.undo": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Undo"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤销"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "復原"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤銷"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤銷"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deshacer"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 12 chars"
+    },
+    "ai.continuity.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuity"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "场记"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "場記"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "場記"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "場記"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuidad"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 14 chars"
+    },
+    "ai.macro.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Macros"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批处理"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批次作業"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批處理"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "批處理"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Macros IA"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 12 chars"
+    },
+    "ai.planner.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Planner"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "策划"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "策劃"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "策劃"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "策劃"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guion/Plan"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 14 chars"
+    },
+    "ai.pledge.badge": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On-Device Offline · Zero Artwork Training"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端侧离线 · 零画作上传训练"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本機離線 · 零作品上傳訓練"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本機離線 · 絕唔會上傳畫作訓練"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本機離線 · 絕唔會上傳畫作訓練"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local sin conexión · Sin entrenar con tus obras"
+          }
+        }
+      }
+    },
+    "ai.voice_note.full": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice Continuity Note (Local Gemma 4)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音场记速记（本地 Gemma 4）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "語音場記速記（本機 Gemma 4）"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "語音記場記（本機 Gemma 4）"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "語音記場記（本機 Gemma 4）"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nota de voz de continuidad (Gemma 4 local)"
+          }
+        }
+      }
+    },
+    "app.name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MangaCanvas"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MangaCanvas"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MangaCanvas"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MangaCanvas"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MangaCanvas"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MangaCanvas"
+          }
+        }
+      }
+    },
+    "panel.layers.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Layers ({count})"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图层（{count}）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圖層（{count}）"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圖層（{count}）"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圖層（{count}）"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capas ({count})"
+          }
+        }
+      }
+    },
+    "panel.opacity.label": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opacity {percent}%"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不透明度 {percent}%"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不透明度 {percent}%"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "透明度 {percent}%"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "透明度 {percent}%"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opacidad {percent}%"
+          }
+        }
+      }
+    },
+    "preset.bw_manga": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "B&W Manga (B4 600DPI)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "黑白页漫（B4 600DPI）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "黑白頁漫（B4 600DPI）"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "黑白頁漫（B4 600DPI）"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "黑白頁漫（B4 600DPI）"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manga B/N (B4 600DPI)"
+          }
+        }
+      }
+    },
+    "preset.webtoon": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color Webtoon Strip"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全彩条漫长画布"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全彩條漫長畫布"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全彩條漫長畫布"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全彩條漫長畫布"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tira Webtoon color"
+          }
+        }
+      }
+    },
+    "settings.language": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App Language"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用语言"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "應用程式語言"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "介面語言"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "介面語言"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Idioma de la app"
+          }
+        }
+      }
+    },
+    "tool.brush.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brush"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画笔"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "筆刷"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "畫筆"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "畫筆"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pincel"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 10 chars"
+    },
+    "tool.clipping_mask.full": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clipping Mask"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪切蒙版"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪裁遮色片"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪裁遮罩"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪裁遮罩"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Máscara de recorte"
+          }
+        }
+      }
+    },
+    "tool.clipping_mask.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clip"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪切"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪裁"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪裁"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪裁"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Máscara"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 12 chars"
+    },
+    "tool.close_gap.full": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close Gap ({px}px)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "间隙闭合（{px}px）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "封閉間隙（{px}px）"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "填補空隙（{px}px）"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "填補空隙（{px}px）"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar huecos ({px}px)"
+          }
+        }
+      }
+    },
+    "tool.eraser.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eraser"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "橡皮"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "橡皮擦"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "擦膠"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "擦膠"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrador"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 10 chars"
+    },
+    "tool.eyedropper.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Picker"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "吸色"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "滴管"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "吸色"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "吸色"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuentagotas"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 12 chars"
+    },
+    "tool.fill.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fill"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "填色"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "填色"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "填色"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "填色"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relleno"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 10 chars"
+    },
+    "tool.reference_layer.full": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference Layer"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参考图层"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "參考圖層"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "參考圖層"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "參考圖層"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capa de referencia"
+          }
+        }
+      }
+    },
+    "tool.reference_layer.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ref"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参考层"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "參考層"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "參考層"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "參考層"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ref."
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 12 chars"
+    },
+    "tool.selection.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选区"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選取"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "揀選"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "揀選"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selección"
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 10 chars"
+    },
+    "tool.stabilizer.full": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stroke Stabilizer"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "笔迹防抖修正"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "筆跡防手震修正"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "筆跡防震修正"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "筆跡防震修正"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estabilizador de trazo"
+          }
+        }
+      }
+    },
+    "tool.stabilizer.short": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smooth"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "防抖"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "防手震"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "防震修正"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "防震修正"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estabiliz."
+          }
+        }
+      },
+      "comment": "Compact UI label budget: max 14 chars"
+    },
+    "tool.vector_eraser.full": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vector Intersection Eraser"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "矢量交点橡皮擦"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向量交點橡皮擦"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向量交點擦膠"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向量交點擦膠"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrador vectorial de intersecciones"
+          }
+        }
+      }
+    },
+    "workspace.focus": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Focus Mode"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "专注插画模式"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "專注插畫模式"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "專注畫畫模式"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "專注畫畫模式"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modo enfoque"
+          }
+        }
+      }
+    },
+    "workspace.manga": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manga Studio"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "漫画工作台"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "漫畫工作台"
+          }
+        },
+        "yue-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "漫畫工作台"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "漫畫工作台"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estudio manga"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

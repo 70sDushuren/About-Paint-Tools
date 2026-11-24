@@ -32,12 +32,12 @@
 
 | 任务 ID | 标签 | 所属模块 | 具体开发内容 | 状态 / 验收标准 |
 | :--- | :--- | :--- | :--- | :--- |
-| `T0.1-01` | `[双线]` | `core/manga-core` | 稀疏 `256×256` CoW 瓦片存储（`TileLayer`）、拉绳防抖（`RopeStabilizer`）与增量撤销栈（`TileUndoStack`） | ✅ 骨架与 5 个单元测试已落地 |
-| `T0.1-02` | `[双线]` | `core/manga-core` | 导出 C-ABI / UniFFI 静态库接口（`stroke_begin / push_points / end`、`canvas_viewport_transform`） | Swift 侧可零拷贝调用并通过跨语言集成测试 |
-| `T0.1-03` | `[双线]` | `core/manga-gpu` | 基于 `wgpu`（Metal 后端）实现脏瓦片上传与全屏视图矩阵合成着色器 | 4K 画布缩放旋转稳定 120fps，帧时间 `< 8.33ms` |
-| `T0.1-04` | `[双线]` | `apps/ipad` | 封装 UIKit `MetalCanvasView` 宿主：接入 `coalescedTouches`（240Hz）、`predictedTouches` 临时叠加与 Palm Rejection | iPad Pro 真机笔尖延迟 `≤ 9ms`，手掌贴屏零误触 |
-| `T0.1-05` | `[双线]` | `core` + `apps/ipad` | 新建工程**双线画布预设**：B4/A4 600DPI 页漫（出血/裁切参考线）+ 800×12800 条漫 + 4K 插画 | 新建即正确显示参考线，初始内存分配为 0 瓦片 |
-| `T0.1-06` | `[i18n]` | `i18n/` + `scripts/` | 5 语言术语词典、词条种子与 CI 校验（`i18n_check.py`），并补充 `scripts/i18n_sync.py` 导出 `Localizable.xcstrings` | `i18n_check.py` 绿灯，Xcode 工程零硬编码文案 |
+| `T0.1-01` | `[双线]` | `core/manga-core` | 稀疏 `256×256` CoW 瓦片存储（`TileLayer`）、拉绳防抖（`RopeStabilizer`）与增量撤销栈（`TileUndoStack`） | ✅ 已落地并通过单元测试 |
+| `T0.1-02` | `[双线]` | `core/manga-core` + `apps/ipad` | 导出 C-ABI 静态库接口（`ffi.rs`、`include/manga_core.h`）与 Swift RAII 桥接（`MangaCoreBridge.swift`） | ✅ Rust C-ABI、C 头文件、Swift 封装与端到端 FFI 单测已落地 |
+| `T0.1-03` | `[双线]` | `core/manga-gpu` | 基于 `wgpu`（Metal 后端）实现脏瓦片上传与全屏视图矩阵合成着色器 | ⏳ 待在 macOS/Xcode 环境联调真机 Metal |
+| `T0.1-04` | `[双线]` | `apps/ipad` | 封装 UIKit `MetalCanvasView` 宿主：接入 `coalescedTouches`（240Hz）、`predictedTouches` 临时叠加与 Palm Rejection | ⏳ 已完成 `ApplePencilInputAdapter.swift`，待真机渲染联调 |
+| `T0.1-05` | `[双线]` | `core` + `apps/ipad` | 新建工程**双线画布预设**（B4/A4 600DPI 出血裁切 + 800/1600 条漫 + 4K 插画）与 `CanvasSession` 视口/落笔闭环 | ✅ Rust `preset.rs` + `canvas.rs` 已落地并通过单测 |
+| `T0.1-06` | `[i18n]` | `i18n/` + `scripts/` | 5 语言术语词典、词条种子、CI 校验（`i18n_check.py`）与 `scripts/i18n_sync.py` 导出 `Localizable.xcstrings` | ✅ 已落地并接入 GitHub Actions CI |
 
 ### `v0.2` — 二次元笔刷引擎与防抖系统
 

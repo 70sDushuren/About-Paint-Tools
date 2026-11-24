@@ -32,12 +32,12 @@ This document decomposes [04. Phased Development Roadmap](./04-roadmap.md) into 
 
 | Task ID | Tag | Module | Engineering Scope | Status / Acceptance Criteria |
 | :--- | :--- | :--- | :--- | :--- |
-| `T0.1-01` | `[Dual]` | `core/manga-core` | Sparse `256×256` CoW tile store (`TileLayer`), Rope Stabilizer (`RopeStabilizer`), and incremental undo (`TileUndoStack`) | ✅ Scaffold + 5 passing unit tests landed |
-| `T0.1-02` | `[Dual]` | `core/manga-core` | Expose C-ABI / UniFFI staticlib endpoints (`stroke_begin / push_points / end`, `canvas_viewport_transform`) | Zero-copy Swift bridge verified with cross-language integration tests |
-| `T0.1-03` | `[Dual]` | `core/manga-gpu` | Implement `wgpu` (Metal backend) dirty-tile texture upload & fullscreen viewport compositor shader | Sustained 120fps (`< 8.33ms`/frame) zoom/rotate on 4K canvas |
-| `T0.1-04` | `[Dual]` | `apps/ipad` | Implement UIKit `MetalCanvasView` host capturing 240Hz `coalescedTouches`, `predictedTouches` overlay, and Palm Rejection | Physical iPad Pro latency `≤ 9ms`; zero palm misfires |
-| `T0.1-05` | `[Dual]` | `core` + `apps/ipad` | **Dual New-Canvas Presets**: B4/A4 600DPI manga page (bleed/crop guides) + `800×12800` Webtoon strip + 4K illustration | Guides render accurately at 0 allocated tiles initially |
-| `T0.1-06` | `[i18n]` | `i18n/` + `scripts/` | 5-language glossary, seed catalogs, `i18n_check.py`, plus `scripts/i18n_sync.py` exporting `Localizable.xcstrings` | `i18n_check.py` green; zero hardcoded strings in SwiftUI |
+| `T0.1-01` | `[Dual]` | `core/manga-core` | Sparse `256×256` CoW tile store (`TileLayer`), Rope Stabilizer (`RopeStabilizer`), and incremental undo (`TileUndoStack`) | ✅ Landed & unit-tested |
+| `T0.1-02` | `[Dual]` | `core/manga-core` + `apps/ipad` | Expose C-ABI staticlib endpoints (`ffi.rs`, `include/manga_core.h`) & Swift RAII bridge (`MangaCoreBridge.swift`) | ✅ Rust C-ABI, C header, Swift bridge & FFI lifecycle test landed |
+| `T0.1-03` | `[Dual]` | `core/manga-gpu` | Implement `wgpu` (Metal backend) dirty-tile texture upload & fullscreen viewport compositor shader | ⏳ Pending macOS/Xcode Metal device integration |
+| `T0.1-04` | `[Dual]` | `apps/ipad` | Implement UIKit `MetalCanvasView` host capturing 240Hz `coalescedTouches`, `predictedTouches` overlay, and Palm Rejection | ⏳ `ApplePencilInputAdapter.swift` ready; pending Metal view wiring |
+| `T0.1-05` | `[Dual]` | `core` + `apps/ipad` | **Dual New-Canvas Presets** (B4/A4 600DPI guides, 800/1600 Webtoon, 4K) & `CanvasSession` viewport/stroke loop | ✅ Rust `preset.rs` + `canvas.rs` landed & unit-tested |
+| `T0.1-06` | `[i18n]` | `i18n/` + `scripts/` | 5-language glossary, seed catalogs, `i18n_check.py`, plus `scripts/i18n_sync.py` exporting `Localizable.xcstrings` | ✅ Landed & enforced in GitHub Actions CI |
 
 ### `v0.2` — Anime Brush Engine & Stabilization
 
