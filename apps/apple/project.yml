@@ -91,6 +91,21 @@ targets:
       - path: iPadOS
       - path: iPhoneDuo
 
+  MangaStudio-macOS-Tests:
+    type: bundle.unit-test
+    platform: macOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.aboutpainttools.mangastudio.macos.tests
+    dependencies:
+      - framework: Frameworks/MangaCore.xcframework
+        embed: false
+    sources:
+      - path: Shared/Sources
+        excludes:
+          - MangaStudioApp.swift
+      - path: Shared/Tests
+
 schemes:
   MangaStudio-iPadOS:
     build:
@@ -100,6 +115,10 @@ schemes:
     build:
       targets:
         MangaStudio-macOS-Touch: all
+        MangaStudio-macOS-Tests: [test]
+    test:
+      targets:
+        - MangaStudio-macOS-Tests
   MangaStudio-iPhoneDuo:
     build:
       targets:

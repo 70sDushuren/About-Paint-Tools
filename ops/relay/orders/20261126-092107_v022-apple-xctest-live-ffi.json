@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "order_id": "20261126-092107_v022-apple-xctest-live-ffi",
+  "created_at_utc": "2026-11-26T09:21:07Z",
+  "milestone": "v0.2.2",
+  "title": "Run live macOS Swift XCTests over Rust MangaCoreFFI + all 3 Wave 1 Apple builds (v0.2.2)",
+  "summary": "Added standalone MangaStudio-macOS-Tests XCTest target (MangaStudioV022Tests.swift) exercising live Rust FFI on Apple Silicon: Tri-App RAM budgets & write-ownership isolation, S1 .prj disk bootstrap, S2 brush dynamics & sparse CoW undo/redo, S3 mixed CJK+Latin counting, and 18 MIT icons / 3 paper themes.",
+  "steps": [
+    {
+      "action": "env-info"
+    },
+    {
+      "action": "build-rust"
+    },
+    {
+      "action": "xcode-gen"
+    },
+    {
+      "action": "build-mac"
+    },
+    {
+      "action": "test-mac"
+    },
+    {
+      "action": "build-ipad"
+    },
+    {
+      "action": "build-duo"
+    },
+    {
+      "action": "check"
+    }
+  ],
+  "notify": true
+}
