@@ -113,3 +113,13 @@ To keep local MacBook Pro Xcode iteration and cloud Linux VM development complet
 | `make push MSG="feat(...): ..."` | Runs `make check` first; only if green does it commit, `git pull --rebase`, and push to `origin` |
 | `make status` | Displays current branch, git status, and `MangaCore.xcframework` freshness |
 
+---
+
+## 5. `GoNext` Cloud ↔ Local Mac Async Relay (GitOps Loop)
+
+[`ops/relay/`](../../ops/relay/README.md) provides an **append-only, zero-conflict, allowlisted GitOps relay** between the Cloud VM and local MacBook Pro:
+- **Cloud Dispatch**: After each cloud milestone, run `python3 scripts/relay_tool.py new ...` to append a timestamped declarative order (`ops/relay/orders/<YYYYMMDD-HHMMSS>_<slug>.json`) containing only pre-audited allowlisted actions (`env-info`, `build-rust`, `xcode-gen`, `build-mac`, `build-ipad`, `build-duo`, `test-mac`, `test-ipad`, `launch-mac`, `open-xcode`, `check`) — never arbitrary shell scripts.
+- **Local Mac Execution & Paired Receipt**: On Mac, either run the single fixed command **`make gonext`** or enable automated polling (`make relay-watch` / macOS `launchd` via `make relay-install-agent`). Pending orders execute chronologically and push a paired receipt `ops/relay/results/<YYYYMMDD-HHMMSS>_<slug>.result.md` containing status, durations, exit codes, and trimmed logs.
+- **Chronological Audit Log & Closed Loop**: Paired `orders/` and `results/` remain in Git as a chronological development log; Cloud pulls receipts to advance on `PASS` or diagnose/fix and issue the next `GoNext` order on `FAIL`.
+
+

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "order_id": "20261126-082450_v021-apple-relay-smoke",
+  "created_at_utc": "2026-11-26T08:24:50Z",
+  "milestone": "v0.2.1",
+  "title": "First Cloud <-> M5 Pro MacBook GoNext Relay Verification (XCFramework + macOS & iPadOS builds + CI check)",
+  "summary": "End-to-end smoke test of the GoNext GitOps relay on M5 Pro MacBook Pro: records Apple toolchain info, verifies incremental 3-slice MangaCore.xcframework, regenerates Xcode project, compiles macOS & iPadOS targets headlessly, and runs local CI gate.",
+  "steps": [
+    {
+      "action": "env-info"
+    },
+    {
+      "action": "build-rust"
+    },
+    {
+      "action": "xcode-gen"
+    },
+    {
+      "action": "build-mac"
+    },
+    {
+      "action": "build-ipad"
+    },
+    {
+      "action": "check"
+    }
+  ],
+  "notify": true
+}

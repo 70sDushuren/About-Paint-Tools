@@ -113,3 +113,13 @@ flowchart LR
 | `make push MSG="feat(...): ..."` | 自动先跑 `make check`，全绿后才 `commit` → `git pull --rebase` → `git push` |
 | `make status` | 查看当前分支、工作区状态与 `MangaCore.xcframework` 是否最新 |
 
+---
+
+## 5. `GoNext` 云-端异步协同执行器（GitOps Relay）
+
+在 [`ops/relay/`](../../ops/relay/README.md) 中内置了一套**只增不改、零合并冲突、带白名单安全锁**的云-端协同执行器：
+- **云端发单**：每完成一个云端开发节点，通过 `python3 scripts/relay_tool.py new ...` 在 `ops/relay/orders/` 生成带时间戳的 JSON 声明式任务单（`<YYYYMMDD-HHMMSS>_<slug>.json`），仅允许声明预审白名单内的安全动作（`env-info`、`build-rust`、`xcode-gen`、`build-mac`、`build-ipad`、`build-duo`、`test-mac`、`test-ipad`、`launch-mac`、`open-xcode`、`check`），严禁任意 Shell 注入。
+- **MacBook 固定执行与回执**：在本地只需执行固定命令 **`make gonext`**（或开启前台轮询 `make relay-watch` / macOS 后台定时服务 `make relay-install-agent`），自动按时间顺序执行未完成任务单，并将退出码、耗时与精简日志写入同名配对回执 `ops/relay/results/<YYYYMMDD-HHMMSS>_<slug>.result.md` 后自动推回 `origin/main`。
+- **完整审计日志与闭环修复**：`orders/` 与 `results/` 按时间戳一一配对永久保留在 Git 历史中；云端拉取回执后若见 `PASS` 则推进下一阶段，若见 `FAIL` 则直接读取裁剪日志修复并派发下一张 `GoNext` 任务单。
+
+

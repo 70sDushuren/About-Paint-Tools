@@ -1,6 +1,7 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help sync sync-force build-rust xcode run-mac run-ipad run-duo check push status
+.PHONY: help sync sync-force build-rust xcode run-mac run-ipad run-duo check push status \
+        gonext relay-watch relay-status relay-install-agent relay-uninstall-agent
 
 help:
 	@./scripts/dev.sh help
@@ -16,6 +17,13 @@ help:
 	@echo "  make check                     Run full CI & S4 Tri-App integration gates locally"
 	@echo "  make push MSG=\"feat: ...\"      Run 'make check', commit, pull --rebase, and push to origin"
 	@echo "  make status                    Show git status and XCFramework freshness"
+	@echo ""
+	@echo "Cloud <-> Local Mac GoNext Relay:"
+	@echo "  make gonext                    Fixed command: pull & run pending GoNext orders, push paired results"
+	@echo "  make relay-status              Show chronological GoNext order/result table & LaunchAgent state"
+	@echo "  make relay-watch               Foreground polling loop (every 30s) for automatic GoNext execution"
+	@echo "  make relay-install-agent       Install macOS launchd background LaunchAgent (every 60s)"
+	@echo "  make relay-uninstall-agent     Remove macOS launchd background LaunchAgent"
 
 sync:
 	@./scripts/dev.sh sync
@@ -46,3 +54,18 @@ push:
 
 status:
 	@./scripts/dev.sh status
+
+gonext:
+	@./scripts/mac_relay.sh run-once
+
+relay-status:
+	@./scripts/mac_relay.sh status
+
+relay-watch:
+	@./scripts/mac_relay.sh watch
+
+relay-install-agent:
+	@./scripts/mac_relay.sh install-agent
+
+relay-uninstall-agent:
+	@./scripts/mac_relay.sh uninstall-agent

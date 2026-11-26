@@ -141,25 +141,28 @@ cmd_sync() {
 
 cmd_check() {
   cd "$ROOT"
-  echo "==> [1/6] Checking 5-language i18n & 1:1 bilingual docs..."
+  echo "==> [1/7] Checking 5-language i18n & 1:1 bilingual docs..."
   python3 "$ROOT/scripts/i18n_check.py"
 
-  echo "==> [2/6] Checking Apple .xcstrings & Android strings.xml sync..."
+  echo "==> [2/7] Checking Apple .xcstrings & Android strings.xml sync..."
   python3 "$ROOT/scripts/i18n_sync.py" --check-xcstrings --check-android
 
-  echo "==> [3/6] Validating canonical CPFF v1.0 SampleManga project..."
+  echo "==> [3/7] Validating canonical CPFF v1.0 SampleManga project..."
   python3 "$ROOT/scripts/prj_validate.py" "$ROOT/templates/SampleManga"
 
-  echo "==> [4/6] Verifying C11 FFI header (zero warnings)..."
+  echo "==> [4/7] Validating GoNext relay orders against strict allowlist..."
+  python3 "$ROOT/scripts/relay_tool.py" validate
+
+  echo "==> [5/7] Verifying C11 FFI header (zero warnings)..."
   cc -std=c11 -Wall -Wextra -Werror -fsyntax-only "$ROOT/core/manga-core/include/manga_core.h"
 
-  echo "==> [5/6] Running Rust workspace tests & 3 modular feature slices..."
+  echo "==> [6/7] Running Rust workspace tests & 3 modular feature slices..."
   cargo test --manifest-path "$ROOT/core/Cargo.toml" --workspace --all-targets
   cargo check --manifest-path "$ROOT/core/Cargo.toml" -p manga-core --no-default-features --features hub
   cargo check --manifest-path "$ROOT/core/Cargo.toml" -p manga-core --no-default-features --features canvas
   cargo check --manifest-path "$ROOT/core/Cargo.toml" -p manga-core --no-default-features --features novel
 
-  echo "==> [6/6] Running Tri-App headless self-checks & S4 Integration Gate..."
+  echo "==> [7/7] Running Tri-App headless self-checks & S4 Integration Gate..."
   cargo run --manifest-path "$ROOT/core/Cargo.toml" -p manga-linux-shell -- --app hub --self-check
   cargo run --manifest-path "$ROOT/core/Cargo.toml" -p manga-linux-shell -- --app manga --self-check
   cargo run --manifest-path "$ROOT/core/Cargo.toml" -p manga-linux-shell -- --app novel --self-check

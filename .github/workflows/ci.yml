@@ -21,6 +21,8 @@ jobs:
         run: python3 scripts/i18n_sync.py --check-xcstrings --check-android
       - name: Validate CPFF v1.0 SampleManga project template
         run: python3 scripts/prj_validate.py templates/SampleManga
+      - name: Validate GoNext relay orders against strict allowlist
+        run: python3 scripts/relay_tool.py validate
 
   rust-core-and-linux-shell:
     name: Rust Core Engine, C-ABI & Linux Native Shell
