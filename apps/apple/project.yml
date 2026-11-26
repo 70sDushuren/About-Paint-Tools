@@ -88,3 +88,17 @@ targets:
       - path: Shared/Resources
       - path: iPadOS
       - path: iPhoneDuo
+
+schemes:
+  MangaStudio-iPadOS:
+    build:
+      targets:
+        MangaStudio-iPadOS: all
+  MangaStudio-macOS-Touch:
+    build:
+      targets:
+        MangaStudio-macOS-Touch: all
+  MangaStudio-iPhoneDuo:
+    build:
+      targets:
+        MangaStudio-iPhoneDuo: all
