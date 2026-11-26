@@ -119,6 +119,11 @@ flowchart TD
 | 05. 5 语言国际化与界面适配规范 | [05-i18n-and-l10n-guide.md](./docs/zh-CN/05-i18n-and-l10n-guide.md) | [05-i18n-and-l10n-guide.md](./docs/en/05-i18n-and-l10n-guide.md) |
 | 06. 开发任务细化清单（WBS） | [06-development-tasks.md](./docs/zh-CN/06-development-tasks.md) | [06-development-tasks.md](./docs/en/06-development-tasks.md) |
 | 07. 创作工程文件框架 V1.0（`.prj` / Git） | [07-creative-project-framework-v1.md](./docs/zh-CN/07-creative-project-framework-v1.md) | [07-creative-project-framework-v1.md](./docs/en/07-creative-project-framework-v1.md) |
+| 08. 三独立工具原创 UI 设计与 `vX.Y.Z` 小步规划 | [08-tri-app-ui-design-and-patch-roadmap.md](./docs/zh-CN/08-tri-app-ui-design-and-patch-roadmap.md) | [08-tri-app-ui-design-and-patch-roadmap.md](./docs/en/08-tri-app-ui-design-and-patch-roadmap.md) |
+| 09. Apple MacBook Pro Xcode 与 Xcode Cloud 开发指南 | [09-apple-xcode-and-cloud-dev-guide.md](./docs/zh-CN/09-apple-xcode-and-cloud-dev-guide.md) | [09-apple-xcode-and-cloud-dev-guide.md](./docs/en/09-apple-xcode-and-cloud-dev-guide.md) |
+
+- **可交互 HTML UI 设计稿 Demo**：[`S1 创想空间`](./docs/demos/s1_hub_ui_demo.html) · [`S2 雕龙`](./docs/demos/s2_manga_ui_demo.html) · [`S3 文心`](./docs/demos/s3_novel_ui_demo.html)
+- **Apple Keynote 兼容双语汇报文稿（14 页）**：[简体中文 `.pptx`](./docs/presentations/About-Paint-Tools_Overview_and_Plan_zh-CN.pptx)（[PDF](./docs/presentations/About-Paint-Tools_Overview_and_Plan_zh-CN.pdf)） · [English `.pptx`](./docs/presentations/About-Paint-Tools_Overview_and_Plan_en.pptx)（[PDF](./docs/presentations/About-Paint-Tools_Overview_and_Plan_en.pdf)）
 
 ---
 
@@ -130,8 +135,11 @@ About-Paint-Tools/
 ├── README.md                    # 英文主页（GitHub 默认入口）
 ├── README.zh-CN.md              # 简体中文主页
 ├── docs/
-│   ├── zh-CN/                   # 简体中文基准文档（01–07）
-│   └── en/                      # 英文基准文档（1:1 镜像，01–07）
+│   ├── zh-CN/                   # 简体中文基准文档（01–09）
+│   ├── en/                      # 英文基准文档（1:1 镜像，01–09）
+│   ├── assets/ui-mockups/       # S1/S2/S3 原创高清 UI 设计稿（7 张）
+│   ├── demos/                   # S1/S2/S3 自包含可交互 HTML UI Demo（3 份）
+│   └── presentations/           # 中英双语 Apple Keynote 兼容汇报文稿（.pptx + .pdf）
 ├── templates/
 │   └── SampleManga/             # CPFF v1.0 双引擎标准示例创作工程（SampleManga.prj + Git LFS）
 ├── i18n/

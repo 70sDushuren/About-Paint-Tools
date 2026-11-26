@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>S3 文心 / LitteraCore (暂定代号) — 交互式 UI 设计稿 Demo</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    /* Unified Tri-App Design Shell — never redeclares :root */
+    .app-shell {
+      --suite-accent: #2FA88B;
+      --suite-accent-soft: rgba(47, 168, 139, 0.14);
+      --suite-diverge: #B87A1E;
+      --suite-diverge-bg: rgba(184, 122, 30, 0.12);
+      --ui-bg: var(--background);
+      --ui-surface: var(--card);
+      --ui-sidebar: var(--sidebar);
+      --ui-elevated: var(--content);
+      --ui-border: var(--border);
+      --ui-fg: var(--foreground);
+      --ui-muted: var(--muted-foreground);
+      --ui-ai-bg: rgba(107, 139, 164, 0.10);
+      --ui-ai-border: #6B8BA4;
+      background: var(--ui-bg);
+      color: var(--ui-fg);
+      min-height: 100vh;
+    }
+    .app-shell[data-theme="daylight"] {
+      --ui-bg: #FAF8F4;
+      --ui-surface: #FFFFFF;
+      --ui-sidebar: #F2EFE9;
+      --ui-elevated: #EFECE4;
+      --ui-border: #E3DED5;
+      --ui-fg: #1E2326;
+      --ui-muted: #5C666E;
+      --ui-ai-bg: #EEF3F6;
+      --ui-ai-border: #6B8BA4;
+    }
+    .app-shell[data-theme="sepia"] {
+      --ui-bg: #F3EDE0;
+      --ui-surface: #FAF6EC;
+      --ui-sidebar: #EAE1CF;
+      --ui-elevated: #EFE7D6;
+      --ui-border: #DDD2BE;
+      --ui-fg: #2B241B;
+      --ui-muted: #6E6151;
+      --ui-ai-bg: #E8E6DC;
+      --ui-ai-border: #7D857B;
+    }
+    .app-shell[data-theme="dark"] {
+      --ui-bg: #15171A;
+      --ui-surface: #1B1E22;
+      --ui-sidebar: #181B1F;
+      --ui-elevated: #22262C;
+      --ui-border: #2A2F36;
+      --ui-fg: #E6E8EB;
+      --ui-muted: #8B949E;
+      --ui-ai-bg: #1A2128;
+      --ui-ai-border: #5B7C99;
+      --suite-accent: #46C9A9;
+      --suite-accent-soft: rgba(70, 201, 169, 0.16);
+      --suite-diverge: #E2A84B;
+      --suite-diverge-bg: rgba(226, 168, 75, 0.14);
+    }
+    .panel-bg { background: var(--ui-surface); border-color: var(--ui-border); }
+    .sidebar-bg { background: var(--ui-sidebar); border-color: var(--ui-border); }
+    .elevated-bg { background: var(--ui-elevated); border-color: var(--ui-border); }
+    .muted-txt { color: var(--ui-muted); }
+    .accent-bg { background: var(--suite-accent); color: #FFFFFF; }
+    .accent-soft { background: var(--suite-accent-soft); color: var(--suite-accent); }
+    .ai-sandbox { background: var(--ui-ai-bg); border-left: 2px dashed var(--ui-ai-border); }
+    .rail-btn {
+      width: 40px; height: 40px; border-radius: 10px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--ui-muted); transition: all 130ms ease; border: 1px solid transparent; cursor: pointer;
+    }
+    .rail-btn:hover { background: var(--ui-elevated); color: var(--ui-fg); }
+    .rail-btn.active {
+      background: var(--suite-accent-soft); color: var(--suite-accent);
+      border-color: rgba(47, 168, 139, 0.4);
+    }
+    .icon-svg {
+      width: 20px; height: 20px; fill: none; stroke: currentColor;
+      stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .hint-popover {
+      position: fixed; z-index: 60; pointer-events: none;
+      width: 276px; padding: 10px 12px; border-radius: 10px;
+      background: var(--ui-surface); border: 1px solid var(--ui-border);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+      opacity: 0; transform: translateX(-4px); transition: opacity 130ms ease, transform 130ms ease;
+    }
+    .hint-popover.visible { opacity: 1; transform: translateX(0); }
+    .hint-mode-active [data-hint-title] {
+      outline: 1px dashed rgba(47, 168, 139, 0.72); outline-offset: 2px;
+    }
+    .hinge-gutter {
+      background: repeating-linear-gradient(-45deg, rgba(47,168,139,0.16), rgba(47,168,139,0.16) 6px, transparent 6px, transparent 12px);
+      border-left: 1px dashed var(--suite-accent); border-right: 1px dashed var(--suite-accent);
+    }
+    .tategaki { writing-mode: vertical-rl; text-orientation: mixed; line-height: 2.1; letter-spacing: 0.06em; }
+    .literary-serif { font-family: Georgia, "Songti SC", "Noto Serif CJK SC", "PingFang SC", serif; }
+  </style>
+</head>
+<body class="p-0 m-0 antialiased text-xs">
+  <div id="shell" class="app-shell flex flex-col" data-theme="daylight">
+    <!-- 1. UNIFIED TOP CONTEXT BAR (48px) -->
+    <header class="h-12 px-3 border-b panel-bg flex items-center justify-between gap-2 shrink-0 flex-wrap">
+      <!-- Left: App Identity + Project Pill -->
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-lg accent-bg flex items-center justify-center font-bold text-xs shadow-sm">S3</div>
+        <div class="flex items-center gap-1.5">
+          <span class="font-semibold text-sm tracking-tight">文心</span>
+          <span class="px-1.5 py-0.5 rounded text-xs elevated-bg border muted-txt">LitteraCore · 暂定代号</span>
+        </div>
+        <span class="hidden lg:inline-flex items-center gap-1.5 px-2 py-1 rounded-md elevated-bg border font-mono text-xs">
+          StarlightBlade.prj · ch001
+        </span>
+      </div>
+
+      <!-- Center: Unified Screen Mode Switcher -->
+      <div class="flex items-center gap-1 p-0.5 rounded-lg elevated-bg border">
+        <button id="tab-write" onclick="switchView('write')" class="px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer accent-bg" data-hint-title="沉浸写作与双引擎对照" data-hint-desc="人工正文写作 + 词典联想 + 右侧只读 AI 参考分屏" data-hint-key="⌘1">写作 · 双引擎对照</button>
+        <button id="tab-epub" onclick="switchView('epub')" class="px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer muted-txt" data-hint-title="插图策展与 EPUB3 预览" data-hint-desc="选配漫画精选页或专属插画，实时仿真横/竖排与 Ruby" data-hint-key="⌘3">插图 · EPUB3 预览</button>
+        <button id="tab-mobile" onclick="switchView('mobile')" class="px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer muted-txt" data-hint-title="iPhone Duo 折叠速记" data-hint-desc="单手拇指双排标点/词典芯片栏与离线 Gemma 4 语音场记" data-hint-key="折叠态">折叠单手速记</button>
+      </div>
+
+      <!-- Right: Posture, Theme, Hint, Deep Links -->
+      <div class="flex items-center gap-1.5">
+        <select id="postureSelect" onchange="setPosture(this.value)" class="px-2 py-1 rounded-md elevated-bg border text-xs cursor-pointer" data-hint-title="硬件姿态模拟" data-hint-desc="切换桌面/iPad、iPhone Duo 展开书本双页与折叠外屏" data-hint-key="姿态">
+          <option value="desktop">iPad / MacBook 三栏</option>
+          <option value="unfolded">iPhone Duo 展开 (铰链书页)</option>
+          <option value="folded">iPhone Duo 折叠 (单手速记)</option>
+        </select>
+
+        <select id="themeSelect" onchange="setTheme(this.value)" class="px-2 py-1 rounded-md elevated-bg border text-xs cursor-pointer" data-hint-title="素笺纸感主题" data-hint-desc="宣纸日光 / 古卷护眼 / 墨夜 OLED / 跟随宿主" data-hint-key="⌘⌥P">
+          <option value="daylight">宣纸日光</option>
+          <option value="sepia">古卷护眼</option>
+          <option value="dark">墨夜 OLED</option>
+          <option value="auto">跟随宿主</option>
+        </select>
+
+        <button id="hintModeBtn" onclick="toggleHintMode()" class="px-2 py-1 rounded-md elevated-bg border text-xs font-medium cursor-pointer" data-hint-title="提示探索模式" data-hint-desc="触控端开启后点任意图标先预览帮助而不误触发" data-hint-key="F1">? 提示</button>
+
+        <button onclick="deepLink('noemadock://open?project=prj-sample-manga-001&chapter=ch001')" class="hidden xl:inline-flex px-2 py-1 rounded-md border text-xs cursor-pointer" style="border-color:rgba(79,124,255,0.45);color:#4F7CFF" data-hint-title="返回 S1 创想空间" data-hint-desc="管理大纲、5 语字典与全套件多版发布" data-hint-key="⌘⇧H">↗ S1</button>
+        <button onclick="deepLink('draconib://open?project=prj-sample-manga-001&chapter=ch001&detail=page=1')" class="hidden xl:inline-flex px-2 py-1 rounded-md border text-xs cursor-pointer" style="border-color:rgba(255,107,74,0.45);color:#FF6B4A" data-hint-title="跳转 S2 雕龙" data-hint-desc="查看或绘制本话漫画原稿与专属轻小说插图" data-hint-key="⌘⇧M">↗ S2</button>
+      </div>
+    </header>
+
+    <!-- 2. UNIFIED 4-ZONE WORKSPACE -->
+    <div class="flex-1 flex min-h-0 overflow-hidden">
+      <!-- ZONE A: FAR-LEFT 56px SLIM ICON-ONLY RAIL -->
+      <aside class="w-14 sidebar-bg border-r flex flex-col items-center justify-between py-3 shrink-0">
+        <div class="flex flex-col items-center gap-2">
+          <button class="rail-btn active" id="rail-write" onclick="railClick('write', this)" data-hint-title="沉浸轻小说写作" data-hint-desc="编辑 5 语人工终稿 (novel/prose/<lang>.md)" data-hint-key="⌘1">
+            <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+          </button>
+          <button class="rail-btn" id="rail-outline" onclick="toggleOutlineDrawer(this)" data-hint-title="章节大纲树" data-hint-desc="展开/收起只读同步自 toc.xml 与 scenes/ 的大纲树" data-hint-key="⌘B">
+            <svg class="icon-svg" viewBox="0 0 24 24"><path d="M4 6h16M8 12h12M8 18h9"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>
+          </button>
+          <button class="rail-btn" id="rail-zen" onclick="toggleZenMode(this)" data-hint-title="Zen 专注模式" data-hint-desc="一键隐藏左右边栏，仅留纯净纸面沉浸码字" data-hint-key="⌘⇧F">
+            <svg class="icon-svg" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+          </button>
+          <button class="rail-btn" id="rail-ai" onclick="toggleRefPane(this)" data-hint-title="AI 参考稿分屏 (只读)" data-hint-desc="查看 Manga→Novel AI 中间稿，严禁自动覆盖人工正文" data-hint-key="⌘⌥R">
+            <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16" stroke-dasharray="2.5 2.5"/><path d="M16 10v3m-1.5-1.5h3"/></svg>
+          </button>
+          <button class="rail-btn" id="rail-dict" onclick="toggleGlossaryPopup(this)" data-hint-title="专有名词词典联想" data-hint-desc="检索 i18n/dictionary.xml 5 语专有名词并一键插入光标" data-hint-key="⌘D / @">
+            <svg class="icon-svg" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          </button>
+          <button class="rail-btn" id="rail-epub" onclick="railClick('epub', this)" data-hint-title="插图策展与 EPUB3 预览" data-hint-desc="混排精选漫画页与专属彩插，实时仿真竖排/Ruby/电纸书" data-hint-key="⌘3">
+            <svg class="icon-svg" viewBox="0 0 24 24"><path d="M2 5h7a3 3 0 0 1 3 3v12a2 2 0 0 0-2-2H2z"/><path d="M22 5h-7a3 3 0 0 0-3 3v12a2 2 0 0 1 2-2h8z"/></svg>
+          </button>
+          <button class="rail-btn" id="rail-mobile" onclick="railClick('mobile', this)" data-hint-title="iPhone Duo 单手速记" data-hint-desc="预览折叠屏拇指标点/词典栏与 Gemma 4 离线语音场记" data-hint-key="折叠态">
+            <svg class="icon-svg" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M10 18h4"/></svg>
+          </button>
+        </div>
+
+        <div class="flex flex-col items-center gap-2">
+          <button class="rail-btn" onclick="triggerVoiceDemo()" data-hint-title="离线语音场记 (Gemma 4)" data-hint-desc="口述正文或结构化记场记进入 ai_assist/completion_queue.xml" data-hint-key="⌘⌥Space">
+            <svg class="icon-svg text-[var(--suite-accent)]" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></svg>
+          </button>
+          <button class="rail-btn" onclick="toggleAuthorLock()" data-hint-title="人工终稿保护锁" data-hint-desc="锁定 locked='true' 防止任何自动化脚本或 AI 覆盖正文" data-hint-key="⌘⇧L">
+            <svg class="icon-svg" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          </button>
+        </div>
+      </aside>
+
+      <!-- VIEW 1: DISTRACTION-FREE & DUAL-ENGINE PARALLEL WRITER (S3-A) -->
+      <div id="view-write" class="flex-1 flex min-w-0 overflow-hidden">
+        <!-- Left Collapsible Outline Drawer -->
+        <aside id="outlineDrawer" class="w-56 sidebar-bg border-r p-3 flex flex-col justify-between overflow-y-auto shrink-0">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="font-semibold text-xs uppercase tracking-wider muted-txt">大纲 · 只读同步</span>
+              <button onclick="toggleOutlineDrawer()" class="muted-txt cursor-pointer">«</button>
+            </div>
+            <div class="space-y-1.5 text-xs">
+              <div class="font-medium">▾ 第一卷 · 轨道风暴</div>
+              <div class="pl-2 space-y-1">
+                <div class="px-2 py-1.5 rounded-md accent-soft font-medium">● ch001 风暴天台</div>
+                <div class="pl-3 muted-txt space-y-1">
+                  <div>├ sc001 北侧天台警报</div>
+                  <div>└ sc002 星光之刃觉醒</div>
+                </div>
+                <div class="px-2 py-1 rounded-md muted-txt hover:text-[var(--ui-fg)] cursor-pointer" onclick="showToast('已切换章节预告：ch002 轨道信号（演示固定在 ch001）')">○ ch002 轨道信号</div>
+                <div class="px-2 py-1 rounded-md muted-txt hover:text-[var(--ui-fg)] cursor-pointer" onclick="showToast('已切换章节预告：ch003 静默残骸')">○ ch003 静默残骸</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Volume Word Goal -->
+          <div class="p-2.5 rounded-lg elevated-bg border space-y-1.5">
+            <div class="flex justify-between text-xs"><span class="muted-txt">卷内字数进度</span><span id="volPct" class="font-mono font-medium">21%</span></div>
+            <div class="h-1.5 rounded-full panel-bg overflow-hidden"><div class="h-full accent-bg" style="width:21%"></div></div>
+            <div class="muted-txt text-[11px] font-mono">12,480 / 60,000 字</div>
+          </div>
+        </aside>
+
+        <!-- Center Literary Prose Editor -->
+        <main class="flex-1 flex flex-col items-center px-6 py-5 overflow-y-auto min-w-0 relative">
+          <div class="w-full max-w-2xl space-y-3">
+            <!-- Chapter Header + Author Lock + 5-Language Prose Switcher -->
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h1 id="chapterHeading" class="text-xl font-bold literary-serif tracking-tight">第 01 话：风暴天台</h1>
+              <div class="flex items-center gap-1.5">
+                <button id="lockBadgeBtn" onclick="toggleAuthorLock()" class="px-2.5 py-1 rounded-full text-xs font-medium accent-soft cursor-pointer">🔒 人工终稿锁定</button>
+                <select id="proseLangSelect" onchange="switchProseLocale(this.value)" class="px-2 py-1 rounded-md elevated-bg border text-xs cursor-pointer">
+                  <option value="zh-Hans">zh-Hans · 简中正文</option>
+                  <option value="en">en · English Prose</option>
+                  <option value="zh-Hant">zh-Hant · 繁中正文</option>
+                  <option value="yue-Hant">yue-Hant · 粵語正文</option>
+                  <option value="es">es · Español</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Collapsible <DivergenceNote> Amber Pill -->
+            <div class="rounded-lg border p-2.5 space-y-1.5" style="background:var(--suite-diverge-bg);border-color:rgba(184,122,30,0.35)">
+              <div class="flex items-center justify-between cursor-pointer" onclick="document.getElementById('divergeBox').classList.toggle('hidden')">
+                <span class="font-medium text-xs" style="color:var(--suite-diverge)">⇄ &lt;DivergenceNote&gt; 有意分歧标注（点击展开编辑 · 写入 novel/novel_meta.xml）</span>
+                <span class="text-[11px] muted-txt">场记 AI 豁免误报 ✓</span>
+              </div>
+              <textarea id="divergeBox" rows="2" class="hidden w-full p-2 rounded-md panel-bg border text-xs outline-none">小说版保留星川莲三年前磁暴事故的完整心理独白，与漫画版 P03 的高速双格剪辑刻意不同。</textarea>
+            </div>
+
+            <!-- Inline Quick Writing Helpers (Glossary + Ruby) -->
+            <div class="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-[var(--ui-border)] text-xs muted-txt">
+              <div class="flex items-center gap-1.5">
+                <button onclick="toggleGlossaryPopup()" class="px-2 py-0.5 rounded elevated-bg border hover:text-[var(--ui-fg)] cursor-pointer">@ 词典联想插入</button>
+                <button onclick="insertIntoEditor('｜星光之刃《スターライト》')" class="px-2 py-0.5 rounded elevated-bg border hover:text-[var(--ui-fg)] cursor-pointer">＋ 插入 Ruby 注音</button>
+                <button onclick="insertIntoEditor('「」', -1)" class="px-2 py-0.5 rounded elevated-bg border hover:text-[var(--ui-fg)] cursor-pointer">「」</button>
+                <button onclick="insertIntoEditor('——')" class="px-2 py-0.5 rounded elevated-bg border hover:text-[var(--ui-fg)] cursor-pointer">——</button>
+              </div>
+              <span class="font-mono text-[11px]">novel/prose/<span id="proseFileName">zh-Hans.md</span></span>
+            </div>
+
+            <!-- Inline Glossary Autocomplete Popover -->
+            <div id="glossaryPopup" class="hidden p-2.5 rounded-xl panel-bg border shadow-xl space-y-1.5">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-semibold text-[var(--suite-accent)]">📖 共享专名词典联想（只读自 i18n/dictionary.xml）</span>
+                <button onclick="toggleGlossaryPopup()" class="muted-txt cursor-pointer">✕</button>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                <button onclick="insertGlossary('星光之刃')" class="p-2 rounded-lg elevated-bg border text-left hover:border-[var(--suite-accent)] cursor-pointer">
+                  <div class="font-medium">星光之刃 <span class="text-[10px] muted-txt">(神器)</span></div>
+                  <div class="muted-txt text-[11px]">EN: Starlight Blade · ES: Hoja Estelar</div>
+                </button>
+                <button onclick="insertGlossary('星川莲')" class="p-2 rounded-lg elevated-bg border text-left hover:border-[var(--suite-accent)] cursor-pointer">
+                  <div class="font-medium">星川莲 <span class="text-[10px] muted-txt">(主角)</span></div>
+                  <div class="muted-txt text-[11px]">EN: Ren Hoshikawa · 粵: 星川蓮</div>
+                </button>
+                <button onclick="insertGlossary('轨道学院')" class="p-2 rounded-lg elevated-bg border text-left hover:border-[var(--suite-accent)] cursor-pointer">
+                  <div class="font-medium">轨道学院 <span class="text-[10px] muted-txt">(地点)</span></div>
+                  <div class="muted-txt text-[11px]">EN: Orbital Academy · ES: Academia Orbital</div>
+                </button>
+              </div>
+            </div>
+
+            <!-- Live Editable Literary Prose Textarea -->
+            <textarea id="proseEditor" oninput="onProseInput()" rows="14" class="w-full bg-transparent outline-none resize-none literary-serif text-base leading-8 tracking-wide"></textarea>
+          </div>
+        </main>
+
+        <!-- HINGE GUTTER FOR IPHONE DUO UNFOLDED -->
+        <div id="hingeGutter" class="hidden w-5 hinge-gutter shrink-0 flex items-center justify-center text-[11px] text-[var(--suite-accent)]">
+          <span class="[writing-mode:vertical-rl] tracking-widest opacity-85">HINGE SAFE</span>
+        </div>
+
+        <!-- Right Collapsible Read-Only Reference Split Pane -->
+        <aside id="refSplitPane" class="w-80 ai-sandbox flex flex-col shrink-0 overflow-hidden">
+          <div class="p-2 border-b border-[var(--ui-border)] grid grid-cols-3 gap-1">
+            <button id="reftab-ai" onclick="switchRefTab('ai')" class="py-1.5 rounded-md text-xs font-medium accent-bg cursor-pointer">AI 参考稿</button>
+            <button id="reftab-manga" onclick="switchRefTab('manga')" class="py-1.5 rounded-md text-xs font-medium elevated-bg muted-txt cursor-pointer">漫画分格</button>
+            <button id="reftab-bible" onclick="switchRefTab('bible')" class="py-1.5 rounded-md text-xs font-medium elevated-bg muted-txt cursor-pointer">设定场记</button>
+          </div>
+
+          <!-- REF TAB 1: READ-ONLY AI REFERENCE DRAFT -->
+          <div id="refpanel-ai" class="p-3 space-y-3 overflow-y-auto flex-1">
+            <div class="p-2.5 rounded-lg panel-bg border space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="font-semibold text-xs">🛡 AI 参考稿 · 严格只读</span>
+                <span class="px-1.5 py-0.5 rounded elevated-bg font-mono text-[10px]">role="ai_reference_only"</span>
+              </div>
+              <div class="muted-txt text-[11px] font-mono">来源: script.xml · Gemma 4 E2B (离线)</div>
+            </div>
+
+            <div id="aiRefText" class="p-3 rounded-lg panel-bg border literary-serif text-xs leading-6 muted-txt select-text">
+              【AI 中间参考稿 · 仅作灵感对照】<br/><br/>
+              暴雨倾泻在轨道学院北侧天台，一道炽白闪电劈开厚重磁暴云。星川莲独自立于护栏边，右手指节泛白地握紧沉睡已久的星光之刃。<br/><br/>
+              「风暴正逼近天台！我们已经不能退缩了。」耳机里传来林星河急促的警示。
+            </div>
+
+            <div class="flex gap-2">
+              <button onclick="copyAiExcerpt()" class="flex-1 py-1.5 rounded-lg panel-bg border text-xs font-medium cursor-pointer">📋 复制灵感短句</button>
+              <button onclick="showToast('已请求本地 Gemma 4 重新生成参考稿至 ai_assist/manga_to_novel/（绝不触碰您的正文）')" class="flex-1 py-1.5 rounded-lg elevated-bg border text-xs cursor-pointer">↻ 刷新参考稿</button>
+            </div>
+            <p class="text-[11px] muted-txt leading-relaxed">设计红线：本区永久禁止“一键覆盖正文”按钮。您的最终轻小说文稿可与漫画稿和 AI 稿完全不同。</p>
+          </div>
+
+          <!-- REF TAB 2: MANGA PANELS (READ-ONLY) -->
+          <div id="refpanel-manga" class="hidden p-3 space-y-3 overflow-y-auto flex-1">
+            <div class="p-2.5 rounded-lg panel-bg border space-y-2">
+              <div class="flex justify-between font-medium"><span>P01 · 天台暴雨分格</span><span class="muted-txt font-mono">manuscript/</span></div>
+              <div class="h-28 rounded border border-[var(--ui-border)] elevated-bg flex items-center justify-center muted-txt">
+                <svg class="w-16 h-16 opacity-60" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="56" height="56" rx="2"/><line x1="4" y1="30" x2="60" y2="24"/><line x1="34" y1="27" x2="32" y2="60"/></svg>
+              </div>
+              <div class="text-xs muted-txt">气泡 b01：「风暴正逼近天台！」</div>
+              <button onclick="deepLink('draconib://open?project=prj-sample-manga-001&chapter=ch001&detail=page=1')" class="w-full py-1.5 rounded-lg border text-xs font-medium cursor-pointer" style="border-color:rgba(255,107,74,0.45);color:#FF6B4A">↗ 在 S2 雕龙中打开本页</button>
+            </div>
+          </div>
+
+          <!-- REF TAB 3: STORY BIBLE & CONTINUITY -->
+          <div id="refpanel-bible" class="hidden p-3 space-y-2.5 overflow-y-auto flex-1">
+            <div class="p-2.5 rounded-lg panel-bg border space-y-1">
+              <div class="font-semibold">星川莲 (char_hero)</div>
+              <div class="muted-txt">瞳色：琥珀金 · 道具：星光之刃 · 状态：左手袖口于天台风压撕裂</div>
+            </div>
+            <div class="p-2.5 rounded-lg panel-bg border space-y-1">
+              <div class="font-semibold">场记提醒 (continuity_log.xml)</div>
+              <div class="muted-txt">当前光源：北侧磁暴青白冷光；已豁免「三年前独白」分歧差异。</div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <!-- VIEW 2: ILLUSTRATION CURATION & LIVE EPUB3 PREVIEW (S3-B) -->
+      <div id="view-epub" class="hidden flex-1 flex min-w-0 overflow-hidden">
+        <!-- Left Anchor Flow -->
+        <aside class="w-52 sidebar-bg border-r p-3 space-y-3 overflow-y-auto shrink-0">
+          <div class="font-semibold text-xs uppercase tracking-wider muted-txt">章节与插图锚点流</div>
+          <ul class="space-y-1.5 text-xs">
+            <li class="p-2 rounded-lg elevated-bg border">卷首彩页 · 封面扉页</li>
+            <li class="p-2 rounded-lg accent-soft font-medium">ch001 风暴天台<div class="text-[11px] opacity-80 mt-0.5" id="activeAnchorLabel">锚点: 漫画精选 p01</div></li>
+            <li class="p-2 rounded-lg elevated-bg border muted-txt">ch002 轨道信号<div class="text-[11px] mt-0.5">锚点: 专属插画 ill01</div></li>
+          </ul>
+        </aside>
+
+        <!-- Center Open Book Spread Live Preview -->
+        <main class="flex-1 p-4 flex flex-col items-center justify-between gap-3 overflow-y-auto min-w-0">
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="flex p-0.5 rounded-lg elevated-bg border">
+              <button onclick="setBookDevice('eink')" id="dev-eink" class="px-2.5 py-1 rounded text-xs cursor-pointer muted-txt">6" 电纸书</button>
+              <button onclick="setBookDevice('bunko')" id="dev-bunko" class="px-2.5 py-1 rounded text-xs cursor-pointer accent-bg">文库本 B6 双页</button>
+            </div>
+            <div class="flex p-0.5 rounded-lg elevated-bg border">
+              <button onclick="setBookDir('vert')" id="dir-vert" class="px-2.5 py-1 rounded text-xs cursor-pointer accent-bg">日/中竖排 Tategaki</button>
+              <button onclick="setBookDir('horiz')" id="dir-horiz" class="px-2.5 py-1 rounded text-xs cursor-pointer muted-txt">横排 LTR</button>
+            </div>
+          </div>
+
+          <!-- Simulated Two-Page Light Novel Book Spread -->
+          <div id="bookSpread" class="w-full max-w-3xl grid grid-cols-1 md:grid-cols-2 rounded-xl overflow-hidden shadow-2xl border border-[var(--ui-border)] panel-bg">
+            <!-- Left Book Page: Curated Illustration -->
+            <div class="p-6 border-b md:border-b-0 md:border-r border-[var(--ui-border)] flex flex-col items-center justify-between min-h-[380px]">
+              <div class="w-full flex-1 rounded-lg elevated-bg border flex flex-col items-center justify-center p-4 gap-3">
+                <svg class="w-28 h-28 opacity-75" viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="1.6">
+                  <rect x="8" y="8" width="104" height="104" rx="4"/>
+                  <path d="M16 86 48 56 72 78 90 62 104 86"/>
+                  <circle cx="84" cy="36" r="10"/>
+                  <line x1="22" y1="22" x2="36" y2="44" stroke-dasharray="3 3"/>
+                  <line x1="42" y1="18" x2="56" y2="40" stroke-dasharray="3 3"/>
+                </svg>
+                <div id="previewIllustTitle" class="font-medium text-xs">漫画精选页 · ch001/manuscript/p01_final.png</div>
+                <div id="previewIllustBadge" class="px-2 py-0.5 rounded-full accent-soft text-[11px] font-mono">source="manga-pick" · 300DPI</div>
+              </div>
+              <div class="w-full flex justify-between text-[11px] muted-txt pt-3"><span>图 1 — 北侧天台的雷光</span><span>18</span></div>
+            </div>
+
+            <!-- Right Book Page: Vertical Tategaki / Horizontal Typography with Ruby -->
+            <div class="p-6 flex flex-col justify-between min-h-[380px]">
+              <div id="bookProsePage" class="flex-1 flex items-center justify-center overflow-x-auto">
+                <div id="bookProseContent" class="tategaki literary-serif text-sm max-h-[310px]">
+                  <div class="font-bold text-base mb-3">第一话 · 风暴天台</div>
+                  <p>　　暮色尚未褪尽，轨道学院北侧天台的风压警报已经拉响第三轮。</p>
+                  <p>　　<ruby>星川莲<rt>ほしかわ れん</rt></ruby>把校服领口拉到下颌，掌心那柄沉睡已久的<ruby>星光之刃<rt>スターライト</rt></ruby>忽然震颤起来。</p>
+                </div>
+              </div>
+              <div class="w-full flex justify-between text-[11px] muted-txt pt-3"><span>第一卷 · 轨道风暴</span><span>19</span></div>
+            </div>
+          </div>
+        </main>
+
+        <!-- Right Dual-Source Illustration Pool & Export -->
+        <aside class="w-64 sidebar-bg border-l p-3 flex flex-col justify-between gap-3 overflow-y-auto shrink-0">
+          <div class="space-y-3">
+            <div class="font-semibold text-xs">双源插图策展池 (Hybrid)</div>
+            <div class="grid grid-cols-2 gap-2" id="illustPoolGrid"></div>
+            <div class="p-2.5 rounded-lg elevated-bg border space-y-1.5 text-xs">
+              <div class="font-medium">排版预设 (editions/)</div>
+              <label class="flex items-center justify-between cursor-pointer"><span>Ruby 注音显示</span><input type="checkbox" id="rubyToggle" checked onchange="toggleRuby()" class="accent-[#2FA88B]" /></label>
+              <div class="flex justify-between muted-txt"><span>字体</span><span>Noto Serif CJK</span></div>
+              <div class="flex justify-between muted-txt"><span>首行缩进</span><span>2.0 em</span></div>
+            </div>
+          </div>
+          <div class="space-y-1.5">
+            <button onclick="showToast('EPUB3 导出完成并 100% 通过 epubcheck（0 Error）！')" class="w-full py-2 rounded-lg accent-bg font-medium cursor-pointer">一键导出合规 EPUB3</button>
+            <button onclick="deepLink('noemadock://publish?project=prj-sample-manga-001&detail=edition=novel-ebook-zh')" class="w-full py-1.5 rounded-lg elevated-bg border text-xs cursor-pointer">↗ 交由 S1 统一多语发布</button>
+          </div>
+        </aside>
+      </div>
+
+      <!-- VIEW 3: IPHONE DUO FOLDED ONE-HANDED QUICK DRAFTING (S3-C) -->
+      <div id="view-mobile" class="hidden flex-1 flex items-center justify-center p-4 overflow-y-auto">
+        <div class="w-full max-w-[390px] rounded-2xl border panel-bg shadow-2xl overflow-hidden flex flex-col">
+          <div class="px-3 py-2.5 border-b border-[var(--ui-border)] flex items-center justify-between">
+            <span class="font-semibold text-xs">☰ ch001 风暴天台</span>
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded-full accent-soft font-mono text-[11px]" id="mobGoalRing">◎ 78%</span>
+              <span class="text-[var(--suite-accent)]">🔒</span>
+            </div>
+          </div>
+
+          <div class="p-4 space-y-2">
+            <div class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px]" style="background:var(--suite-diverge-bg);color:var(--suite-diverge)">⇄ 有意分歧 · 展开查看</div>
+            <textarea id="mobileEditor" rows="8" oninput="syncFromMobile(this.value)" class="w-full bg-transparent outline-none resize-none literary-serif text-sm leading-7">星川莲把校服领口拉到下颌，听着远处磁暴云层里低沉的静电嗡鸣。
+
+「……终于来了吗。」</textarea>
+          </div>
+
+          <!-- Two-Row Thumb Accessory Deck -->
+          <div class="border-t border-[var(--ui-border)] sidebar-bg p-2 space-y-2">
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+              <button onclick="insertMobile('「」', -1)" class="px-2.5 py-1 rounded-md panel-bg border text-xs font-medium cursor-pointer shrink-0">「」</button>
+              <button onclick="insertMobile('『』', -1)" class="px-2.5 py-1 rounded-md panel-bg border text-xs font-medium cursor-pointer shrink-0">『』</button>
+              <button onclick="insertMobile('——')" class="px-2.5 py-1 rounded-md panel-bg border text-xs cursor-pointer shrink-0">——</button>
+              <button onclick="insertMobile('……')" class="px-2.5 py-1 rounded-md panel-bg border text-xs cursor-pointer shrink-0">……</button>
+              <button onclick="insertMobile('星川莲')" class="px-2 py-1 rounded-md accent-soft text-xs font-medium cursor-pointer shrink-0">星川莲</button>
+              <button onclick="insertMobile('星光之刃')" class="px-2 py-1 rounded-md accent-soft text-xs font-medium cursor-pointer shrink-0">星光之刃</button>
+            </div>
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5">
+                <button onclick="showToast('已撤回上一句')" class="w-9 h-9 rounded-lg panel-bg border flex items-center justify-center cursor-pointer">↶</button>
+                <button onclick="showToast('已弹出只读专名词典速查')" class="w-9 h-9 rounded-lg panel-bg border flex items-center justify-center cursor-pointer">📖</button>
+              </div>
+              <button onclick="triggerVoiceDemo()" class="flex-1 h-9 rounded-full accent-bg font-medium flex items-center justify-center gap-1.5 cursor-pointer">
+                <span>🎙</span><span>离线语音场记 (Gemma 4)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. UNIFIED SLIM BOTTOM STATUS BAR -->
+    <footer class="h-7 px-3 border-t panel-bg flex items-center justify-between text-xs muted-txt shrink-0">
+      <div class="flex items-center gap-3 overflow-x-auto">
+        <span id="wordCountStatus" class="font-medium text-[var(--ui-fg)]">0 字</span>
+        <span id="goalRingStatus" class="text-[var(--suite-accent)]">◎ 今日目标 78%</span>
+        <span>写权分区: <strong class="text-[var(--ui-fg)]">Novel (S3)</strong></span>
+        <span>GPU 画布: <strong class="text-[var(--ui-fg)]">关闭</strong></span>
+        <span>内存: <strong class="text-[var(--suite-accent)]">64 MB / 120 MB</strong></span>
+      </div>
+      <div class="hidden sm:flex items-center gap-2">
+        <span id="lockStatusFoot">🔒 locked="true"</span>
+        <span>· 已原子保存</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- FLOATING 4-ELEMENT HINT POPOVER -->
+  <div id="hintPopover" class="hint-popover">
+    <div class="flex items-center justify-between gap-2 mb-1">
+      <span id="hintTitle" class="font-semibold text-xs text-[var(--suite-accent)]"></span>
+      <span id="hintKey" class="px-1.5 py-0.5 rounded elevated-bg border font-mono text-[11px] muted-txt"></span>
+    </div>
+    <p id="hintDesc" class="text-xs muted-txt leading-snug"></p>
+  </div>
+
+  <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 px-3.5 py-2 rounded-lg accent-bg text-xs font-medium shadow-xl opacity-0 pointer-events-none transition-opacity duration-200"></div>
+
+  <script>
+    const sampleProse = {
+      'zh-Hans': {
+        heading: '第 01 话：风暴天台',
+        body: '暮色尚未褪尽，轨道学院北侧天台的风压警报已经拉响第三轮。\n\n星川莲把校服领口拉到下颌，听着远处磁暴云层里低沉的静电嗡鸣。三年前那场坠落事故留下的耳鸣此刻再次浮现——他知道，这绝不是普通的气象异常。\n\n直到掌心那柄沉睡已久的星光之刃忽然震颤起来。「……终于来了吗。」'
+      },
+      'en': {
+        heading: 'Chapter 01: Rooftop Storm',
+        body: 'Twilight had barely faded when the third wind-pressure siren echoed across the North Rooftop of Orbital Academy.\n\nRen Hoshikawa pulled his collar tight against the static hum rolling off the geomagnetic storm clouds. In his palm, the long-dormant Starlight Blade began to resonate.\n\n"...So it has finally begun."'
+      },
+      'zh-Hant': {
+        heading: '第 01 話：風暴天台',
+        body: '暮色尚未褪盡，軌道學院北側天台的風壓警報已經拉響第三輪。\n\n星川蓮把校服領口拉到下頷，直到掌心那柄沉睡已久的星光之刃忽然震顫起來。「……終於來了嗎。」'
+      },
+      'yue-Hant': {
+        heading: '第 01 話：風暴天台',
+        body: '天色啱啱暗落嚟，軌道學院北面天台嘅風壓警報已經響咗第三輪。\n\n星川蓮拉高校服領口，掌心把沉睡咗好耐嘅星光之刃突然震咗一下。「……終於嚟到喇咩。」'
+      },
+      'es': {
+        heading: 'Capítulo 01: Tormenta en la Azotea',
+        body: 'El crepúsculo apenas se había desvanecido cuando sonó la tercera alarma en la azotea norte de la Academia Orbital.\n\nEn la palma de Ren, la Hoja Estelar comenzó a vibrar con una luz serena. «...Por fin ha llegado.»'
+      }
+    };
+
+    const illustItems = [
+      { id: 'm1', name: '漫画 p01 · 暴雨天台', src: 'ch001/manuscript/p01_final.png', mode: 'manga-pick', picked: true },
+      { id: 'm2', name: '漫画 p04 · 星刃拔鞘', src: 'ch001/manuscript/p04_final.png', mode: 'manga-pick', picked: false },
+      { id: 'c1', name: '专属彩插 · 卷首立绘', src: 'ch001/novel/illustrations/frontis_01.png', mode: 'novel-custom', picked: false },
+      { id: 'c2', name: '专属插画 · 磁暴夜空', src: 'ch001/novel/illustrations/storm_sky.png', mode: 'novel-custom', picked: false }
+    ];
+
+    let s3 = {
+      view: 'write',
+      locale: 'zh-Hans',
+      locked: true,
+      zen: false,
+      hintMode: false,
+      bookDir: 'vert'
+    };
+
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg; el.style.opacity = '1';
+      clearTimeout(el._t); el._t = setTimeout(() => el.style.opacity = '0', 2600);
+    }
+    function deepLink(uri) { showToast('已发出跨工具 Deep-Link：' + uri); }
+
+    function switchView(v) {
+      s3.view = v;
+      ['write', 'epub', 'mobile'].forEach(k => {
+        document.getElementById('view-' + k).classList.toggle('hidden', k !== v);
+        document.getElementById('tab-' + k).className = k === v
+          ? 'px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer accent-bg'
+          : 'px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer muted-txt';
+        document.getElementById('rail-' + k)?.classList.toggle('active', k === v);
+      });
+    }
+
+    function railClick(v, btn) {
+      if (s3.hintMode) { showHintForEl(btn); return; }
+      switchView(v);
+    }
+
+    function setTheme(t) { document.getElementById('shell').setAttribute('data-theme', t); }
+
+    function setPosture(p) {
+      const hinge = document.getElementById('hingeGutter');
+      hinge.classList.add('hidden');
+      if (p === 'folded') {
+        switchView('mobile');
+        showToast('已切换 iPhone Duo 折叠外屏单手速记态 (SinglePaneCompact)');
+      } else if (p === 'unfolded') {
+        switchView('write');
+        document.getElementById('outlineDrawer').classList.add('hidden');
+        document.getElementById('refSplitPane').classList.remove('hidden');
+        hinge.classList.remove('hidden');
+        showToast('已切换 iPhone Duo 展开态：左正文 / 中央铰链避让 / 右只读参考');
+      } else {
+        switchView('write');
+        document.getElementById('outlineDrawer').classList.remove('hidden');
+        document.getElementById('refSplitPane').classList.remove('hidden');
+      }
+    }
+
+    function toggleHintMode() {
+      s3.hintMode = !s3.hintMode;
+      document.getElementById('shell').classList.toggle('hint-mode-active', s3.hintMode);
+      document.getElementById('hintModeBtn').className = s3.hintMode
+        ? 'px-2 py-1 rounded-md accent-bg text-xs font-medium cursor-pointer'
+        : 'px-2 py-1 rounded-md elevated-bg border text-xs font-medium cursor-pointer';
+      showToast(s3.hintMode ? '提示探索模式开启：点图标仅预览说明' : '提示探索模式关闭');
+    }
+
+    function toggleOutlineDrawer(btn) {
+      if (s3.hintMode && btn) { showHintForEl(btn); return; }
+      document.getElementById('outlineDrawer').classList.toggle('hidden');
+    }
+
+    function toggleRefPane(btn) {
+      if (s3.hintMode && btn) { showHintForEl(btn); return; }
+      document.getElementById('refSplitPane').classList.toggle('hidden');
+    }
+
+    function toggleZenMode(btn) {
+      if (s3.hintMode && btn) { showHintForEl(btn); return; }
+      s3.zen = !s3.zen;
+      document.getElementById('outlineDrawer').classList.toggle('hidden', s3.zen);
+      document.getElementById('refSplitPane').classList.toggle('hidden', s3.zen);
+      document.getElementById('rail-zen').classList.toggle('active', s3.zen);
+      showToast(s3.zen ? 'Zen 专注模式已开启（隐藏双侧边栏）' : '已退出 Zen 专注模式');
+    }
+
+    function toggleAuthorLock() {
+      s3.locked = !s3.locked;
+      document.getElementById('lockBadgeBtn').textContent = s3.locked ? '🔒 人工终稿锁定' : '🔓 草稿未锁定';
+      document.getElementById('lockStatusFoot').textContent = s3.locked ? '🔒 locked="true"' : '🔓 locked="false"';
+      showToast(s3.locked ? '已锁定人工终稿：严禁任何脚本或 AI 覆盖' : '已解除锁定');
+    }
+
+    function switchProseLocale(loc) {
+      s3.locale = loc;
+      const d = sampleProse[loc];
+      document.getElementById('chapterHeading').textContent = d.heading;
+      document.getElementById('proseEditor').value = d.body;
+      document.getElementById('proseFileName').textContent = loc + '.md';
+      onProseInput();
+      showToast('已切换独立人工正文文件：novel/prose/' + loc + '.md');
+    }
+
+    function onProseInput() {
+      const txt = document.getElementById('proseEditor').value;
+      const clean = txt.replace(/\s+/g, '');
+      const count = clean.length;
+      const pct = Math.min(100, Math.round((count / 200) * 100));
+      document.getElementById('wordCountStatus').textContent = count + ' 字';
+      document.getElementById('goalRingStatus').textContent = `◎ 今日目标 ${pct}%`;
+      document.getElementById('mobGoalRing').textContent = `◎ ${pct}%`;
+      if (txt.endsWith('@')) {
+        document.getElementById('glossaryPopup').classList.remove('hidden');
+      }
+    }
+
+    function toggleGlossaryPopup(btn) {
+      if (s3.hintMode && btn) { showHintForEl(btn); return; }
+      document.getElementById('glossaryPopup').classList.toggle('hidden');
+    }
+
+    function insertIntoEditor(str, cursorOffset = 0) {
+      const ed = document.getElementById('proseEditor');
+      const start = ed.selectionStart ?? ed.value.length;
+      const end = ed.selectionEnd ?? ed.value.length;
+      ed.value = ed.value.slice(0, start) + str + ed.value.slice(end);
+      const pos = start + str.length + cursorOffset;
+      ed.focus();
+      ed.setSelectionRange(pos, pos);
+      onProseInput();
+    }
+
+    function insertGlossary(term) {
+      const ed = document.getElementById('proseEditor');
+      if (ed.value.endsWith('@')) ed.value = ed.value.slice(0, -1);
+      insertIntoEditor(term);
+      document.getElementById('glossaryPopup').classList.add('hidden');
+      showToast(`已插入词典规范译名：${term}`);
+    }
+
+    function switchRefTab(tab) {
+      ['ai', 'manga', 'bible'].forEach(t => {
+        document.getElementById('refpanel-' + t).classList.toggle('hidden', t !== tab);
+        document.getElementById('reftab-' + t).className = t === tab
+          ? 'py-1.5 rounded-md text-xs font-medium accent-bg cursor-pointer'
+          : 'py-1.5 rounded-md text-xs font-medium elevated-bg muted-txt cursor-pointer';
+      });
+    }
+
+    function copyAiExcerpt() {
+      showToast('已复制 AI 参考灵感片段至剪贴板（您的正文未被自动修改）');
+    }
+
+    function renderIllustPool() {
+      document.getElementById('illustPoolGrid').innerHTML = illustItems.map((it, idx) => `
+        <button onclick="pickIllust(${idx})" class="p-2 rounded-lg border text-left transition cursor-pointer ${it.picked ? 'accent-soft border-[var(--suite-accent)]' : 'elevated-bg'}">
+          <div class="h-14 rounded panel-bg border mb-1.5 flex items-center justify-center text-xs muted-txt">${it.picked ? '✓ 已选' : '预览'}</div>
+          <div class="font-medium truncate text-[11px]">${it.name}</div>
+          <div class="font-mono text-[10px] muted-txt">${it.mode}</div>
+        </button>
+      `).join('');
+    }
+
+    function pickIllust(idx) {
+      illustItems.forEach((it, i) => it.picked = i === idx);
+      const cur = illustItems[idx];
+      document.getElementById('previewIllustTitle').textContent = `${cur.name} · ${cur.src}`;
+      document.getElementById('previewIllustBadge').textContent = `source="${cur.mode}" · 300DPI`;
+      document.getElementById('activeAnchorLabel').textContent = '锚点: ' + cur.name;
+      renderIllustPool();
+      showToast('已更新轻小说插图锚点：' + cur.name);
+    }
+
+    function setBookDir(dir) {
+      s3.bookDir = dir;
+      document.getElementById('dir-vert').className = dir === 'vert' ? 'px-2.5 py-1 rounded text-xs cursor-pointer accent-bg' : 'px-2.5 py-1 rounded text-xs cursor-pointer muted-txt';
+      document.getElementById('dir-horiz').className = dir === 'horiz' ? 'px-2.5 py-1 rounded text-xs cursor-pointer accent-bg' : 'px-2.5 py-1 rounded text-xs cursor-pointer muted-txt';
+      const el = document.getElementById('bookProseContent');
+      el.className = dir === 'vert'
+        ? 'tategaki literary-serif text-sm max-h-[310px]'
+        : 'literary-serif text-sm leading-7 space-y-2';
+    }
+
+    function setBookDevice(dev) {
+      document.getElementById('dev-eink').className = dev === 'eink' ? 'px-2.5 py-1 rounded text-xs cursor-pointer accent-bg' : 'px-2.5 py-1 rounded text-xs cursor-pointer muted-txt';
+      document.getElementById('dev-bunko').className = dev === 'bunko' ? 'px-2.5 py-1 rounded text-xs cursor-pointer accent-bg' : 'px-2.5 py-1 rounded text-xs cursor-pointer muted-txt';
+      document.getElementById('bookSpread').classList.toggle('grayscale', dev === 'eink');
+      showToast(dev === 'eink' ? '已切换 6" E-Ink 墨水屏灰度仿真' : '已切换文库本 B6 双页展开预览');
+    }
+
+    function toggleRuby() {
+      const show = document.getElementById('rubyToggle').checked;
+      document.querySelectorAll('#bookProseContent rt').forEach(rt => rt.style.display = show ? '' : 'none');
+    }
+
+    function insertMobile(str, offset = 0) {
+      const ed = document.getElementById('mobileEditor');
+      const start = ed.selectionStart ?? ed.value.length;
+      ed.value = ed.value.slice(0, start) + str + ed.value.slice(ed.selectionEnd ?? start);
+      const pos = start + str.length + offset;
+      ed.focus(); ed.setSelectionRange(pos, pos);
+      syncFromMobile(ed.value);
+    }
+
+    function syncFromMobile(val) {
+      document.getElementById('proseEditor').value = val;
+      onProseInput();
+    }
+
+    function triggerVoiceDemo() {
+      showToast('🎙 离线 Gemma 4 语音场记已记录：「ch001 星川莲左手袖口破损」→ ai_assist/completion_queue.xml（绝不篡改正文）');
+    }
+
+    // Unified Hint Popover
+    const pop = document.getElementById('hintPopover');
+    function showHintForEl(el) {
+      const title = el.getAttribute('data-hint-title');
+      if (!title) return;
+      document.getElementById('hintTitle').textContent = title;
+      document.getElementById('hintDesc').textContent = el.getAttribute('data-hint-desc') || '';
+      document.getElementById('hintKey').textContent = el.getAttribute('data-hint-key') || '';
+      const r = el.getBoundingClientRect();
+      let left = r.right + 10, top = r.top;
+      if (left + 284 > window.innerWidth) left = Math.max(8, r.left - 286);
+      if (top + 88 > window.innerHeight) top = Math.max(8, window.innerHeight - 96);
+      pop.style.left = left + 'px'; pop.style.top = top + 'px';
+      pop.classList.add('visible');
+    }
+    document.addEventListener('mouseover', e => { const el = e.target.closest('[data-hint-title]'); if (el) showHintForEl(el); });
+    document.addEventListener('mouseout', e => { const el = e.target.closest('[data-hint-title]'); if (el) pop.classList.remove('visible'); });
+
+    // Init
+    switchProseLocale('zh-Hans');
+    renderIllustPool();
+  </script>
+</body>
+</html>

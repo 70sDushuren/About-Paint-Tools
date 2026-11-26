@@ -119,6 +119,11 @@ All project documents are maintained in 1:1 mirrored **English** and **Simplifie
 | 05. 5-Language i18n & Layout Guide | [05-i18n-and-l10n-guide.md](./docs/en/05-i18n-and-l10n-guide.md) | [05-i18n-and-l10n-guide.md](./docs/zh-CN/05-i18n-and-l10n-guide.md) |
 | 06. Detailed Engineering Task Breakdown (WBS) | [06-development-tasks.md](./docs/en/06-development-tasks.md) | [06-development-tasks.md](./docs/zh-CN/06-development-tasks.md) |
 | 07. Creative Project File Framework V1.0 (`.prj` / Git) | [07-creative-project-framework-v1.md](./docs/en/07-creative-project-framework-v1.md) | [07-creative-project-framework-v1.md](./docs/zh-CN/07-creative-project-framework-v1.md) |
+| 08. Tri-App Original UI Design & `vX.Y.Z` Patch Roadmap | [08-tri-app-ui-design-and-patch-roadmap.md](./docs/en/08-tri-app-ui-design-and-patch-roadmap.md) | [08-tri-app-ui-design-and-patch-roadmap.md](./docs/zh-CN/08-tri-app-ui-design-and-patch-roadmap.md) |
+| 09. Apple MacBook Pro Xcode & Xcode Cloud Guide | [09-apple-xcode-and-cloud-dev-guide.md](./docs/en/09-apple-xcode-and-cloud-dev-guide.md) | [09-apple-xcode-and-cloud-dev-guide.md](./docs/zh-CN/09-apple-xcode-and-cloud-dev-guide.md) |
+
+- **Interactive HTML UI Demos**: [`S1 NoemaDock`](./docs/demos/s1_hub_ui_demo.html) · [`S2 DracoNib`](./docs/demos/s2_manga_ui_demo.html) · [`S3 LitteraCore`](./docs/demos/s3_novel_ui_demo.html)
+- **Apple Keynote-Compatible Bilingual Decks (14 Slides)**: [English `.pptx`](./docs/presentations/About-Paint-Tools_Overview_and_Plan_en.pptx) ([PDF](./docs/presentations/About-Paint-Tools_Overview_and_Plan_en.pdf)) · [简体中文 `.pptx`](./docs/presentations/About-Paint-Tools_Overview_and_Plan_zh-CN.pptx) ([PDF](./docs/presentations/About-Paint-Tools_Overview_and_Plan_zh-CN.pdf))
 
 ---
 
@@ -130,8 +135,11 @@ About-Paint-Tools/
 ├── README.md                    # English project homepage
 ├── README.zh-CN.md              # Simplified Chinese project homepage
 ├── docs/
-│   ├── en/                      # Canonical English documentation (01–07)
-│   └── zh-CN/                   # Canonical Simplified Chinese documentation (01–07)
+│   ├── en/                      # Canonical English documentation (01–09)
+│   ├── zh-CN/                   # Canonical Simplified Chinese documentation (01–09)
+│   ├── assets/ui-mockups/       # S1/S2/S3 original high-res UI mockups (7 images)
+│   ├── demos/                   # S1/S2/S3 self-contained interactive HTML UI demos (3 files)
+│   └── presentations/           # Bilingual Apple Keynote-compatible decks (.pptx + .pdf)
 ├── templates/
 │   └── SampleManga/             # Reference CPFF v1.0 dual-engine project (SampleManga.prj + Git LFS)
 ├── i18n/

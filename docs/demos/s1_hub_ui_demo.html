@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>S1 创想空间 / NoemaDock (暂定代号) — 交互式 UI 设计稿 Demo</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    /* Unified Tri-App Design Shell — never redeclares :root */
+    .app-shell {
+      --suite-accent: #4F7CFF;
+      --suite-accent-soft: rgba(79, 124, 255, 0.15);
+      --suite-manga: #2DD4BF;
+      --suite-novel: #F59E0B;
+      --suite-diverge: #A855F7;
+      --suite-lock: #22C55E;
+      --suite-warn: #F43F5E;
+      --ui-bg: var(--background);
+      --ui-surface: var(--card);
+      --ui-sidebar: var(--sidebar);
+      --ui-border: var(--border);
+      --ui-fg: var(--foreground);
+      --ui-muted: var(--muted-foreground);
+      --ui-elevated: var(--content);
+      background: var(--ui-bg);
+      color: var(--ui-fg);
+      min-height: 100vh;
+    }
+    .app-shell[data-theme="dark"] {
+      --ui-bg: #14161B;
+      --ui-surface: #1B1E26;
+      --ui-sidebar: #171A21;
+      --ui-elevated: #222631;
+      --ui-border: #2E3443;
+      --ui-fg: #ECEEF2;
+      --ui-muted: #949BA8;
+    }
+    .app-shell[data-theme="daylight"] {
+      --ui-bg: #F7F6F2;
+      --ui-surface: #FFFFFF;
+      --ui-sidebar: #F0EEE7;
+      --ui-elevated: #EFECE4;
+      --ui-border: #DDD9CE;
+      --ui-fg: #1A1D24;
+      --ui-muted: #5E6573;
+    }
+    .app-shell[data-theme="sepia"] {
+      --ui-bg: #F3EDE0;
+      --ui-surface: #FAF6EC;
+      --ui-sidebar: #EAE1CF;
+      --ui-elevated: #EFE7D6;
+      --ui-border: #D9CEB8;
+      --ui-fg: #2B241B;
+      --ui-muted: #6E6151;
+    }
+    .panel-bg { background: var(--ui-surface); border-color: var(--ui-border); }
+    .sidebar-bg { background: var(--ui-sidebar); border-color: var(--ui-border); }
+    .elevated-bg { background: var(--ui-elevated); border-color: var(--ui-border); }
+    .muted-txt { color: var(--ui-muted); }
+    .accent-bg { background: var(--suite-accent); color: #FFFFFF; }
+    .accent-soft { background: var(--suite-accent-soft); color: var(--suite-accent); }
+    .rail-btn {
+      width: 40px; height: 40px; border-radius: 10px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--ui-muted); transition: all 140ms ease; position: relative;
+      border: 1px solid transparent; cursor: pointer;
+    }
+    .rail-btn:hover { background: var(--ui-elevated); color: var(--ui-fg); }
+    .rail-btn.active {
+      background: var(--suite-accent-soft);
+      color: var(--suite-accent);
+      border-color: rgba(79, 124, 255, 0.35);
+    }
+    .icon-svg {
+      width: 20px; height: 20px; fill: none; stroke: currentColor;
+      stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .hinge-gutter {
+      background: repeating-linear-gradient(
+        -45deg,
+        rgba(79, 124, 255, 0.14),
+        rgba(79, 124, 255, 0.14) 6px,
+        transparent 6px,
+        transparent 12px
+      );
+      border-left: 1px dashed var(--suite-accent);
+      border-right: 1px dashed var(--suite-accent);
+    }
+    .hint-popover {
+      position: fixed; z-index: 60; pointer-events: none;
+      width: 272px; padding: 10px 12px; border-radius: 10px;
+      background: var(--ui-surface); border: 1px solid var(--ui-border);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+      opacity: 0; transform: translateX(-4px); transition: opacity 130ms ease, transform 130ms ease;
+    }
+    .hint-popover.visible { opacity: 1; transform: translateX(0); }
+    .hint-mode-active [data-hint-title] {
+      outline: 1px dashed rgba(79, 124, 255, 0.65);
+      outline-offset: 2px;
+    }
+    .posture-folded { max-width: 420px; margin: 0 auto; border-left: 1px solid var(--ui-border); border-right: 1px solid var(--ui-border); }
+    .posture-unfolded { max-width: 980px; margin: 0 auto; border-left: 1px solid var(--ui-border); border-right: 1px solid var(--ui-border); }
+  </style>
+</head>
+<body class="p-0 m-0 antialiased text-xs">
+  <div id="shell" class="app-shell flex flex-col" data-theme="dark">
+    <!-- 1. UNIFIED TOP CONTEXT BAR (48px) -->
+    <header class="h-12 px-3 border-b panel-bg flex items-center justify-between gap-2 shrink-0 flex-wrap">
+      <!-- Left: App Identity + Project Pill -->
+      <div class="flex items-center gap-2 min-w-0">
+        <div class="w-7 h-7 rounded-lg accent-bg flex items-center justify-center font-bold text-xs shadow-sm" title="S1 Suite Hub">S1</div>
+        <div class="flex items-center gap-1.5">
+          <span id="appName" class="font-semibold text-sm tracking-tight">创想空间</span>
+          <span class="px-1.5 py-0.5 rounded text-xs elevated-bg border muted-txt">NoemaDock · 暂定代号</span>
+        </div>
+        <span class="hidden md:inline-flex items-center gap-1.5 px-2 py-1 rounded-md elevated-bg border text-xs ml-1">
+          <svg class="w-3.5 h-3.5 text-[#4F7CFF]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          <span class="font-mono">StarlightBlade.prj</span>
+        </span>
+      </div>
+
+      <!-- Center: Unified Screen Mode Switcher -->
+      <div class="flex items-center gap-1 p-0.5 rounded-lg elevated-bg border">
+        <button id="tabBoard" onclick="switchView('board')" class="px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer" data-hint-title="双引擎分集看板" data-hint-desc="并排管理每话漫画原稿与轻小说进度及有意分歧" data-hint-key="⌘2">双引擎看板</button>
+        <button id="tabAudit" onclick="switchView('audit')" class="px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer" data-hint-title="导入与5语审校" data-hint-desc="拖拽导入画稿/文案，巡检5语字典锁定与西语字数溢出" data-hint-key="⌘4">导入 · 5语审校</button>
+        <button id="tabPublish" onclick="switchView('publish')" class="px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer" data-hint-title="多版发布与Git同步" data-hint-desc="按发行版×5语一键构建 dist/ 与创作者 Git+LFS 同步" data-hint-key="⌘5">发布 · Git+LFS</button>
+      </div>
+
+      <!-- Right: Posture, Locale, Theme, Hint Mode, Cross-App Deep Links -->
+      <div class="flex items-center gap-1.5">
+        <select id="postureSelect" onchange="setPosture(this.value)" class="px-2 py-1 rounded-md elevated-bg border text-xs cursor-pointer" data-hint-title="六端姿态模拟" data-hint-desc="预览 iPad / MacBook 触控 / iPhone Duo 折叠与展开铰链安全区" data-hint-key="姿态">
+          <option value="desktop">iPad / MacBook 宽屏</option>
+          <option value="unfolded">iPhone Duo 展开 (铰链避让)</option>
+          <option value="folded">iPhone Duo 折叠 (单手)</option>
+        </select>
+
+        <select id="localeSelect" onchange="setLocale(this.value)" class="px-2 py-1 rounded-md elevated-bg border text-xs cursor-pointer" data-hint-title="5 语言实时切换" data-hint-desc="无需重启实时切换 5 套本地化界面与 Hint 文案" data-hint-key="i18n">
+          <option value="zh-Hans">简中</option>
+          <option value="zh-Hant">繁中</option>
+          <option value="yue-Hant">粵語</option>
+          <option value="en">EN</option>
+          <option value="es">ES</option>
+        </select>
+
+        <select id="themeSelect" onchange="setTheme(this.value)" class="px-2 py-1 rounded-md elevated-bg border text-xs cursor-pointer" data-hint-title="工作室主题" data-hint-desc="切换暗黑工作室、暖纸日光、古卷护眼或跟随宿主" data-hint-key="主题">
+          <option value="dark">暗黑工作室</option>
+          <option value="daylight">暖纸日光</option>
+          <option value="sepia">古卷护眼</option>
+          <option value="auto">跟随宿主</option>
+        </select>
+
+        <button id="hintModeBtn" onclick="toggleHintMode()" class="px-2 py-1 rounded-md elevated-bg border text-xs font-medium flex items-center gap-1 cursor-pointer" data-hint-title="提示探索模式" data-hint-desc="触控端开启后单击任意图标先看说明而不误触发" data-hint-key="F1">
+          <span>?</span><span class="hidden sm:inline">提示</span>
+        </button>
+
+        <div class="hidden xl:flex items-center gap-1 pl-1 border-l border-[var(--ui-border)]">
+          <button onclick="deepLink('draconib://open?project=prj-sample-manga-001&chapter=ch001&detail=page=1')" class="px-2 py-1 rounded-md border text-xs cursor-pointer hover:opacity-90" style="border-color:rgba(45,212,191,0.45);color:#2DD4BF" data-hint-title="跳转 S2 雕龙" data-hint-desc="通过 Deep-Link 在独立进程中拉起漫画画布" data-hint-key="⌘⇧M">↗ S2 雕龙</button>
+          <button onclick="deepLink('litteracore://open?project=prj-sample-manga-001&chapter=ch001&detail=locale=zh-Hans')" class="px-2 py-1 rounded-md border text-xs cursor-pointer hover:opacity-90" style="border-color:rgba(245,158,11,0.45);color:#F59E0B" data-hint-title="跳转 S3 文心" data-hint-desc="通过 Deep-Link 在独立进程中拉起轻小说工坊" data-hint-key="⌘⇧N">↗ S3 文心</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- 2. UNIFIED 4-ZONE WORKSPACE -->
+    <div id="workspaceFrame" class="flex-1 flex min-h-0 overflow-hidden">
+      <!-- ZONE A: FAR-LEFT 56px SLIM ICON-ONLY NAVIGATION RAIL -->
+      <aside id="iconRail" class="w-14 sidebar-bg border-r flex flex-col items-center justify-between py-3 shrink-0">
+        <div class="flex flex-col items-center gap-2">
+          <button class="rail-btn" id="rail-overview" onclick="railAction('board', this)" data-hint-title="项目总览" data-hint-desc="查看 .prj 健康度、版权声明与全工程连载状态" data-hint-key="⌘1">
+            <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          </button>
+          <button class="rail-btn active" id="rail-board" onclick="railAction('board', this)" data-hint-title="双引擎分集看板" data-hint-desc="并排管理每话漫画原稿(S2)与轻小说正文(S3)进度" data-hint-key="⌘2">
+            <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="4" width="7.5" height="16" rx="1.5"/><rect x="13.5" y="4" width="7.5" height="16" rx="1.5"/></svg>
+          </button>
+          <button class="rail-btn" id="rail-import" onclick="railAction('audit', this)" data-hint-title="统一资产与文案导入" data-hint-desc="拖入散页画稿与文案，通过 Handoff 安全移交 S2/S3" data-hint-key="⌘3">
+            <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 3v11m0 0-4-4m4 4 4-4"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+          </button>
+          <button class="rail-btn" id="rail-i18n" onclick="railAction('audit', this)" data-hint-title="5 语字典与气泡审校" data-hint-desc="检查 en/简/繁/粤/西 译文缺漏、超长与 locked 锁" data-hint-key="⌘4">
+            <svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a13 13 0 0 1 0 18M12 3a13 13 0 0 0 0 18"/></svg>
+          </button>
+          <button class="rail-btn" id="rail-publish" onclick="railAction('publish', this)" data-hint-title="多发行版一键打包" data-hint-desc="勾选黑白印刷/条漫/EPUB3 × 5 语输出至 dist/" data-hint-key="⌘5">
+            <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3z"/><path d="M12 12 4 7.5M12 12l8-4.5M12 12v9"/></svg>
+          </button>
+          <button class="rail-btn" id="rail-git" onclick="railAction('publish', this)" data-hint-title="创作者 Git + LFS 同步" data-hint-desc="文本/LFS 分层识别、快照提交与译者浅克隆命令" data-hint-key="⌘6">
+            <svg class="icon-svg" viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M6 8.5v2.5a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V8.5M12 14v1.5"/></svg>
+          </button>
+          <div class="w-6 border-t border-[var(--ui-border)] my-1"></div>
+          <button class="rail-btn" onclick="toggleLeftDrawer()" data-hint-title="工程树与设定圣经" data-hint-desc="展开/折叠左侧 CPFF v1.0 工程目录与角色设定卡" data-hint-key="⌘B">
+            <svg class="icon-svg" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 1 4 17.5z"/><path d="M8 7h8M8 11h6"/></svg>
+          </button>
+          <button class="rail-btn" onclick="showToast('本地 Gemma 4 E2B 运行时中心：已就绪（按需加载，120s 闲置自动归零，三工具共享单份权重）')" data-hint-title="本地 AI 运行中心" data-hint-desc="管理 Gemma 4 E2B/E4B 离线权重与 ai_assist 只读队列" data-hint-key="⌘7">
+            <svg class="icon-svg" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>
+          </button>
+        </div>
+
+        <div class="flex flex-col items-center gap-2">
+          <button class="rail-btn" onclick="toggleRightDrawer()" data-hint-title="右侧属性检查器" data-hint-desc="展开/折叠当前章节元数据、分场清单与写权守卫" data-hint-key="⌘I">
+            <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
+          </button>
+          <button class="rail-btn" onclick="showToast('CPFF v1.0 实时体检通过：Schema 1.0 · POSIX 路径 · AI 隔离红线 · Git LFS 全部绿灯')" data-hint-title="CPFF 规范体检" data-hint-desc="即时运行 Rust 内核校验器检查 .prj 与 AI 隔离红线" data-hint-key="⌘⇧V">
+            <svg class="icon-svg text-[#22C55E]" viewBox="0 0 24 24"><path d="M12 3 5 6v6c0 4.5 3 7.8 7 9 4-1.2 7-4.5 7-9V6l-7-3z"/><path d="m9 12 2 2 4-4"/></svg>
+          </button>
+        </div>
+      </aside>
+
+      <!-- ZONE B: LEFT COLLAPSIBLE PROJECT TREE DRAWER -->
+      <aside id="leftDrawer" class="w-56 sidebar-bg border-r p-3 flex flex-col gap-3 overflow-y-auto shrink-0">
+        <div class="flex items-center justify-between">
+          <span class="font-semibold text-xs uppercase tracking-wider muted-txt" id="lblProjectTree">工程结构 · CPFF v1.0</span>
+          <button onclick="toggleLeftDrawer()" class="muted-txt hover:opacity-100 cursor-pointer" title="折叠">«</button>
+        </div>
+
+        <!-- Git Clone Rename Fallback Banner -->
+        <div id="fallbackBanner" class="p-2 rounded-lg border text-xs space-y-1.5" style="background:rgba(245,158,11,0.1);border-color:rgba(245,158,11,0.35)">
+          <div class="font-medium text-[#F59E0B]">⚠ 目录改名容错已触发</div>
+          <div class="muted-txt leading-relaxed">Clone 目录名与 <span class="font-mono">SampleManga.prj</span> 不同，已安全回退加载。</div>
+          <div class="flex gap-1.5">
+            <button onclick="dismissFallback('已保持兼容模式打开')" class="px-2 py-0.5 rounded elevated-bg border text-xs cursor-pointer">保持兼容</button>
+            <button onclick="dismissFallback('已同步重命名文件夹并刷新 .prj 索引')" class="px-2 py-0.5 rounded accent-bg text-xs cursor-pointer">一键同步</button>
+          </div>
+        </div>
+
+        <nav class="space-y-2 text-xs">
+          <div>
+            <div class="font-medium mb-1 flex items-center justify-between">
+              <span>▾ 大纲与目录 (outline/)</span>
+              <span class="px-1 rounded text-[11px] accent-soft">可写</span>
+            </div>
+            <ul class="pl-3 space-y-1 muted-txt">
+              <li class="hover:text-[var(--ui-fg)] cursor-pointer" onclick="showToast('已打开 outline/synopsis.md（故事梗概）')">• synopsis.md 故事梗概</li>
+              <li class="hover:text-[var(--ui-fg)] cursor-pointer" onclick="showToast('已打开 outline/toc.xml（总目录索引）')">• toc.xml 总目录</li>
+              <li class="hover:text-[var(--ui-fg)] cursor-pointer" onclick="showToast('已打开 outline/arcs/arc01.md')">• arcs/arc01_storm.md</li>
+            </ul>
+          </div>
+
+          <div>
+            <div class="font-medium mb-1 flex items-center justify-between">
+              <span>▾ 设定圣经 (bible/)</span>
+              <span class="px-1 rounded text-[11px] accent-soft">可写</span>
+            </div>
+            <ul class="pl-3 space-y-1 muted-txt">
+              <li class="hover:text-[var(--ui-fg)] cursor-pointer" onclick="showToast('角色卡：星川莲 / 林星河 / 导师零（12 位角色）')">• characters/ 角色卡 (12)</li>
+              <li class="hover:text-[var(--ui-fg)] cursor-pointer" onclick="showToast('已加载世界观设定 bible/world.md')">• world.md 世界观</li>
+              <li class="hover:text-[var(--ui-fg)] cursor-pointer" onclick="showToast('总场记表：已同步 18 条视觉/道具状态')">• continuity_log.xml 总场记</li>
+            </ul>
+          </div>
+
+          <div>
+            <div class="font-medium mb-1">▾ 版权与声明 (declarations/)</div>
+            <ul class="pl-3 space-y-1 muted-txt">
+              <li>• CC-BY-NC-SA 4.0 ✓</li>
+              <li>• 同人授权 & AI 披露 ✓</li>
+            </ul>
+          </div>
+
+          <div>
+            <div class="font-medium mb-1 flex items-center justify-between">
+              <span>▾ 章节目录 (chapters/)</span>
+              <button onclick="addChapter()" class="text-[#4F7CFF] hover:underline cursor-pointer">+ 新话</button>
+            </div>
+            <ul id="treeChapterList" class="pl-1 space-y-1"></ul>
+          </div>
+        </nav>
+      </aside>
+
+      <!-- HINGE GUTTER (ONLY VISIBLE IN IPHONE DUO UNFOLDED POSTURE) -->
+      <div id="hingeGutter" class="hidden w-5 hinge-gutter shrink-0 flex flex-col items-center justify-center text-[11px] text-[#4F7CFF]" title="iPhone Duo 物理铰链安全避让区 (≥16pt)">
+        <span class="[writing-mode:vertical-rl] tracking-widest opacity-80">HINGE SAFE</span>
+      </div>
+
+      <!-- ZONE C: MAIN STAGE -->
+      <main class="flex-1 p-4 overflow-y-auto min-w-0">
+        <!-- VIEW 1: DUAL-ENGINE CHAPTER BOARD (S1-A) -->
+        <section id="view-board" class="space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h1 id="boardTitle" class="text-base font-semibold">双引擎分集看板 · 漫画 × 轻小说并进</h1>
+              <p id="boardSub" class="muted-txt text-xs mt-0.5">共享大纲与设定圣经，漫画原稿与人工轻小说终稿完全解耦、独立演进</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="flex p-0.5 rounded-lg elevated-bg border">
+                <button onclick="setBoardFilter('all')" id="flt-all" class="px-2 py-1 rounded text-xs cursor-pointer accent-bg">全部</button>
+                <button onclick="setBoardFilter('diverge')" id="flt-diverge" class="px-2 py-1 rounded text-xs cursor-pointer muted-txt">仅有分歧</button>
+                <button onclick="setBoardFilter('ai')" id="flt-ai" class="px-2 py-1 rounded text-xs cursor-pointer muted-txt">AI参考就绪</button>
+              </div>
+              <button onclick="toggleCompactBoard()" id="compactToggleBtn" class="px-2.5 py-1.5 rounded-lg elevated-bg border text-xs cursor-pointer">大纲紧凑视图</button>
+              <button onclick="addChapter()" class="px-3 py-1.5 rounded-lg accent-bg text-xs font-medium cursor-pointer">+ 新建章节</button>
+            </div>
+          </div>
+
+          <div id="chapterCards" class="space-y-3"></div>
+        </section>
+
+        <!-- VIEW 2: UNIFIED IMPORTER & 5-LANGUAGE AUDIT MATRIX (S1-B) -->
+        <section id="view-audit" class="hidden space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h1 class="text-base font-semibold">统一资产/文案导入器 & 5 语字典气泡审校矩阵</h1>
+              <p class="muted-txt text-xs mt-0.5">严格遵守写权分治：S1 仅写元数据并通过 Handoff 清单移交 S2/S3 入库；自动补全永不覆盖人工锁定行</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="simulateImport()" class="px-3 py-1.5 rounded-lg elevated-bg border text-xs font-medium cursor-pointer">⬇ 模拟批量拖入 12 画稿 + 2 文案</button>
+              <button onclick="autoFillUnlocked()" class="px-3 py-1.5 rounded-lg accent-bg text-xs font-medium cursor-pointer">✨ 仅补全未锁定行 (保护🔒)</button>
+            </div>
+          </div>
+
+          <!-- Importer Dry-Run Panel -->
+          <div id="importDryRun" class="p-3 rounded-xl border panel-bg flex flex-wrap items-center justify-between gap-3">
+            <div class="space-y-1">
+              <div class="font-medium flex items-center gap-2">
+                <span>📥 导入路由 Dry-Run 预检</span>
+                <span class="px-1.5 py-0.5 rounded text-xs" style="background:rgba(34,197,94,0.14);color:#22C55E">写权隔离合规 ✓</span>
+              </div>
+              <div id="importStatus" class="muted-txt text-xs">拖入 <span class="font-mono">.png/.psd/.clip</span> 或 <span class="font-mono">.md/.docx/.txt</span> 自动按文件名正则路由章节（已有工程通过 Handoff 移交 S2/S3 签收）。</div>
+            </div>
+            <button onclick="confirmHandoff()" id="handoffBtn" class="hidden px-3 py-1.5 rounded-lg accent-bg text-xs font-medium cursor-pointer">确认并下发 Handoff 清单</button>
+          </div>
+
+          <!-- 5-Language Audit Filters -->
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5">
+              <button onclick="setAuditFilter('all')" id="aflt-all" class="px-2.5 py-1 rounded-md text-xs accent-bg cursor-pointer">全部词条</button>
+              <button onclick="setAuditFilter('missing')" id="aflt-missing" class="px-2.5 py-1 rounded-md text-xs elevated-bg border cursor-pointer">仅缺译</button>
+              <button onclick="setAuditFilter('overflow')" id="aflt-overflow" class="px-2.5 py-1 rounded-md text-xs elevated-bg border cursor-pointer">西语超长 ⚠</button>
+              <button onclick="setAuditFilter('unlocked')" id="aflt-unlocked" class="px-2.5 py-1 rounded-md text-xs elevated-bg border cursor-pointer">未锁定 AUTO</button>
+            </div>
+            <span class="muted-txt text-xs">点击任意单元格中的锁标可切换 <span class="font-mono">locked="true|false"</span></span>
+          </div>
+
+          <!-- 5-Language Table -->
+          <div class="rounded-xl border panel-bg overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="elevated-bg border-b border-[var(--ui-border)]">
+                  <th class="p-2.5 font-semibold">Key / 角色</th>
+                  <th class="p-2.5 font-semibold">EN (基准)</th>
+                  <th class="p-2.5 font-semibold">zh-Hans (基准)</th>
+                  <th class="p-2.5 font-semibold">zh-Hant</th>
+                  <th class="p-2.5 font-semibold">yue-Hant (zh-HK)</th>
+                  <th class="p-2.5 font-semibold">ES (限42字)</th>
+                </tr>
+              </thead>
+              <tbody id="auditTableBody" class="divide-y divide-[var(--ui-border)]"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- VIEW 3: MULTI-EDITION PUBLISHING & VISUAL GIT+LFS SYNC (S1-C) -->
+        <section id="view-publish" class="hidden space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h1 class="text-base font-semibold">多发行版一键打包矩阵 & 创作者 Git + LFS 同步中心</h1>
+              <p class="muted-txt text-xs mt-0.5">单源多发行输出至 <span class="font-mono">dist/</span>（受 <span class="font-mono">.gitignore</span> 隔离，零污染源稿）；非程序员 3 步完成版本快照与远端同步</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 xl:grid-cols-12 gap-4">
+            <!-- Left 7 cols: Multi-Edition Matrix -->
+            <div class="xl:col-span-7 p-4 rounded-xl border panel-bg space-y-4">
+              <div class="flex items-center justify-between">
+                <h2 class="font-semibold text-sm">发行版 × 5 语言构建矩阵 (<span class="font-mono">editions/</span>)</h2>
+                <span id="selectedPkgCount" class="px-2 py-0.5 rounded-full accent-soft font-medium">已选 9 个发行包</span>
+              </div>
+
+              <div class="overflow-x-auto">
+                <table class="w-full text-center border-collapse text-xs">
+                  <thead>
+                    <tr class="elevated-bg border-b border-[var(--ui-border)]">
+                      <th class="p-2 text-left">发行版配置</th>
+                      <th class="p-2">简中</th><th class="p-2">EN</th><th class="p-2">繁中</th><th class="p-2">粤语</th><th class="p-2">ES</th>
+                    </tr>
+                  </thead>
+                  <tbody id="editionMatrixBody" class="divide-y divide-[var(--ui-border)]"></tbody>
+                </table>
+              </div>
+
+              <!-- Pre-Flight Gate -->
+              <div class="p-3 rounded-lg elevated-bg border space-y-1.5 text-xs">
+                <div class="font-medium">发售前合规预检门禁 (Pre-Flight Gate)</div>
+                <div class="text-[#22C55E]">✓ 版权声明 CC-BY-NC-SA 4.0 与同人二次创作声明就绪</div>
+                <div class="text-[#22C55E]">✓ AI 披露声明合规：所有 AI 产物严格位于 <span class="font-mono">ai_assist/</span></div>
+                <div id="preflightI18n" class="text-[#22C55E]">✓ 所选发行包 5 语校验就绪，将自动调度 S2 切片与 S3 EPUB3 构建</div>
+              </div>
+
+              <div class="space-y-2">
+                <div class="flex flex-wrap items-center gap-2">
+                  <button onclick="runBuildPackages()" class="px-4 py-2 rounded-lg accent-bg font-medium cursor-pointer">▶ 一键构建所选发行包 → dist/</button>
+                  <button onclick="showToast('已生成 Release Tag 草稿：v0.2.0-ch001-multilang（含校验清单）')" class="px-3 py-2 rounded-lg elevated-bg border cursor-pointer">🏷 创建 Release 草稿</button>
+                </div>
+                <div id="buildProgressWrap" class="hidden space-y-1">
+                  <div class="flex justify-between text-xs muted-txt"><span id="buildStepText">准备中...</span><span id="buildPct">0%</span></div>
+                  <div class="h-2 rounded-full elevated-bg overflow-hidden"><div id="buildBar" class="h-full accent-bg transition-all duration-300" style="width:0%"></div></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right 5 cols: Creator Git + LFS Sync -->
+            <div class="xl:col-span-5 p-4 rounded-xl border panel-bg space-y-3">
+              <div class="flex items-center justify-between">
+                <h2 class="font-semibold text-sm">创作者 Git + LFS 同步</h2>
+                <span class="px-2 py-0.5 rounded-md elevated-bg border font-mono text-xs">branch: main</span>
+              </div>
+
+              <div class="space-y-2 text-xs">
+                <div class="p-2.5 rounded-lg elevated-bg border space-y-1">
+                  <div class="font-medium flex justify-between"><span>📝 轻量文本（Git 精准 Diff）</span><span class="muted-txt">18 KB</span></div>
+                  <div class="font-mono muted-txt">M SampleManga.prj · M i18n/locales/es.xml</div>
+                </div>
+                <div class="p-2.5 rounded-lg elevated-bg border space-y-1">
+                  <div class="font-medium flex justify-between"><span>🖼 重型画稿（Git LFS 自动托管）</span><span class="text-[#22C55E]">LFS 盾牌 ✓</span></div>
+                  <div class="font-mono muted-txt">M ch001/manuscript/p001.mnga (42 MB)</div>
+                </div>
+              </div>
+
+              <div class="space-y-1.5">
+                <label class="text-xs muted-txt block">本次版本快照备注（自动生成规范提交记录）</label>
+                <input id="commitMsgInput" type="text" value="第1话西语气泡微调与网点定稿" class="w-full px-2.5 py-1.5 rounded-lg elevated-bg border text-xs outline-none focus:border-[#4F7CFF]" />
+                <div class="flex gap-2">
+                  <button onclick="commitSnapshot(false)" class="flex-1 py-1.5 rounded-lg elevated-bg border font-medium cursor-pointer">💾 仅存本地快照</button>
+                  <button onclick="commitSnapshot(true)" class="flex-1 py-1.5 rounded-lg accent-bg font-medium cursor-pointer">☁ 保存并推送</button>
+                </div>
+                <button onclick="copyTranslatorCmd()" class="w-full py-1.5 rounded-lg border text-xs muted-txt hover:text-[var(--ui-fg)] cursor-pointer" style="border-style:dashed;border-color:var(--ui-border)">🌐 复制译者纯文本浅克隆命令 (零画稿下载)</button>
+              </div>
+
+              <div class="pt-2 border-t border-[var(--ui-border)] space-y-2">
+                <div class="font-medium text-xs muted-txt">创作时光线 (History Timeline)</div>
+                <ul id="gitTimeline" class="space-y-2 text-xs"></ul>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- ZONE D: RIGHT COLLAPSIBLE INSPECTOR DRAWER -->
+      <aside id="rightDrawer" class="w-72 sidebar-bg border-l p-3 flex flex-col gap-3 overflow-y-auto shrink-0">
+        <div class="flex items-center justify-between">
+          <span class="font-semibold text-xs uppercase tracking-wider muted-txt">属性检查器 · Inspector</span>
+          <button onclick="toggleRightDrawer()" class="muted-txt hover:opacity-100 cursor-pointer" title="折叠">»</button>
+        </div>
+
+        <div id="inspectorContent" class="space-y-3 text-xs"></div>
+
+        <!-- Write-Guard Shield -->
+        <div class="mt-auto p-2.5 rounded-lg border space-y-1" style="background:rgba(34,197,94,0.08);border-color:rgba(34,197,94,0.32)">
+          <div class="font-semibold text-[#22C55E] flex items-center gap-1.5">
+            <span>🛡 S1 写权隔离守卫运行中</span>
+          </div>
+          <div class="muted-txt leading-relaxed">
+            可写：<span class="font-mono">.prj / bible / i18n / editions / chapter.xml</span><br/>
+            只读保护：<span class="font-mono">manuscript/</span> (S2) · <span class="font-mono">novel/prose/</span> (S3)
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- 3. UNIFIED SLIM BOTTOM STATUS BAR (28px) -->
+    <footer class="h-7 px-3 border-t panel-bg flex items-center justify-between text-xs muted-txt shrink-0">
+      <div class="flex items-center gap-3 overflow-x-auto">
+        <span class="text-[#22C55E]">● CPFF v1.0 校验通过</span>
+        <span>写权分区: <strong class="text-[var(--ui-fg)]">Hub (S1)</strong></span>
+        <span>GPU 画布: <strong class="text-[var(--ui-fg)]">关闭</strong></span>
+        <span>内存实测: <strong class="text-[#22C55E]">118 MB / 200 MB</strong></span>
+      </div>
+      <div class="hidden sm:flex items-center gap-3">
+        <span id="statusPosture">姿态: Tablet/Desktop 宽屏</span>
+        <span id="statusLocale">语言: zh-Hans</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- FLOATING 4-ELEMENT HINT POPOVER -->
+  <div id="hintPopover" class="hint-popover">
+    <div class="flex items-center justify-between gap-2 mb-1">
+      <span id="hintTitle" class="font-semibold text-xs text-[#4F7CFF]"></span>
+      <span id="hintKey" class="px-1.5 py-0.5 rounded elevated-bg border font-mono text-[11px] muted-txt"></span>
+    </div>
+    <p id="hintDesc" class="text-xs muted-txt leading-snug"></p>
+  </div>
+
+  <!-- TOAST FEEDBACK -->
+  <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 px-3.5 py-2 rounded-lg accent-bg text-xs font-medium shadow-xl opacity-0 pointer-events-none transition-opacity duration-200"></div>
+
+  <script>
+    const i18nDict = {
+      'zh-Hans': { appName: '创想空间', boardTitle: '双引擎分集看板 · 漫画 × 轻小说并进', boardSub: '共享大纲与设定圣经，漫画原稿与人工轻小说终稿完全解耦、独立演进', tree: '工程结构 · CPFF v1.0' },
+      'zh-Hant': { appName: '創想空間', boardTitle: '雙引擎分集看板 · 漫畫 × 輕小說並進', boardSub: '共享大綱與設定聖經，漫畫原稿與人工輕小說終稿完全解耦、獨立演進', tree: '工程結構 · CPFF v1.0' },
+      'yue-Hant': { appName: '創想空間', boardTitle: '雙引擎分集看板 · 漫畫 × 輕小說同步', boardSub: '共用大綱同設定聖經，漫畫原稿同輕小說人工終稿各自獨立寫', tree: '工程結構 · CPFF v1.0' },
+      'en': { appName: 'NoemaDock', boardTitle: 'Dual-Engine Chapter Board · Manga × Light Novel', boardSub: 'Shared outline & story bible while manga art and authoritative novel prose evolve independently', tree: 'Project Tree · CPFF v1.0' },
+      'es': { appName: 'NoemaDock', boardTitle: 'Panel Doble Motor · Manga × Novela Ligera', boardSub: 'Guía y biblia compartidas con evolución independiente del manga y la novela', tree: 'Estructura · CPFF v1.0' }
+    };
+
+    let state = {
+      view: 'board',
+      selectedChapterId: 'ch001',
+      boardFilter: 'all',
+      compactBoard: false,
+      auditFilter: 'all',
+      hintMode: false,
+      locale: 'zh-Hans',
+      chapters: [
+        {
+          id: 'ch001', title: '第 1 话：风暴天台', status: 'drafting',
+          mangaStage: '线稿中 (18/24页)', mangaProgress: 75, mangaAiReady: true,
+          novelWords: 4280, novelLocked: true, novelIllust: 'hybrid',
+          scenes: ['sc001_rooftop_storm.md', 'sc002_blade_awakening.md'],
+          divergenceNote: '小说保留三年前磁暴独白与内心戏，漫画压缩为两格高速视觉冲击。'
+        },
+        {
+          id: 'ch002', title: '第 2 话：轨道信号', status: 'storyboard',
+          mangaStage: '分镜大样 (6/22页)', mangaProgress: 30, mangaAiReady: true,
+          novelWords: 3150, novelLocked: false, novelIllust: 'manga-pick',
+          scenes: ['sc001_academy_gate.md', 'sc002_radio_static.md'],
+          divergenceNote: ''
+        },
+        {
+          id: 'ch003', title: '第 3 话：静默残骸', status: 'outline',
+          mangaStage: '待开工 (0/24页)', mangaProgress: 5, mangaAiReady: false,
+          novelWords: 1240, novelLocked: false, novelIllust: 'novel-custom',
+          scenes: ['sc001_wreckage_walk.md'],
+          divergenceNote: '轻小说版提前揭露导师身份线索，漫画版延后至第 5 话揭晓。'
+        }
+      ],
+      auditRows: [
+        { key: 'ch001.p01.b01', speaker: '星川莲', en: { t: 'The storm is near!', lock: true }, zhHans: { t: '风暴正逼近天台！', lock: true }, zhHant: { t: '風暴正逼近天台！', lock: true }, yue: { t: '風暴就快殺到天台！', lock: true }, es: { t: '¡La tormenta se acerca!', lock: true, max: 42 } },
+        { key: 'ch001.p01.b02', speaker: '星川莲', en: { t: 'We cannot turn back now.', lock: true }, zhHans: { t: '我们已经不能退缩了。', lock: true }, zhHant: { t: '我們已經不能退縮了。', lock: false }, yue: { t: '我哋已經唔可以退縮。', lock: false }, es: { t: 'Ya no podemos dar marcha atrás.', lock: false, max: 42 } },
+        { key: 'ch001.p01.b03', speaker: '林星河', en: { t: 'Watch out above the tower!', lock: true }, zhHans: { t: '小心塔楼上方！', lock: true }, zhHant: { t: '', lock: false }, yue: { t: '', lock: false }, es: { t: '¡Ten muchísimo cuidado justo encima de la torre!', lock: false, max: 42 } },
+        { key: 'term.starlight_blade', speaker: '专有名词', en: { t: 'Starlight Blade', lock: true }, zhHans: { t: '星光之刃', lock: true }, zhHant: { t: '星光之刃', lock: true }, yue: { t: '星光之刃', lock: true }, es: { t: 'Hoja Estelar', lock: true, max: 42 } }
+      ],
+      editions: [
+        { id: 'bw', name: '📘 日漫 B4 印刷版', meta: '600DPI · RTL · 黑白网点', langs: [true, false, true, false, false] },
+        { id: 'wt', name: '📱 全彩条漫竖屏版', meta: '800×1280 无缝切片', langs: [true, true, true, true, true] },
+        { id: 'ep', name: '📖 轻小说电子书', meta: 'EPUB3 · 混合插图', langs: [true, true, false, false, false] }
+      ],
+      commits: [
+        { time: '今天 14:20', msg: 'ch001 线稿精修与简中人工终稿锁定', tag: 'LFS 42MB' },
+        { time: '昨天 22:05', msg: '补全 5 语专有名词 dictionary.xml', tag: 'Git 6KB' },
+        { time: '11/24', msg: '初始化 StarlightBlade.prj (CPFF v1.0)', tag: 'Init' }
+      ]
+    };
+
+    function showToast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.style.opacity = '1';
+      clearTimeout(el._t);
+      el._t = setTimeout(() => { el.style.opacity = '0'; }, 2800);
+    }
+
+    function deepLink(uri) {
+      showToast('已发出跨工具 Deep-Link：' + uri);
+    }
+
+    function switchView(view) {
+      state.view = view;
+      ['board', 'audit', 'publish'].forEach(v => {
+        document.getElementById('view-' + v).classList.toggle('hidden', v !== view);
+        const tab = document.getElementById('tab' + v.charAt(0).toUpperCase() + v.slice(1));
+        tab.className = v === view
+          ? 'px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer accent-bg'
+          : 'px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer muted-txt';
+      });
+      document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('active'));
+      const map = { board: 'rail-board', audit: 'rail-i18n', publish: 'rail-publish' };
+      document.getElementById(map[view])?.classList.add('active');
+    }
+
+    function railAction(targetView, btn) {
+      if (state.hintMode) {
+        showHintForEl(btn);
+        return;
+      }
+      switchView(targetView);
+    }
+
+    function toggleLeftDrawer() { document.getElementById('leftDrawer').classList.toggle('hidden'); }
+    function toggleRightDrawer() { document.getElementById('rightDrawer').classList.toggle('hidden'); }
+    function dismissFallback(msg) { document.getElementById('fallbackBanner').classList.add('hidden'); showToast(msg); }
+
+    function setTheme(theme) {
+      document.getElementById('shell').setAttribute('data-theme', theme);
+    }
+
+    function setLocale(loc) {
+      state.locale = loc;
+      const d = i18nDict[loc] || i18nDict['zh-Hans'];
+      document.getElementById('appName').textContent = d.appName;
+      document.getElementById('boardTitle').textContent = d.boardTitle;
+      document.getElementById('boardSub').textContent = d.boardSub;
+      document.getElementById('lblProjectTree').textContent = d.tree;
+      document.getElementById('statusLocale').textContent = '语言: ' + loc;
+      showToast('已即时切换至 ' + loc + '（无需重启 App，零缺词）');
+    }
+
+    function setPosture(p) {
+      const frame = document.getElementById('workspaceFrame');
+      const left = document.getElementById('leftDrawer');
+      const right = document.getElementById('rightDrawer');
+      const hinge = document.getElementById('hingeGutter');
+      frame.classList.remove('posture-folded', 'posture-unfolded');
+      hinge.classList.add('hidden');
+      if (p === 'folded') {
+        frame.classList.add('posture-folded');
+        left.classList.add('hidden');
+        right.classList.add('hidden');
+        document.getElementById('statusPosture').textContent = '姿态: iPhone Duo 折叠态 (SinglePaneCompact)';
+      } else if (p === 'unfolded') {
+        frame.classList.add('posture-unfolded');
+        left.classList.remove('hidden');
+        right.classList.add('hidden');
+        hinge.classList.remove('hidden');
+        document.getElementById('statusPosture').textContent = '姿态: iPhone Duo 展开态 (DualPaneAcrossHinge · 铰链避让)';
+      } else {
+        left.classList.remove('hidden');
+        right.classList.remove('hidden');
+        document.getElementById('statusPosture').textContent = '姿态: iPad / MacBook 宽屏 (DesktopTouchHybrid)';
+      }
+    }
+
+    function toggleHintMode() {
+      state.hintMode = !state.hintMode;
+      const btn = document.getElementById('hintModeBtn');
+      const shell = document.getElementById('shell');
+      shell.classList.toggle('hint-mode-active', state.hintMode);
+      btn.className = state.hintMode
+        ? 'px-2 py-1 rounded-md accent-bg text-xs font-medium flex items-center gap-1 cursor-pointer'
+        : 'px-2 py-1 rounded-md elevated-bg border text-xs font-medium flex items-center gap-1 cursor-pointer';
+      showToast(state.hintMode ? '提示探索模式已开启：单击任意虚线框图标可预览 Hint 说明而不执行' : '提示探索模式已关闭');
+    }
+
+    function setBoardFilter(f) {
+      state.boardFilter = f;
+      ['all', 'diverge', 'ai'].forEach(k => {
+        const el = document.getElementById('flt-' + k);
+        el.className = k === f ? 'px-2 py-1 rounded text-xs cursor-pointer accent-bg' : 'px-2 py-1 rounded text-xs cursor-pointer muted-txt';
+      });
+      renderBoard();
+    }
+
+    function toggleCompactBoard() {
+      state.compactBoard = !state.compactBoard;
+      document.getElementById('compactToggleBtn').textContent = state.compactBoard ? '双轨卡片视图' : '大纲紧凑视图';
+      renderBoard();
+    }
+
+    function moveChapter(idx, dir) {
+      const target = idx + dir;
+      if (target < 0 || target >= state.chapters.length) return;
+      [state.chapters[idx], state.chapters[target]] = [state.chapters[target], state.chapters[idx]];
+      renderBoard();
+      showToast('已原子重排章节并同步写入 .prj 与 outline/toc.xml（S2/S3 引用 0 断链）');
+    }
+
+    function addChapter() {
+      const n = state.chapters.length + 1;
+      const id = 'ch' + String(n).padStart(3, '0');
+      state.chapters.push({
+        id, title: `第 ${n} 话：新连载章节`, status: 'outline',
+        mangaStage: '待开工 (0/24页)', mangaProgress: 0, mangaAiReady: false,
+        novelWords: 0, novelLocked: false, novelIllust: 'hybrid',
+        scenes: ['sc001_opening.md'], divergenceNote: ''
+      });
+      state.selectedChapterId = id;
+      renderBoard();
+      renderInspector();
+      showToast(`已创建 ${id} 并更新 StarlightBlade.prj`);
+    }
+
+    function selectChapter(id) {
+      state.selectedChapterId = id;
+      renderBoard();
+      renderInspector();
+    }
+
+    function updateDivergence(val) {
+      const ch = state.chapters.find(c => c.id === state.selectedChapterId);
+      if (ch) {
+        ch.divergenceNote = val;
+        renderBoard();
+      }
+    }
+
+    function renderBoard() {
+      const tree = document.getElementById('treeChapterList');
+      tree.innerHTML = state.chapters.map(c => `
+        <li onclick="selectChapter('${c.id}')" class="px-2 py-1 rounded-md cursor-pointer flex items-center justify-between ${c.id === state.selectedChapterId ? 'accent-soft font-medium' : 'muted-txt hover:text-[var(--ui-fg)]'}">
+          <span class="truncate">${c.id} ${c.title.replace(/^第 \d+ 话：/, '')}</span>
+          ${c.divergenceNote ? '<span class="w-1.5 h-1.5 rounded-full bg-[#A855F7] shrink-0"></span>' : ''}
+        </li>
+      `).join('');
+
+      const list = state.chapters.filter(c => {
+        if (state.boardFilter === 'diverge') return !!c.divergenceNote;
+        if (state.boardFilter === 'ai') return c.mangaAiReady;
+        return true;
+      });
+
+      const wrap = document.getElementById('chapterCards');
+      if (state.compactBoard) {
+        wrap.innerHTML = `<div class="rounded-xl border panel-bg overflow-x-auto"><table class="w-full text-left text-xs">
+          <thead><tr class="elevated-bg border-b border-[var(--ui-border)]"><th class="p-2.5">章节</th><th class="p-2.5">漫画轨 (S2)</th><th class="p-2.5">小说轨 (S3)</th><th class="p-2.5">分歧</th><th class="p-2.5">操作</th></tr></thead>
+          <tbody class="divide-y divide-[var(--ui-border)]">${list.map((c, idx) => `
+            <tr onclick="selectChapter('${c.id}')" class="cursor-pointer ${c.id === state.selectedChapterId ? 'accent-soft' : ''}">
+              <td class="p-2.5 font-medium">${c.id} · ${c.title}</td>
+              <td class="p-2.5 text-[#2DD4BF]">${c.mangaStage}</td>
+              <td class="p-2.5 text-[#F59E0B]">${c.novelWords.toLocaleString()} 字 ${c.novelLocked ? '🔒' : ''}</td>
+              <td class="p-2.5">${c.divergenceNote ? '<span class="px-1.5 py-0.5 rounded text-xs" style="background:rgba(168,85,247,0.16);color:#A855F7">✦ 有分歧</span>' : '<span class="muted-txt">—</span>'}</td>
+              <td class="p-2.5 space-x-1"><button onclick="event.stopPropagation();moveChapter(${idx},-1)" class="px-1.5 py-0.5 rounded elevated-bg border cursor-pointer">↑</button><button onclick="event.stopPropagation();moveChapter(${idx},1)" class="px-1.5 py-0.5 rounded elevated-bg border cursor-pointer">↓</button></td>
+            </tr>`).join('')}
+          </tbody></table></div>`;
+        return;
+      }
+
+      wrap.innerHTML = list.map((c, idx) => `
+        <div onclick="selectChapter('${c.id}')" class="p-3.5 rounded-xl border panel-bg transition cursor-pointer ${c.id === state.selectedChapterId ? 'ring-1 ring-[#4F7CFF]' : ''}">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div class="flex items-center gap-2">
+              <div class="flex gap-1">
+                <button onclick="event.stopPropagation();moveChapter(${idx},-1)" class="px-1.5 py-0.5 rounded elevated-bg border muted-txt hover:text-[var(--ui-fg)] cursor-pointer" title="上移章节">↑</button>
+                <button onclick="event.stopPropagation();moveChapter(${idx},1)" class="px-1.5 py-0.5 rounded elevated-bg border muted-txt hover:text-[var(--ui-fg)] cursor-pointer" title="下移章节">↓</button>
+              </div>
+              <span class="font-mono text-xs px-1.5 py-0.5 rounded elevated-bg border">${c.id}</span>
+              <span class="font-semibold text-sm">${c.title}</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              ${c.mangaAiReady ? '<span class="px-2 py-0.5 rounded-full text-xs elevated-bg border muted-txt">✨ AI 参考就绪</span>' : ''}
+              ${c.divergenceNote ? '<span class="px-2 py-0.5 rounded-full text-xs font-medium" style="background:rgba(168,85,247,0.16);color:#A855F7">✦ 有意分歧 ×1</span>' : ''}
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <!-- Manga Track -->
+            <div class="p-3 rounded-lg border space-y-2.5" style="background:rgba(45,212,191,0.06);border-color:rgba(45,212,191,0.28)">
+              <div class="flex items-center justify-between">
+                <span class="font-medium text-[#2DD4BF]">🎨 漫画轨 · S2 雕龙 (只读缩略)</span>
+                <span class="muted-txt">${c.mangaStage}</span>
+              </div>
+              <div class="grid grid-cols-3 gap-2">
+                ${[1,2,3].map(p => `<div class="h-14 rounded border border-[var(--ui-border)] elevated-bg flex flex-col items-center justify-center muted-txt">
+                  <svg class="w-5 h-5 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M3 10h18M12 10v11"/></svg>
+                  <span class="text-[11px] font-mono">p0${p}</span>
+                </div>`).join('')}
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex-1 h-1.5 rounded-full elevated-bg overflow-hidden"><div class="h-full bg-[#2DD4BF]" style="width:${c.mangaProgress}%"></div></div>
+                <button onclick="event.stopPropagation();deepLink('draconib://open?project=prj-sample-manga-001&chapter=${c.id}&detail=page=1')" class="px-2.5 py-1 rounded-md border text-xs font-medium cursor-pointer" style="border-color:rgba(45,212,191,0.45);color:#2DD4BF">↗ 在雕龙中打开</button>
+              </div>
+            </div>
+
+            <!-- Novel Track -->
+            <div class="p-3 rounded-lg border space-y-2.5" style="background:rgba(245,158,11,0.06);border-color:rgba(245,158,11,0.28)">
+              <div class="flex items-center justify-between">
+                <span class="font-medium text-[#F59E0B]">✍ 轻小说轨 · S3 文心 (独立终稿)</span>
+                <span class="${c.novelLocked ? 'text-[#22C55E]' : 'muted-txt'}">${c.novelLocked ? '🔒 人工锁定' : '草稿中'}</span>
+              </div>
+              <div class="flex items-baseline justify-between py-2">
+                <div>
+                  <span class="text-xl font-bold tabular-nums">${c.novelWords.toLocaleString()}</span>
+                  <span class="muted-txt ml-1">字 (zh-Hans)</span>
+                </div>
+                <span class="px-2 py-0.5 rounded-md elevated-bg border text-xs">插图策略: <span class="font-mono">${c.novelIllust}</span></span>
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <span class="muted-txt text-xs">decoupledFromManga="true"</span>
+                <button onclick="event.stopPropagation();deepLink('litteracore://open?project=prj-sample-manga-001&chapter=${c.id}&detail=locale=zh-Hans')" class="px-2.5 py-1 rounded-md border text-xs font-medium cursor-pointer" style="border-color:rgba(245,158,11,0.45);color:#F59E0B">↗ 在文心中打开</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderInspector() {
+      const ch = state.chapters.find(c => c.id === state.selectedChapterId) || state.chapters[0];
+      document.getElementById('inspectorContent').innerHTML = `
+        <div class="p-2.5 rounded-lg elevated-bg border space-y-1.5">
+          <div class="font-semibold">📄 章节元信息 (chapter.xml)</div>
+          <div class="flex justify-between"><span class="muted-txt">章节 ID</span><span class="font-mono">${ch.id}</span></div>
+          <div class="flex justify-between"><span class="muted-txt">当前状态</span><span class="font-mono text-[#4F7CFF]">${ch.status}</span></div>
+          <div class="flex justify-between"><span class="muted-txt">插图模式</span><span class="font-mono">${ch.novelIllust}</span></div>
+        </div>
+
+        <div class="p-2.5 rounded-lg elevated-bg border space-y-1.5">
+          <div class="font-semibold flex justify-between"><span>🎬 分场清单 (scenes/)</span><span class="muted-txt">${ch.scenes.length}</span></div>
+          <ul class="space-y-1 font-mono muted-txt">
+            ${ch.scenes.map(s => `<li>• ${s}</li>`).join('')}
+          </ul>
+        </div>
+
+        <div class="p-2.5 rounded-lg border space-y-1.5" style="background:rgba(168,85,247,0.08);border-color:rgba(168,85,247,0.35)">
+          <div class="font-semibold text-[#A855F7]">✦ &lt;DivergenceNote&gt; 有意分歧说明</div>
+          <textarea oninput="updateDivergence(this.value)" rows="3" placeholder="记录小说版与漫画版的刻意改编差异，场记 AI 将豁免误报..." class="w-full p-2 rounded-md elevated-bg border text-xs outline-none focus:border-[#A855F7]">${ch.divergenceNote}</textarea>
+        </div>
+      `;
+    }
+
+    function setAuditFilter(f) {
+      state.auditFilter = f;
+      ['all', 'missing', 'overflow', 'unlocked'].forEach(k => {
+        document.getElementById('aflt-' + k).className = k === f
+          ? 'px-2.5 py-1 rounded-md text-xs accent-bg cursor-pointer'
+          : 'px-2.5 py-1 rounded-md text-xs elevated-bg border cursor-pointer';
+      });
+      renderAudit();
+    }
+
+    function toggleCellLock(rowIdx, col) {
+      const cell = state.auditRows[rowIdx][col];
+      cell.lock = !cell.lock;
+      renderAudit();
+      showToast(`${state.auditRows[rowIdx].key} [${col}] 已切换为 ${cell.lock ? 'locked="true" 人工保护' : 'AUTO 可自动补全'}`);
+    }
+
+    function autoFillUnlocked() {
+      let updated = 0, skipped = 0;
+      state.auditRows.forEach(r => {
+        ['zhHant', 'yue', 'es'].forEach(col => {
+          if (r[col].lock) { skipped++; return; }
+          if (!r[col].t) {
+            r[col].t = col === 'zhHant' ? '小心塔樓上方！' : '小心塔樓上面！';
+            updated++;
+          } else if (col === 'es' && r[col].t.length > r[col].max) {
+            r[col].t = '¡Cuidado encima de la torre!';
+            updated++;
+          }
+        });
+      });
+      renderAudit();
+      showToast(`安全补全完成：更新 ${updated} 项未锁定/超长译文，严格跳过 ${skipped} 项人工锁定行 🔒`);
+    }
+
+    function simulateImport() {
+      document.getElementById('importStatus').innerHTML = '已扫描 <strong>12 张画稿 (ch002_p01..12.psd → 移交 S2 雕龙)</strong> 与 <strong>2 篇文案 (ch002_zh.md, ch002_en.md → 移交 S3 文心)</strong>，CPFF 正则映射 100% 匹配！';
+      document.getElementById('handoffBtn').classList.remove('hidden');
+    }
+
+    function confirmHandoff() {
+      document.getElementById('handoffBtn').classList.add('hidden');
+      document.getElementById('importStatus').innerHTML = '<span class="text-[#22C55E]">✓ 已生成 Import Handoff 清单并触发 S2/S3 写权签收入库，S1 零越界写盘。</span>';
+      showToast('批量导入 Handoff 已安全完成！');
+    }
+
+    function renderAuditCell(rowIdx, col, cell) {
+      const overflow = cell.max && cell.t.length > cell.max;
+      if (!cell.t) {
+        return `<td class="p-2.5"><span class="px-2 py-0.5 rounded text-xs" style="background:rgba(244,63,94,0.16);color:#F43F5E">⚠ 缺失译文</span></td>`;
+      }
+      return `<td class="p-2.5 align-top">
+        <div class="mb-1">${cell.t}</div>
+        <div class="flex items-center gap-1">
+          <button onclick="toggleCellLock(${rowIdx},'${col}')" class="px-1.5 py-0.5 rounded text-[11px] cursor-pointer ${cell.lock ? 'text-[#22C55E]' : 'text-[#4F7CFF]'}" style="background:${cell.lock ? 'rgba(34,197,94,0.14)' : 'rgba(79,124,255,0.14)'}">${cell.lock ? '🔒 Locked' : 'AUTO'}</button>
+          ${overflow ? `<span class="px-1.5 py-0.5 rounded text-[11px] font-mono text-[#F43F5E]" style="background:rgba(244,63,94,0.15)">${cell.t.length}/${cell.max} 超长</span>` : ''}
+        </div>
+      </td>`;
+    }
+
+    function renderAudit() {
+      const rows = state.auditRows.map((r, i) => ({ r, i })).filter(({ r }) => {
+        if (state.auditFilter === 'missing') return !r.zhHant.t || !r.yue.t;
+        if (state.auditFilter === 'overflow') return r.es.t.length > r.es.max;
+        if (state.auditFilter === 'unlocked') return !r.zhHant.lock || !r.yue.lock || !r.es.lock;
+        return true;
+      });
+      document.getElementById('auditTableBody').innerHTML = rows.map(({ r, i }) => `
+        <tr>
+          <td class="p-2.5 align-top"><div class="font-mono font-medium">${r.key}</div><div class="muted-txt">${r.speaker}</div></td>
+          ${renderAuditCell(i, 'en', r.en)}
+          ${renderAuditCell(i, 'zhHans', r.zhHans)}
+          ${renderAuditCell(i, 'zhHant', r.zhHant)}
+          ${renderAuditCell(i, 'yue', r.yue)}
+          ${renderAuditCell(i, 'es', r.es)}
+        </tr>
+      `).join('');
+    }
+
+    function toggleEditionLang(eIdx, lIdx) {
+      state.editions[eIdx].langs[lIdx] = !state.editions[eIdx].langs[lIdx];
+      renderPublish();
+    }
+
+    function renderPublish() {
+      let total = 0;
+      document.getElementById('editionMatrixBody').innerHTML = state.editions.map((ed, ei) => {
+        ed.langs.forEach(v => { if (v) total++; });
+        return `<tr>
+          <td class="p-2.5 text-left"><div class="font-medium">${ed.name}</div><div class="muted-txt text-[11px]">${ed.meta}</div></td>
+          ${ed.langs.map((v, li) => `<td class="p-2"><input type="checkbox" ${v ? 'checked' : ''} onchange="toggleEditionLang(${ei},${li})" class="w-4 h-4 accent-[#4F7CFF] cursor-pointer" /></td>`).join('')}
+        </tr>`;
+      }).join('');
+      document.getElementById('selectedPkgCount').textContent = `已选 ${total} 个发行包`;
+      document.getElementById('gitTimeline').innerHTML = state.commits.map((c, idx) => `
+        <li class="flex items-start gap-2">
+          <span class="mt-1 w-2 h-2 rounded-full shrink-0 ${idx === 0 ? 'bg-[#4F7CFF]' : 'bg-[var(--ui-border)]'}"></span>
+          <div class="min-w-0 flex-1">
+            <div class="font-medium truncate">${c.msg}</div>
+            <div class="muted-txt text-[11px] flex justify-between"><span>${c.time}</span><span class="font-mono">${c.tag}</span></div>
+          </div>
+        </li>
+      `).join('');
+    }
+
+    function runBuildPackages() {
+      const wrap = document.getElementById('buildProgressWrap');
+      const bar = document.getElementById('buildBar');
+      const pct = document.getElementById('buildPct');
+      const txt = document.getElementById('buildStepText');
+      wrap.classList.remove('hidden');
+      const steps = [
+        [25, '校验 CPFF v1.0 声明与 5 语气泡容量...'],
+        [55, '调度 S2 内核生成 600DPI 印刷页与条漫无缝切片...'],
+        [85, '调度 S3 出版内核打包 EPUB3 并运行 epubcheck...'],
+        [100, '全部发行包已输出至 dist/（零污染源稿）✓']
+      ];
+      steps.forEach(([p, msg], i) => {
+        setTimeout(() => {
+          bar.style.width = p + '%'; pct.textContent = p + '%'; txt.textContent = msg;
+          if (p === 100) showToast('多发行版构建全部成功！输出目录：dist/');
+        }, i * 450);
+      });
+    }
+
+    function commitSnapshot(push) {
+      const msg = document.getElementById('commitMsgInput').value.trim() || '保存创作快照';
+      state.commits.unshift({ time: '刚刚', msg, tag: push ? 'Pushed · LFS ✓' : 'Local Snapshot' });
+      document.getElementById('commitMsgInput').value = '';
+      renderPublish();
+      showToast(push ? '已保存版本快照并同步推送至远端 Git+LFS 仓库！' : '已保存本地版本快照');
+    }
+
+    function copyTranslatorCmd() {
+      showToast('已复制：GIT_LFS_SKIP_SMUDGE=1 git clone <repo>（译者免下大画稿）');
+    }
+
+    // Unified 4-Element Hover / Hint-Mode Popover
+    const pop = document.getElementById('hintPopover');
+    function showHintForEl(el) {
+      const title = el.getAttribute('data-hint-title');
+      if (!title) return;
+      document.getElementById('hintTitle').textContent = title;
+      document.getElementById('hintDesc').textContent = el.getAttribute('data-hint-desc') || '';
+      document.getElementById('hintKey').textContent = el.getAttribute('data-hint-key') || '';
+      const r = el.getBoundingClientRect();
+      let left = r.right + 10;
+      let top = r.top;
+      if (left + 280 > window.innerWidth) left = Math.max(8, r.left - 282);
+      if (top + 88 > window.innerHeight) top = Math.max(8, window.innerHeight - 96);
+      pop.style.left = left + 'px';
+      pop.style.top = top + 'px';
+      pop.classList.add('visible');
+    }
+    function hideHint() { pop.classList.remove('visible'); }
+
+    document.addEventListener('mouseover', e => {
+      const el = e.target.closest('[data-hint-title]');
+      if (el) showHintForEl(el);
+    });
+    document.addEventListener('mouseout', e => {
+      const el = e.target.closest('[data-hint-title]');
+      if (el) hideHint();
+    });
+
+    // Init
+    switchView('board');
+    renderBoard();
+    renderInspector();
+    renderAudit();
+    renderPublish();
+  </script>
+</body>
+</html>
