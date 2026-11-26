@@ -1,7 +1,13 @@
 .DEFAULT_GOAL := help
 
 .PHONY: help sync sync-force build-rust xcode run-mac run-ipad run-duo check push status \
-        gonext relay-watch relay-status relay-install-agent relay-uninstall-agent
+        gonext relay-watch relay-status relay-install-agent relay-uninstall-agent relay-stop relay-resume
+
+# Default safety budgets for automated GoNext watch / background LaunchAgent
+INTERVAL   ?= 30
+MAX_MIN    ?= 60
+MAX_ORDERS ?= 10
+MAX_FAILS  ?= 3
 
 help:
 	@./scripts/dev.sh help
@@ -18,11 +24,15 @@ help:
 	@echo "  make push MSG=\"feat: ...\"      Run 'make check', commit, pull --rebase, and push to origin"
 	@echo "  make status                    Show git status and XCFramework freshness"
 	@echo ""
-	@echo "Cloud <-> Local Mac GoNext Relay:"
+	@echo "Cloud <-> Local Mac GoNext Relay (Guarded Auto-Mode):"
 	@echo "  make gonext                    Fixed command: pull & run pending GoNext orders, push paired results"
-	@echo "  make relay-status              Show chronological GoNext order/result table & LaunchAgent state"
-	@echo "  make relay-watch               Foreground polling loop (every 30s) for automatic GoNext execution"
-	@echo "  make relay-install-agent       Install macOS launchd background LaunchAgent (every 60s)"
+	@echo "  make relay-status              Show order/result log, pause/circuit-breaker state & remaining budget"
+	@echo "  make relay-watch [MAX_MIN=60 MAX_ORDERS=10 MAX_FAILS=3 INTERVAL=30]"
+	@echo "                                 Guarded foreground auto-watch (finishes active order & stops at limit)"
+	@echo "  make relay-install-agent [MAX_MIN=60 MAX_ORDERS=10 MAX_FAILS=3 INTERVAL=60]"
+	@echo "                                 Install guarded macOS launchd background agent (auto-unloads at limit)"
+	@echo "  make relay-stop                Emergency stop: halt watch/agent & lock local relay until resumed"
+	@echo "  make relay-resume              Clear local pause/circuit-breaker lock to re-enable GoNext"
 	@echo "  make relay-uninstall-agent     Remove macOS launchd background LaunchAgent"
 
 sync:
@@ -56,16 +66,22 @@ status:
 	@./scripts/dev.sh status
 
 gonext:
-	@./scripts/mac_relay.sh run-once
+	@./scripts/mac_relay.sh run-once --max-fails "$(MAX_FAILS)"
 
 relay-status:
 	@./scripts/mac_relay.sh status
 
 relay-watch:
-	@./scripts/mac_relay.sh watch
+	@./scripts/mac_relay.sh watch --interval "$(INTERVAL)" --max-minutes "$(MAX_MIN)" --max-orders "$(MAX_ORDERS)" --max-fails "$(MAX_FAILS)"
 
 relay-install-agent:
-	@./scripts/mac_relay.sh install-agent
+	@./scripts/mac_relay.sh install-agent --interval "$(if $(filter 30,$(INTERVAL)),60,$(INTERVAL))" --max-minutes "$(MAX_MIN)" --max-orders "$(MAX_ORDERS)" --max-fails "$(MAX_FAILS)"
 
 relay-uninstall-agent:
 	@./scripts/mac_relay.sh uninstall-agent
+
+relay-stop:
+	@./scripts/mac_relay.sh stop
+
+relay-resume:
+	@./scripts/mac_relay.sh resume

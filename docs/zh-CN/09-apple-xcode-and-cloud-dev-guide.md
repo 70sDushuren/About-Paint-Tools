@@ -121,5 +121,7 @@ flowchart LR
 - **云端发单**：每完成一个云端开发节点，通过 `python3 scripts/relay_tool.py new ...` 在 `ops/relay/orders/` 生成带时间戳的 JSON 声明式任务单（`<YYYYMMDD-HHMMSS>_<slug>.json`），仅允许声明预审白名单内的安全动作（`env-info`、`build-rust`、`xcode-gen`、`build-mac`、`build-ipad`、`build-duo`、`test-mac`、`test-ipad`、`launch-mac`、`open-xcode`、`check`），严禁任意 Shell 注入。
 - **MacBook 固定执行与回执**：在本地只需执行固定命令 **`make gonext`**（或开启前台轮询 `make relay-watch` / macOS 后台定时服务 `make relay-install-agent`），自动按时间顺序执行未完成任务单，并将退出码、耗时与精简日志写入同名配对回执 `ops/relay/results/<YYYYMMDD-HHMMSS>_<slug>.result.md` 后自动推回 `origin/main`。
 - **完整审计日志与闭环修复**：`orders/` 与 `results/` 按时间戳一一配对永久保留在 Git 历史中；云端拉取回执后若见 `PASS` 则推进下一阶段，若见 `FAIL` 则直接读取裁剪日志修复并派发下一张 `GoNext` 任务单。
+- **防死循环熔断与时限/次数护栏**：两端均支持独立预算——Mac 端启动 `make relay-watch MAX_MIN=60 MAX_ORDERS=10 MAX_FAILS=3`（或 `make relay-install-agent`）后，若到达总时长/总单数上限，会**优雅完成当前正在执行的最后 1 单并推回回执**后自动退出并弹出系统通知；若出现连续 `MAX_FAILS` 次失败或连续 2 次相同错误指纹（`DUPLICATE_ERROR_LOOP`），立刻自动熔断锁定，需人工核查并执行 `make relay-resume` 恢复；任何时刻可本地 `make relay-stop` 或云端写入 `ops/relay/PAUSE` 一键双向急停。
+
 
 

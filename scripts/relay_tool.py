@@ -3,18 +3,23 @@
 Cloud & CI companion tool for the About-Paint-Tools `GoNext` GitOps Relay.
 
 Subcommands:
-  new       Create a validated timestamped order in ops/relay/orders/
-  validate  Validate all order files against schema & strict action allowlist
-  list      Display chronological order/result pairing table
-  pending   Print pending order file paths in chronological order (used by mac_relay.sh)
-  wait      Poll origin/main until a specific order's paired result.md arrives
+  new          Create a validated timestamped order in ops/relay/orders/
+  validate     Validate all order files against schema & strict action allowlist
+  list         Display chronological order/result pairing table
+  pending      Print pending order file paths in chronological order (used by mac_relay.sh)
+  dump-steps   Validate an order and print allowlisted actions line-by-line
+  meta         Read a single metadata field from an order JSON
+  guard-check  Audit recent receipts for consecutive failures, duplicate error loops,
+               order-count cap, or remote PAUSE kill switch (exit 42 when tripped)
+  wait         Poll origin/main until a specific order's paired result.md arrives,
+               bounded strictly by --timeout and --max-polls
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
-import os
 import re
 import subprocess
 import sys
@@ -25,6 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RELAY_DIR = ROOT / "ops" / "relay"
 ORDERS_DIR = RELAY_DIR / "orders"
 RESULTS_DIR = RELAY_DIR / "results"
+PAUSE_FILE = RELAY_DIR / "PAUSE"
 
 ALLOWED_ACTIONS = (
     "env-info",
@@ -106,6 +112,12 @@ def list_order_files() -> list[Path]:
     return sorted(ORDERS_DIR.glob("*.json"))
 
 
+def list_result_files() -> list[Path]:
+    if not RESULTS_DIR.is_dir():
+        return []
+    return sorted(RESULTS_DIR.glob("*.result.md"))
+
+
 def result_path_for(order_id: str) -> Path:
     return RESULTS_DIR / f"{order_id}.result.md"
 
@@ -116,6 +128,31 @@ def parse_result_status(result_path: Path) -> str:
     text = result_path.read_text(encoding="utf-8", errors="replace")
     m = re.search(r"^status:\s*([A-Z_]+)\s*$", text, flags=re.MULTILINE)
     return m.group(1) if m else "DONE"
+
+
+def extract_failure_signature(result_path: Path) -> str:
+    """Extracts a stable fingerprint of the failing step + key error lines for duplicate-loop detection."""
+    text = result_path.read_text(encoding="utf-8", errors="replace")
+    failed_step = re.search(
+        r"^\|\s*\d+\s*\|\s*`([^`]+)`\s*\|\s*\*\*FAIL\*\*\s*\|\s*[^|]+\|\s*(\d+)\s*\|",
+        text,
+        flags=re.MULTILINE,
+    )
+    action = failed_step.group(1) if failed_step else "unknown"
+    exit_code = failed_step.group(2) if failed_step else "unknown"
+
+    # Extract concise diagnostic error lines from the failing details block, stripping volatile timestamps/paths.
+    error_lines: list[str] = []
+    for line in text.splitlines():
+        low = line.lower()
+        if any(tok in low for tok in ("error:", "undefined symbols", "build failed", "panic", "fatal:", "security error")):
+            cleaned = re.sub(r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d+)?Z?", "<TS>", line.strip())
+            cleaned = re.sub(r"0x[0-9a-fA-F]+", "<HEX>", cleaned)
+            cleaned = re.sub(r"/Users/[^/\s]+", "/Users/<USER>", cleaned)
+            error_lines.append(cleaned)
+    core = "\n".join(error_lines[-5:]) if error_lines else f"{action}:{exit_code}"
+    digest = hashlib.sha256(f"{action}|{exit_code}|{core}".encode("utf-8")).hexdigest()[:12]
+    return f"{action}(exit={exit_code}):{digest}"
 
 
 def cmd_new(args: argparse.Namespace) -> int:
@@ -206,6 +243,8 @@ def cmd_list(_args: argparse.Namespace) -> int:
         title = data.get("title", "")
         status = parse_result_status(result_path_for(order_id))
         print(f"{order_id:<42} {milestone:<10} {status:<10} {title}")
+    if PAUSE_FILE.exists():
+        print("\n[PAUSED] Remote kill switch ops/relay/PAUSE is active.")
     return 0
 
 
@@ -240,21 +279,111 @@ def cmd_meta(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_guard_check(args: argparse.Namespace) -> int:
+    """Audits relay receipts for circuit-breaker triggers (exit 42 if tripped)."""
+    reasons: list[str] = []
+    if PAUSE_FILE.exists():
+        pause_note = PAUSE_FILE.read_text(encoding="utf-8", errors="replace").strip()
+        reasons.append(f"REMOTE_PAUSE: ops/relay/PAUSE is present ({pause_note or 'no reason'})")
+
+    results = list_result_files()
+    if args.since_order:
+        results = [r for r in results if r.name.replace(".result.md", "") >= args.since_order]
+
+    total_in_scope = len(results)
+    if args.max_orders > 0 and total_in_scope >= args.max_orders:
+        reasons.append(
+            f"MAX_ORDERS_REACHED: processed {total_in_scope} >= limit {args.max_orders}"
+        )
+
+    consecutive_failures = 0
+    recent_fail_sigs: list[str] = []
+    for r in reversed(results):
+        st = parse_result_status(r)
+        if st == "FAIL":
+            consecutive_failures += 1
+            if len(recent_fail_sigs) < 2:
+                recent_fail_sigs.append(extract_failure_signature(r))
+        else:
+            break
+
+    if args.max_consecutive_failures > 0 and consecutive_failures >= args.max_consecutive_failures:
+        reasons.append(
+            f"MAX_CONSECUTIVE_FAILURES: {consecutive_failures} consecutive FAIL receipts "
+            f"(limit={args.max_consecutive_failures})"
+        )
+
+    duplicate_loop = (
+        args.detect_duplicate_error
+        and len(recent_fail_sigs) >= 2
+        and recent_fail_sigs[0] == recent_fail_sigs[1]
+    )
+    if duplicate_loop:
+        reasons.append(
+            f"DUPLICATE_ERROR_LOOP: last 2 consecutive failures have identical error signature "
+            f"'{recent_fail_sigs[0]}'"
+        )
+
+    summary = {
+        "tripped": bool(reasons),
+        "remote_paused": PAUSE_FILE.exists(),
+        "total_results_in_scope": total_in_scope,
+        "consecutive_failures": consecutive_failures,
+        "recent_fail_signatures": recent_fail_sigs,
+        "reasons": reasons,
+    }
+
+    if args.json:
+        print(json.dumps(summary, indent=2, ensure_ascii=False))
+    else:
+        if reasons:
+            print("CIRCUIT_BREAKER_TRIPPED:")
+            for reason in reasons:
+                print(f"  - {reason}")
+        else:
+            print(
+                f"GUARD_OK: results_in_scope={total_in_scope}, "
+                f"consecutive_failures={consecutive_failures}/{args.max_consecutive_failures}, "
+                f"remote_paused=false"
+            )
+
+    return 42 if reasons else 0
+
+
 def cmd_wait(args: argparse.Namespace) -> int:
     order_id = args.order_id
     branch = args.branch
-    deadline = time.time() + args.timeout
+    start_ts = time.time()
+    deadline = start_ts + args.timeout
+    max_polls = args.max_polls if args.max_polls > 0 else max(1, (args.timeout + args.interval - 1) // args.interval)
     rel_result = f"ops/relay/results/{order_id}.result.md"
     print(
         f"==> Waiting for Mac receipt '{rel_result}' on origin/{branch} "
-        f"(timeout={args.timeout}s, interval={args.interval}s)..."
+        f"(timeout={args.timeout}s, max_polls={max_polls}, interval={args.interval}s)..."
     )
+    poll = 0
     while True:
+        poll += 1
+        if PAUSE_FILE.exists():
+            print("PAUSED: ops/relay/PAUSE detected; aborting wait immediately.", file=sys.stderr)
+            return 42
+
         subprocess.run(
             ["git", "fetch", "origin", branch, "--quiet"],
             cwd=ROOT,
             check=False,
         )
+        # Check if remote added ops/relay/PAUSE
+        remote_pause = subprocess.run(
+            ["git", "cat-file", "-e", f"origin/{branch}:ops/relay/PAUSE"],
+            cwd=ROOT,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if remote_pause.returncode == 0:
+            print("PAUSED: remote ops/relay/PAUSE detected on origin; stopping wait.", file=sys.stderr)
+            return 42
+
         check = subprocess.run(
             ["git", "cat-file", "-e", f"origin/{branch}:{rel_result}"],
             cwd=ROOT,
@@ -268,13 +397,14 @@ def cmd_wait(args: argparse.Namespace) -> int:
                 check=True,
             )
             res_path = ROOT / rel_result
-            print(f"OK: Receipt received -> {rel_result}\n")
+            print(f"OK: Receipt received after {int(time.time() - start_ts)}s (poll {poll}/{max_polls}) -> {rel_result}\n")
             print(res_path.read_text(encoding="utf-8", errors="replace"))
             return 0 if parse_result_status(res_path) == "PASS" else 1
 
-        if time.time() >= deadline:
+        if poll >= max_polls or time.time() >= deadline:
             print(
-                f"TIMEOUT: Receipt '{rel_result}' did not arrive within {args.timeout}s.",
+                f"TIMEOUT: Receipt '{rel_result}' did not arrive within {args.timeout}s "
+                f"({poll}/{max_polls} polls). Pausing automatically for user confirmation.",
                 file=sys.stderr,
             )
             return 124
@@ -317,11 +447,29 @@ def main() -> int:
     p_meta.add_argument("field")
     p_meta.set_defaults(func=cmd_meta)
 
+    p_guard = sub.add_parser(
+        "guard-check",
+        help="Check circuit-breaker rules (consecutive failures, duplicate error loop, order cap, PAUSE)",
+    )
+    p_guard.add_argument("--since-order", default="", help="Only count receipts with order_id >= this value")
+    p_guard.add_argument("--max-orders", type=int, default=0, help="Max receipts allowed in scope (0=unlimited)")
+    p_guard.add_argument("--max-consecutive-failures", type=int, default=3, help="Max trailing FAIL streak")
+    p_guard.add_argument(
+        "--no-duplicate-error-check",
+        dest="detect_duplicate_error",
+        action="store_false",
+        default=True,
+        help="Disable immediate trip on 2 identical consecutive failure signatures",
+    )
+    p_guard.add_argument("--json", action="store_true", help="Output JSON summary")
+    p_guard.set_defaults(func=cmd_guard_check)
+
     p_wait = sub.add_parser("wait", help="Poll origin until paired result.md arrives")
     p_wait.add_argument("order_id")
     p_wait.add_argument("--branch", default="main")
     p_wait.add_argument("--timeout", type=int, default=300)
     p_wait.add_argument("--interval", type=int, default=15)
+    p_wait.add_argument("--max-polls", type=int, default=0, help="Max poll iterations (0=auto from timeout/interval)")
     p_wait.set_defaults(func=cmd_wait)
 
     args = parser.parse_args()
