@@ -44,6 +44,7 @@ public struct AppleWorkspaceState: Sendable {
 public struct AppleWorkspaceShellView: View {
     @State private var state: AppleWorkspaceState
     @State private var hintModeActive: Bool = false
+    @State private var activeLocale: UiLocaleKind = .zhHans
     @State private var activeProjectDir: String
 
     public init(initialState: AppleWorkspaceState) {
@@ -62,6 +63,7 @@ public struct AppleWorkspaceShellView: View {
                 bottomStatusBar(layout: layout)
             }
             .background(shellChromeBackground)
+            .environment(\.locale, Locale(identifier: activeLocale.bcp47))
         }
     }
 
@@ -102,6 +104,26 @@ public struct AppleWorkspaceShellView: View {
                 modePicker
                     .frame(maxWidth: 250)
             }
+
+            // v0.8 Live In-App 5-Language Switcher (en / zh-Hans / zh-Hant / yue-Hant / es)
+            Menu {
+                ForEach(UiLocaleKind.allCases) { loc in
+                    Button {
+                        activeLocale = loc
+                    } label: {
+                        Text(loc == activeLocale ? "✓ \(loc.nativeLabel)" : loc.nativeLabel)
+                    }
+                }
+            } label: {
+                Text(activeLocale.shortBadge)
+                    .font(.caption.bold())
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(Color.secondary.opacity(0.18))
+                    .foregroundStyle(isDarkHeader ? .white : .primary)
+                    .clipShape(Capsule())
+            }
+            .accessibilityLabel("Switch App Language")
 
             // Decision #2: Global `?` Hint Mode toggle (tap any rail icon to inspect its 4-element Hint card)
             Button {
@@ -194,9 +216,11 @@ public struct AppleWorkspaceShellView: View {
             Text("·")
             Text("Platform: \(platformName(state.platform))")
             Text("·")
+            Text("Lang: \(activeLocale.bcp47)")
+            Text("·")
             Text("Budget: \(ramBudgetMb(for: state.activeSuiteApp)) MB")
             Spacer()
-            Text("CPFF v1.0 · MIT · v0.7.0 / T0.7-S4")
+            Text("CPFF v1.0 · MIT · v0.8.0 / T0.8-S4")
         }
         .font(.caption2.monospaced())
         .foregroundStyle(isDarkHeader ? Color.white.opacity(0.65) : .secondary)
@@ -209,11 +233,19 @@ public struct AppleWorkspaceShellView: View {
 
     private var modePicker: some View {
         Picker("Workspace", selection: $state.mode) {
-            Text(LocalizedStringKey("workspace.focus")).tag(StudioWorkspaceMode.focusIllustration)
-            Text(LocalizedStringKey("workspace.manga")).tag(StudioWorkspaceMode.mangaStudio)
-            Text(LocalizedStringKey("workspace.dual_studio")).tag(StudioWorkspaceMode.dualNovelManga)
+            Text(localizedCore("workspace.focus")).tag(StudioWorkspaceMode.focusIllustration)
+            Text(localizedCore("workspace.manga")).tag(StudioWorkspaceMode.mangaStudio)
+            Text(localizedCore("workspace.dual_studio")).tag(StudioWorkspaceMode.dualNovelManga)
         }
         .pickerStyle(.segmented)
+    }
+
+    private func localizedCore(_ key: String) -> String {
+        #if canImport(MangaCoreFFI)
+        return MangaErgonomicsEngine.translate(key: key, locale: activeLocale)
+        #else
+        return key
+        #endif
     }
 
     private var isDarkHeader: Bool {

@@ -77,6 +77,57 @@ public enum LayerBlendMode: UInt32, CaseIterable, Sendable {
     }
 }
 
+/// `v0.8` — Supported 5-language live runtime locales (`en`, `zh-Hans`, `zh-Hant`, `yue-Hant`, `es`).
+public enum UiLocaleKind: UInt32, CaseIterable, Sendable, Identifiable {
+    case en = 0
+    case zhHans = 1
+    case zhHant = 2
+    case yueHant = 3
+    case es = 4
+
+    public var id: UInt32 { rawValue }
+
+    public var bcp47: String {
+        switch self {
+        case .en: return "en"
+        case .zhHans: return "zh-Hans"
+        case .zhHant: return "zh-Hant"
+        case .yueHant: return "yue-Hant"
+        case .es: return "es"
+        }
+    }
+
+    public var shortBadge: String {
+        switch self {
+        case .en: return "EN"
+        case .zhHans: return "简中"
+        case .zhHant: return "繁中"
+        case .yueHant: return "粵語"
+        case .es: return "ES"
+        }
+    }
+
+    public var nativeLabel: String {
+        switch self {
+        case .en: return "English"
+        case .zhHans: return "简体中文"
+        case .zhHant: return "繁體中文"
+        case .yueHant: return "廣東話"
+        case .es: return "Español"
+        }
+    }
+}
+
+/// `v0.8` — Deterministic touch & stylus gesture actions mirrored from `gesture.rs`.
+public enum GestureActionKind: UInt32, Sendable {
+    case none = 0
+    case undo = 1
+    case redo = 2
+    case toggleRadialMenu = 3
+    case rejectPalm = 4
+    case panZoomCanvas = 5
+}
+
 /// Swift-side mirror of `MangaTargetPlatform` in `manga_core.h`.
 public enum TargetPlatformKind: UInt32, CaseIterable, Sendable {
     case ipadOs = 0
@@ -640,6 +691,64 @@ public enum MangaSuiteS4Gate {
         projectDir.withCString { cDir in
             manga_suite_run_t07_s4_gate(cDir) != 0
         }
+    }
+
+    public static func runT08S4(projectDir: String) -> Bool {
+        projectDir.withCString { cDir in
+            manga_suite_run_t08_s4_gate(cDir) != 0
+        }
+    }
+}
+
+/// `v0.8` — Apple Trio Touch/Stylus Gestures, Foldable Hinge Geometry & Live 5-Language Catalog.
+public enum MangaErgonomicsEngine {
+    public static func resolveGesture(
+        touchCount: UInt8,
+        durationMs: Float,
+        maxTravelPx: Float,
+        contactRadiusPx: Float,
+        stylusActive: Bool,
+        pencilSqueeze: Bool
+    ) -> GestureActionKind {
+        let code = manga_gesture_resolve(
+            touchCount,
+            durationMs,
+            maxTravelPx,
+            contactRadiusPx,
+            stylusActive ? 1 : 0,
+            pencilSqueeze ? 1 : 0
+        )
+        return GestureActionKind(rawValue: code) ?? .none
+    }
+
+    public static func computeFoldablePanes(
+        viewportWidthDp: Float,
+        posture: FoldPostureKind,
+        reportedCreaseDp: Float = 16
+    ) -> (isSplit: Bool, leftWidth: Float, rightWidth: Float, hingeWidth: Float) {
+        var left: Float = viewportWidthDp
+        var right: Float = 0
+        var hinge: Float = 0
+        let split = manga_foldable_compute_pane_widths(
+            viewportWidthDp,
+            posture.rawValue,
+            reportedCreaseDp,
+            &left,
+            &right,
+            &hinge
+        ) != 0
+        return (split, left, right, hinge)
+    }
+
+    public static func translate(key: String, locale: UiLocaleKind) -> String {
+        var buffer = [CChar](repeating: 0, count: 512)
+        let written = key.withCString { cKey in
+            buffer.withUnsafeMutableBufferPointer { buf in
+                manga_i18n_translate_key(locale.rawValue, cKey, buf.baseAddress, buf.count)
+            }
+        }
+        guard written > 0 else { return key }
+        return String(decoding: buffer.prefix(Int(written)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
 }
 

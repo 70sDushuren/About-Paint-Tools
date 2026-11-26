@@ -414,6 +414,35 @@ uint8_t manga_novel_validate_illustration_slot(
 
 uint8_t manga_suite_run_t07_s4_gate(const char *project_dir_utf8);
 
+/* --- v0.8.0 & T0.8-S4 Apple Trio Gestures, Foldable Hinge Geometry & Live 5-Locale API --- */
+
+uint32_t manga_gesture_resolve(
+    uint8_t touch_count,
+    float duration_ms,
+    float max_travel_px,
+    float contact_radius_px,
+    uint8_t stylus_active,
+    uint8_t pencil_squeeze
+);
+
+uint8_t manga_foldable_compute_pane_widths(
+    float viewport_width_dp,
+    uint32_t posture_code,
+    float reported_crease_dp,
+    float *out_left_w,
+    float *out_right_w,
+    float *out_hinge_w
+);
+
+size_t manga_i18n_translate_key(
+    uint32_t locale_code,
+    const char *key_utf8,
+    char *out_buf,
+    size_t out_cap
+);
+
+uint8_t manga_suite_run_t08_s4_gate(const char *project_dir_utf8);
+
 #ifdef __cplusplus
 }
 #endif

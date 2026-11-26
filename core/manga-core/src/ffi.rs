@@ -1353,6 +1353,91 @@ pub unsafe extern "C" fn manga_suite_run_t07_s4_gate(project_dir_utf8: *const c_
     u8::from(crate::suite::run_t07_s4_mnga_psd_actionbus_gate(std::path::Path::new(&dir)).is_ok())
 }
 
+/// Resolves touch/stylus telemetry into a deterministic `GestureAction` code (`v0.8`).
+#[no_mangle]
+pub extern "C" fn manga_gesture_resolve(
+    touch_count: u8,
+    duration_ms: f32,
+    max_travel_px: f32,
+    contact_radius_px: f32,
+    stylus_active: u8,
+    pencil_squeeze: u8,
+) -> u32 {
+    crate::gesture::resolve_touch_gesture(
+        touch_count,
+        duration_ms,
+        max_travel_px,
+        contact_radius_px,
+        stylus_active != 0,
+        pencil_squeeze != 0,
+    ) as u32
+}
+
+/// Computes hinge-safe left/right pane widths for iPhone Duo & Android foldable postures (`v0.8`).
+///
+/// # Safety
+/// `out_left_w`, `out_right_w`, and `out_hinge_w` must be non-null writable pointers.
+#[no_mangle]
+pub unsafe extern "C" fn manga_foldable_compute_pane_widths(
+    viewport_width_dp: f32,
+    posture_code: u32,
+    reported_crease_dp: f32,
+    out_left_w: *mut f32,
+    out_right_w: *mut f32,
+    out_hinge_w: *mut f32,
+) -> u8 {
+    if out_left_w.is_null() || out_right_w.is_null() || out_hinge_w.is_null() {
+        return 0;
+    }
+    let posture = crate::platform::FoldPosture::from_u32(posture_code)
+        .unwrap_or(crate::platform::FoldPosture::Flat);
+    let geom = crate::gesture::compute_foldable_pane_geometry(
+        viewport_width_dp,
+        posture,
+        reported_crease_dp,
+    );
+    unsafe {
+        *out_left_w = geom.left_pane_width_dp;
+        *out_right_w = geom.right_pane_width_dp;
+        *out_hinge_w = geom.hinge_exclusion_dp;
+    }
+    u8::from(geom.is_split)
+}
+
+/// Resolves a core UI key in one of the 5 live languages (`0=en, 1=zh-Hans, 2=zh-Hant, 3=yue-Hant, 4=es`).
+///
+/// # Safety
+/// `key_utf8` must be a valid NUL-terminated string; `out_buf` must have capacity `out_cap`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_i18n_translate_key(
+    locale_code: u32,
+    key_utf8: *const c_char,
+    out_buf: *mut c_char,
+    out_cap: usize,
+) -> usize {
+    let key = unsafe { cstr_to_string(key_utf8, "") };
+    let Some(locale) = crate::gesture::UiLocale::from_u32(locale_code) else {
+        return 0;
+    };
+    let Some(val) = locale.translate_core_key(&key) else {
+        return 0;
+    };
+    unsafe { write_utf8_to_c_buf(val, out_buf, out_cap) }
+}
+
+/// Executes the **`T0.8-S4` Apple Trio Touch/Foldable Ergonomics & Live 5-Language Gate**.
+///
+/// # Safety
+/// `project_dir_utf8` must be null or a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn manga_suite_run_t08_s4_gate(project_dir_utf8: *const c_char) -> u8 {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    if dir.is_empty() {
+        return 0;
+    }
+    u8::from(crate::suite::run_t08_s4_apple_trio_gesture_i18n_gate(std::path::Path::new(&dir)).is_ok())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

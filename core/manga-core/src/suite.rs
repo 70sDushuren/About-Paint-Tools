@@ -1212,6 +1212,81 @@ pub fn run_t07_s4_mnga_psd_actionbus_gate(project_dir: &Path) -> Result<T07S4Gat
     })
 }
 
+/// Summary produced by the **`T0.8-S4` Apple Trio Touch/Foldable Ergonomics & Live 5-Language Gate**.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct T08S4GateReport {
+    pub apple_trio_layouts_verified: usize,
+    pub gestures_verified: usize,
+    pub iphone_duo_hinge_safe: bool,
+    pub locales_checked_cells: usize,
+    pub locale_truncation_violations: usize,
+}
+
+/// Executes the **`T0.8-S4` Apple Trio Ergonomics & 5-Language Gate** over a CPFF v1.0 `.prj` workspace:
+/// - Verifies iPadOS (full + Split View), Touchscreen MacBook (desktop hybrid), and iPhone Duo
+///   (folded cover / unfolded dual-pane / tabletop) deterministic layouts and hinge exclusion math.
+/// - Verifies 2-finger Undo, 3-finger Redo, Pencil Pro Squeeze Radial Menu, and Palm Rejection.
+/// - Audits all 5 runtime locales (`en`, `zh-Hans`, `zh-Hant`, `yue-Hant`, `es`) for 0 missing keys
+///   and 0 compact touch truncation violations.
+pub fn run_t08_s4_apple_trio_gesture_i18n_gate(project_dir: &Path) -> Result<T08S4GateReport, String> {
+    let _ = run_tri_app_compatibility_check(project_dir)?;
+
+    use crate::gesture::{
+        audit_five_locale_truncation, compute_foldable_pane_geometry, resolve_touch_gesture,
+        GestureAction,
+    };
+    use crate::platform::{recommend_workspace_layout, FoldPosture, TargetPlatform, WorkspaceLayoutHint};
+
+    let l_ipad_full = recommend_workspace_layout(TargetPlatform::IpadOs, FoldPosture::Flat, 1194.0, 834.0);
+    let l_ipad_split = recommend_workspace_layout(TargetPlatform::IpadOs, FoldPosture::Flat, 390.0, 834.0);
+    let l_mac_touch = recommend_workspace_layout(TargetPlatform::MacOsTouch, FoldPosture::Flat, 1512.0, 982.0);
+    let l_duo_fold = recommend_workspace_layout(TargetPlatform::IphoneDuo, FoldPosture::FoldedCompact, 402.0, 874.0);
+    let l_duo_open = recommend_workspace_layout(TargetPlatform::IphoneDuo, FoldPosture::UnfoldedDualPane, 780.0, 874.0);
+    let l_duo_table = recommend_workspace_layout(TargetPlatform::IphoneDuo, FoldPosture::TabletopHalfOpen, 780.0, 874.0);
+
+    if l_ipad_full != WorkspaceLayoutHint::TabletTouchStudio
+        || l_ipad_split != WorkspaceLayoutHint::SinglePaneCompact
+        || l_mac_touch != WorkspaceLayoutHint::DesktopTouchHybrid
+        || l_duo_fold != WorkspaceLayoutHint::SinglePaneCompact
+        || l_duo_open != WorkspaceLayoutHint::DualPaneAcrossHinge
+        || l_duo_table != WorkspaceLayoutHint::TabletopCanvasTopControlsBottom
+    {
+        return Err("T0.8-S4 Apple Trio layout recommendation mismatch".into());
+    }
+
+    let g_undo = resolve_touch_gesture(2, 110.0, 3.0, 7.0, false, false) == GestureAction::Undo;
+    let g_redo = resolve_touch_gesture(3, 125.0, 5.0, 7.0, false, false) == GestureAction::Redo;
+    let g_squeeze = resolve_touch_gesture(0, 0.0, 0.0, 0.0, true, true) == GestureAction::ToggleRadialMenu;
+    let g_palm = resolve_touch_gesture(1, 40.0, 1.0, 22.0, true, false) == GestureAction::RejectPalm;
+    if !(g_undo && g_redo && g_squeeze && g_palm) {
+        return Err("T0.8-S4 touch/stylus gesture resolver failed".into());
+    }
+
+    let duo_geom = compute_foldable_pane_geometry(780.0, FoldPosture::UnfoldedDualPane, 18.0);
+    let iphone_duo_hinge_safe = duo_geom.is_split
+        && duo_geom.hinge_exclusion_dp >= 16.0
+        && (duo_geom.left_pane_width_dp + duo_geom.right_pane_width_dp + duo_geom.hinge_exclusion_dp - 780.0).abs()
+            < 1e-3;
+    if !iphone_duo_hinge_safe {
+        return Err("T0.8-S4 iPhone Duo hinge-safe split math failed".into());
+    }
+
+    let (locales_checked_cells, locale_truncation_violations) = audit_five_locale_truncation();
+    if locale_truncation_violations > 0 {
+        return Err(format!(
+            "T0.8-S4 5-locale audit reported {locale_truncation_violations} violations"
+        ));
+    }
+
+    Ok(T08S4GateReport {
+        apple_trio_layouts_verified: 6,
+        gestures_verified: 4,
+        iphone_duo_hinge_safe,
+        locales_checked_cells,
+        locale_truncation_violations,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1364,6 +1439,25 @@ mod tests {
         assert_eq!(report.action_bus_preview_steps, 4);
         assert!(report.action_bus_single_undo_ok);
         assert!(report.novel_illustration_slots_verified);
+
+        let _ = std::fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn t08_s4_apple_trio_gesture_and_5_locale_gate_passes() {
+        let parent = std::env::temp_dir().join(format!("manga_t08_s4_unit_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&parent);
+        std::fs::create_dir_all(&parent).unwrap();
+        let opts = crate::project_init::ProjectInitOptions::dual_engine_default("T08GatePrj", "S4Tester");
+        crate::project_init::init_cpff_project(&parent, &opts).unwrap();
+
+        let report = run_t08_s4_apple_trio_gesture_i18n_gate(&parent.join("T08GatePrj"))
+            .expect("T0.8-S4 gate must pass");
+        assert_eq!(report.apple_trio_layouts_verified, 6);
+        assert_eq!(report.gestures_verified, 4);
+        assert!(report.iphone_duo_hinge_safe);
+        assert_eq!(report.locales_checked_cells, 40);
+        assert_eq!(report.locale_truncation_violations, 0);
 
         let _ = std::fs::remove_dir_all(&parent);
     }
