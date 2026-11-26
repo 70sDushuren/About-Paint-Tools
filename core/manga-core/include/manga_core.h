@@ -443,6 +443,11 @@ size_t manga_i18n_translate_key(
 
 uint8_t manga_suite_run_t08_s4_gate(const char *project_dir_utf8);
 
+/* --- v0.9.0 & T0.9-S4 Pre-1.0 Wave 1 Apple Trio Joint Beta Stress Gate API --- */
+
+uint64_t manga_beta_b4_50layer_undo_benchmark_us(void);
+uint8_t manga_suite_run_t09_s4_gate(const char *project_dir_utf8);
+
 #ifdef __cplusplus
 }
 #endif

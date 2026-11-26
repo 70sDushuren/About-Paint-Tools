@@ -5,8 +5,8 @@ use manga_core::{
     init_cpff_project, run_t02_s4_concurrency_soak, run_t03_s4_bible_layers_gate,
     run_t04_s4_ingest_fill_divergence_gate, run_t05_s4_vector_ruler_glossary_gate,
     run_t06_s4_panels_tones_webtoon_epub_gate, run_t07_s4_mnga_psd_actionbus_gate,
-    run_t08_s4_apple_trio_gesture_i18n_gate, run_tri_app_compatibility_check, CanvasPreset,
-    ProjectInitOptions, SuiteApp, TargetPlatform,
+    run_t08_s4_apple_trio_gesture_i18n_gate, run_t09_s4_wave1_beta_stress_gate,
+    run_tri_app_compatibility_check, CanvasPreset, ProjectInitOptions, SuiteApp, TargetPlatform,
 };
 use manga_linux_shell::{LinuxStudioShell, WaylandTabletToolEvent, WaylandTabletTouchAdapter};
 
@@ -89,12 +89,13 @@ fn main() {
             let t06 = run_t06_s4_panels_tones_webtoon_epub_gate(&soak_prj)?;
             let t07 = run_t07_s4_mnga_psd_actionbus_gate(&soak_prj)?;
             let t08 = run_t08_s4_apple_trio_gesture_i18n_gate(&soak_prj)?;
-            Ok((soak, t03, t04, t05, t06, t07, t08))
+            let t09 = run_t09_s4_wave1_beta_stress_gate(&soak_prj)?;
+            Ok((soak, t03, t04, t05, t06, t07, t08, t09))
         });
         let _ = std::fs::remove_dir_all(&soak_parent);
 
         match gate_result {
-            Ok((soak, t03, t04, t05, t06, t07, t08)) => {
+            Ok((soak, t03, t04, t05, t06, t07, t08, t09)) => {
                 println!(
                     "OK [T0.2-S4 Concurrency Soak]: {} rounds passed (S1_reads={}, S2_stamps={}, S3_atomic_saves={}, locked_rejections={}, leaked_tmp={})",
                     soak.rounds_completed,
@@ -160,6 +161,17 @@ fn main() {
                     t08.iphone_duo_hinge_safe,
                     t08.locales_checked_cells,
                     t08.locale_truncation_violations
+                );
+                println!(
+                    "OK [T0.9-S4 Wave 1 Beta Stress Gate]: b4_layers={}, cow_undo_steps={}, cow_total_us={}us, b4_sparse_kb={}KB, wt1600_slices={}, ram_budget={}MB, wave1_targets={}, i18n_violations={}",
+                    t09.b4_layers_verified,
+                    t09.cow_undo_redo_steps,
+                    t09.cow_undo_total_us,
+                    t09.b4_sparse_memory_bytes / 1024,
+                    t09.webtoon_1600_slices_1280,
+                    t09.combined_ram_budget_mb,
+                    t09.wave1_apple_targets_ready,
+                    t09.five_locale_violations
                 );
                 return;
             }

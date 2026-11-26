@@ -1438,6 +1438,47 @@ pub unsafe extern "C" fn manga_suite_run_t08_s4_gate(project_dir_utf8: *const c_
     u8::from(crate::suite::run_t08_s4_apple_trio_gesture_i18n_gate(std::path::Path::new(&dir)).is_ok())
 }
 
+/// Runs a live 50-step CoW Undo/Redo benchmark on a B4 600DPI (`6071×8598`) sparse tile layer
+/// and returns elapsed microseconds (`v0.9` Beta stress telemetry).
+#[no_mangle]
+pub extern "C" fn manga_beta_b4_50layer_undo_benchmark_us() -> u64 {
+    let b4 = crate::preset::CanvasPreset::B4PrintManga600Dpi.spec();
+    let mut tile_layer = crate::tile::TileLayer::new(b4.width, b4.height);
+    let mut history = crate::undo::TileUndoStack::new(100);
+    let t0 = std::time::Instant::now();
+    for step in 0..50u32 {
+        let px = step * 100;
+        let py = step * 120;
+        let (coord, _, _) = crate::tile::TileCoord::from_pixel(px as i32, py as i32);
+        let before = tile_layer.get_tile(coord);
+        tile_layer.set_pixel(px, py, [(step * 5) as u8, 80, 180, 255]);
+        let after = tile_layer.get_tile(coord);
+        history.push(crate::undo::TileDiff {
+            entries: vec![(coord, before, after)],
+        });
+    }
+    for _ in 0..50 {
+        let _ = history.undo(&mut tile_layer);
+    }
+    for _ in 0..50 {
+        let _ = history.redo(&mut tile_layer);
+    }
+    t0.elapsed().as_micros().max(1) as u64
+}
+
+/// Executes the **`T0.9-S4` Pre-1.0 Wave 1 Apple Trio Joint Beta Stress Gate**.
+///
+/// # Safety
+/// `project_dir_utf8` must be null or a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn manga_suite_run_t09_s4_gate(project_dir_utf8: *const c_char) -> u8 {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    if dir.is_empty() {
+        return 0;
+    }
+    u8::from(crate::suite::run_t09_s4_wave1_beta_stress_gate(std::path::Path::new(&dir)).is_ok())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

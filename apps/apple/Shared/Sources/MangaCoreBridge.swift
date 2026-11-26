@@ -698,6 +698,19 @@ public enum MangaSuiteS4Gate {
             manga_suite_run_t08_s4_gate(cDir) != 0
         }
     }
+
+    public static func runT09S4(projectDir: String) -> Bool {
+        projectDir.withCString { cDir in
+            manga_suite_run_t09_s4_gate(cDir) != 0
+        }
+    }
+}
+
+/// `v0.9` — Pre-1.0 Apple Wave 1 Joint Beta Dual-Track Stress Benchmark.
+public enum MangaBetaStressBench {
+    public static func runB4FiftyStepCowUndoBenchmarkUs() -> UInt64 {
+        manga_beta_b4_50layer_undo_benchmark_us()
+    }
 }
 
 /// `v0.8` — Apple Trio Touch/Stylus Gestures, Foldable Hinge Geometry & Live 5-Language Catalog.

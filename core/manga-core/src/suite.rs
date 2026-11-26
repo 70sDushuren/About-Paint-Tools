@@ -1287,6 +1287,140 @@ pub fn run_t08_s4_apple_trio_gesture_i18n_gate(project_dir: &Path) -> Result<T08
     })
 }
 
+/// Summary produced by the **`T0.9-S4` Pre-1.0 Apple Wave 1 Joint Beta Dual-Track Stress Gate**.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct T09S4GateReport {
+    pub b4_layers_verified: usize,
+    pub cow_undo_redo_steps: usize,
+    pub cow_undo_total_us: u64,
+    pub b4_sparse_memory_bytes: usize,
+    pub webtoon_1600_slices_1280: usize,
+    pub combined_ram_budget_mb: u32,
+    pub wave1_apple_targets_ready: usize,
+    pub five_locale_violations: usize,
+}
+
+/// Executes the **`T0.9-S4` Pre-1.0 Wave 1 Apple Trio Joint Beta Stress Gate**:
+/// - Track A: Allocates a 50-layer B4 600DPI (`6071×8598`) cel stack, verifies sparse tile memory
+///   efficiency, and benchmarks 50 consecutive CoW `TileUndoStack` undo + redo cycles (`< 16ms/step` SLA).
+/// - Track B: Verifies `1600×25600` high-res Webtoon strip splits into 20 seamless `1280px` slices.
+/// - Tri-App 8GB RAM Guard: Confirms combined standalone budget (`<= 2048 MB`) and Wave 1 Metal readiness
+///   across iPadOS, Touchscreen MacBook, and iPhone Duo, plus 0 5-locale truncation violations.
+pub fn run_t09_s4_wave1_beta_stress_gate(project_dir: &Path) -> Result<T09S4GateReport, String> {
+    let base_report = run_tri_app_compatibility_check(project_dir)?;
+
+    // 1. Track A: 50-layer B4 600DPI sparse cel stack + 50-step CoW Undo/Redo latency benchmark
+    let b4 = crate::preset::CanvasPreset::B4PrintManga600Dpi.spec();
+    let mut stack = crate::layer::LayerStack::new(b4.width, b4.height);
+    let modes = [
+        crate::layer::BlendMode::Normal,
+        crate::layer::BlendMode::Multiply,
+        crate::layer::BlendMode::Screen,
+        crate::layer::BlendMode::GlowDodge,
+        crate::layer::BlendMode::LinearBurn,
+    ];
+    for i in 0..50usize {
+        let lid = stack.add_raster_layer(format!("B4_Layer_{i:02}"));
+        if let Some(layer) = stack.get_mut(lid) {
+            layer.blend_mode = modes[i % modes.len()];
+            layer.clipping_mask = i % 3 == 2;
+            layer.is_reference = i == 0;
+            // Paint 1 sparse pixel in distinct coordinates on every 5th layer
+            if i % 5 == 0 {
+                layer.write_pixel((i as u32) * 32, (i as u32) * 48, [16, 20, 28, 255]);
+            }
+        }
+    }
+    let b4_layers_verified = stack.layers().len();
+    let b4_sparse_memory_bytes: usize = stack
+        .layers()
+        .iter()
+        .filter_map(|l| l.raster.as_ref().map(|r| r.memory_bytes()))
+        .sum();
+    // 10 painted tiles * 256 KiB = 2.5 MiB (vs ~10.4 GiB naive dense 50-layer B4!)
+    if b4_layers_verified != 50 || b4_sparse_memory_bytes > 8 * 1024 * 1024 {
+        return Err(format!(
+            "T0.9-S4 50-layer B4 sparse memory exceeded bound: layers={b4_layers_verified}, bytes={b4_sparse_memory_bytes}"
+        ));
+    }
+
+    let mut tile_layer = crate::tile::TileLayer::new(b4.width, b4.height);
+    let mut history = crate::undo::TileUndoStack::new(100);
+    let t0 = std::time::Instant::now();
+    for step in 0..50u32 {
+        let px = step * 100;
+        let py = step * 120;
+        let (coord, _, _) = crate::tile::TileCoord::from_pixel(px as i32, py as i32);
+        let before = tile_layer.get_tile(coord);
+        tile_layer.set_pixel(px, py, [(step * 5) as u8, 80, 180, 255]);
+        let after = tile_layer.get_tile(coord);
+        history.push(crate::undo::TileDiff {
+            entries: vec![(coord, before, after)],
+        });
+    }
+    for _ in 0..50 {
+        if !history.undo(&mut tile_layer) {
+            return Err("T0.9-S4 CoW undo stack underrun".into());
+        }
+    }
+    if tile_layer.allocated_tile_count() != 0 {
+        return Err("T0.9-S4 CoW 50-step undo leaked allocated tiles".into());
+    }
+    for _ in 0..50 {
+        if !history.redo(&mut tile_layer) {
+            return Err("T0.9-S4 CoW redo stack underrun".into());
+        }
+    }
+    let cow_undo_total_us = t0.elapsed().as_micros() as u64;
+    // DoD: 50 consecutive undo/redo steps < 16ms each (< 800_000 us total)
+    if cow_undo_total_us > 800_000 {
+        return Err(format!(
+            "T0.9-S4 50-step CoW undo/redo exceeded 16ms/step SLA ({cow_undo_total_us}us)"
+        ));
+    }
+
+    // 2. Track B: High-res Webtoon 1600x25600 strip slicing (20 slices @ 1280px)
+    let wt_spec = crate::preset::CanvasPreset::WebtoonStrip1600.spec();
+    let wt_slices = crate::webtoon::compute_webtoon_slices(wt_spec.height, 1280);
+    if wt_slices.len() != 20 {
+        return Err(format!(
+            "T0.9-S4 Webtoon 1600x25600 expected 20 slices @ 1280px, got {}",
+            wt_slices.len()
+        ));
+    }
+
+    // 3. Wave 1 Apple Trio Metal readiness & 8GB Tri-App RAM guard
+    let wave1 = [
+        crate::platform::TargetPlatform::IpadOs,
+        crate::platform::TargetPlatform::MacOsTouch,
+        crate::platform::TargetPlatform::IphoneDuo,
+    ];
+    let wave1_apple_targets_ready = wave1
+        .iter()
+        .filter(|p| p.release_wave() == 1 && p.capabilities().gpu_backend == "Metal (wgpu)")
+        .count();
+    if wave1_apple_targets_ready != 3 || base_report.combined_ram_budget_mb > 2048 {
+        return Err("T0.9-S4 Wave 1 Apple Trio Metal or 8GB RAM budget guard failed".into());
+    }
+
+    // 4. 5-Locale zero-truncation QA
+    let (_, five_locale_violations) = crate::gesture::audit_five_locale_truncation();
+    if five_locale_violations > 0 {
+        return Err("T0.9-S4 5-locale zero-truncation QA failed".into());
+    }
+
+    Ok(T09S4GateReport {
+        b4_layers_verified,
+        cow_undo_redo_steps: 50,
+        cow_undo_total_us,
+        b4_sparse_memory_bytes,
+        webtoon_1600_slices_1280: wt_slices.len(),
+        combined_ram_budget_mb: base_report.combined_ram_budget_mb,
+        wave1_apple_targets_ready,
+        five_locale_violations,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1458,6 +1592,26 @@ mod tests {
         assert!(report.iphone_duo_hinge_safe);
         assert_eq!(report.locales_checked_cells, 40);
         assert_eq!(report.locale_truncation_violations, 0);
+
+        let _ = std::fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn t09_s4_wave1_beta_stress_gate_passes() {
+        let parent = std::env::temp_dir().join(format!("manga_t09_s4_unit_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&parent);
+        std::fs::create_dir_all(&parent).unwrap();
+        let opts = crate::project_init::ProjectInitOptions::dual_engine_default("T09GatePrj", "S4Tester");
+        crate::project_init::init_cpff_project(&parent, &opts).unwrap();
+
+        let report = run_t09_s4_wave1_beta_stress_gate(&parent.join("T09GatePrj"))
+            .expect("T0.9-S4 Wave 1 Beta stress gate must pass");
+        assert_eq!(report.b4_layers_verified, 50);
+        assert_eq!(report.cow_undo_redo_steps, 50);
+        assert!(report.cow_undo_total_us < 800_000);
+        assert_eq!(report.webtoon_1600_slices_1280, 20);
+        assert_eq!(report.wave1_apple_targets_ready, 3);
+        assert_eq!(report.five_locale_violations, 0);
 
         let _ = std::fs::remove_dir_all(&parent);
     }
