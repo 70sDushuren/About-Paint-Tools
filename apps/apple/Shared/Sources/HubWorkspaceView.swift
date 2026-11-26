@@ -6,6 +6,7 @@ import SwiftUI
 public enum HubSectionKind: String, CaseIterable, Sendable, Identifiable {
     case overview
     case newProject
+    case storyBible
     case dualBoard
     case ingest
     case localeAudit
@@ -14,11 +15,13 @@ public enum HubSectionKind: String, CaseIterable, Sendable, Identifiable {
     public var id: String { rawValue }
 }
 
-/// `S1 v0.2.2` — `创想空间 / NoemaDock` (Working Codename) native shell:
-/// 56px Indigo icon rail + 4-element Hint Popovers + live CPFF v1.0 `.prj` bootstrap via Rust FFI.
+/// `S1 v0.3.2` — `创想空间 / NoemaDock` (Working Codename) native shell:
+/// 56px Indigo icon rail + Left CPFF Project Tree + Live Story Bible & TOC Atomic Editor +
+/// CPFF v1.0 `.prj` bootstrap & `T0.2-S4` / `T0.3-S4` integration gates via Rust FFI.
 public struct HubWorkspaceView: View {
     public let layout: WorkspaceLayoutHintKind
     public let hintModeActive: Bool
+    @Binding public var activeProjectDir: String
     public let onOpenTool: (SuiteAppKind) -> Void
 
     @State private var selectedSection: HubSectionKind = .overview
@@ -28,13 +31,29 @@ public struct HubWorkspaceView: View {
     @State private var lastCreatedPath: String?
     @State private var lastCreatedSucceeded: Bool?
 
+    // S1 v0.3.2 Live Story Bible & TOC Editor state
+    @State private var bibleCharacters: [StoryBibleCharacterSummary] = []
+    @State private var tocEntries: [ProjectTocEntrySummary] = []
+    @State private var bibleRevisionHash: UInt64 = 0
+    @State private var newCharId: String = "char-sora"
+    @State private var newCharNameZh: String = "苍月"
+    @State private var newCharNameEn: String = "Sora Tsuki"
+    @State private var newCharRole: String = "mentor"
+    @State private var newCharPalette: String = "#2FA88B"
+    @State private var newChapterId: String = "ch003"
+    @State private var newChapterZh: String = "双生分镜"
+    @State private var newChapterEn: String = "Twin Storyboards"
+    @State private var gateStatusLine: String = "T0.3-S4 Gate ready."
+
     public init(
         layout: WorkspaceLayoutHintKind,
         hintModeActive: Bool,
+        activeProjectDir: Binding<String>,
         onOpenTool: @escaping (SuiteAppKind) -> Void
     ) {
         self.layout = layout
         self.hintModeActive = hintModeActive
+        self._activeProjectDir = activeProjectDir
         self.onOpenTool = onOpenTool
     }
 
@@ -42,6 +61,11 @@ public struct HubWorkspaceView: View {
         HStack(spacing: 0) {
             iconRail
             Divider()
+            if layout != .singlePaneCompact {
+                projectTreeSidebar
+                    .frame(width: 220)
+                Divider()
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     headerBanner
@@ -50,6 +74,8 @@ public struct HubWorkspaceView: View {
                         overviewCards
                     case .newProject:
                         newProjectBootstrapCard
+                    case .storyBible:
+                        storyBibleAndTocEditorCard
                     case .dualBoard:
                         dualEngineBoardCard
                     case .ingest, .localeAudit, .publish:
@@ -64,6 +90,10 @@ public struct HubWorkspaceView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(SuiteColorTokens.hubSurface)
+        }
+        .onAppear(perform: reloadProjectTree)
+        .onChange(of: activeProjectDir) { _, _ in
+            reloadProjectTree()
         }
     }
 
@@ -103,7 +133,7 @@ public struct HubWorkspaceView: View {
                 roleBadge: "S1 Hub",
                 summary: "Inspect CPFF v1.0 manifest, write-ownership isolation, and active editions.",
                 shortcut: "⌘1",
-                ownershipCue: "S1 RW: *.prj, outline/*"
+                ownershipCue: "S1 RW: *.prj, outline/*, bible/*"
             ),
             ToolHintSpec(
                 id: HubSectionKind.newProject.rawValue,
@@ -113,6 +143,15 @@ public struct HubWorkspaceView: View {
                 summary: "Bootstrap a complete dual-engine CPFF v1.0 .prj folder with Git LFS & 5-locale XML.",
                 shortcut: "⌘N",
                 ownershipCue: "FFI: manga_hub_init_project"
+            ),
+            ToolHintSpec(
+                id: HubSectionKind.storyBible.rawValue,
+                glyph: .novelOutline,
+                title: "Story Bible & TOC",
+                roleBadge: "v0.3.2 Live",
+                summary: "Edit bible/characters.xml & outline/toc.xml atomically; S3 hot-reloads in < 300ms.",
+                shortcut: "⌘B",
+                ownershipCue: "S1 Exclusive RW · FNV-1a Hash"
             ),
             ToolHintSpec(
                 id: HubSectionKind.dualBoard.rawValue,
@@ -153,6 +192,112 @@ public struct HubWorkspaceView: View {
         ]
     }
 
+    // MARK: - Left CPFF Project Tree (S1 v0.3.2)
+
+    private var projectTreeSidebar: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("CPFF Project Tree")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button {
+                        reloadProjectTree()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption2)
+                            .foregroundStyle(SuiteColorTokens.hubAccent)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(URL(fileURLWithPath: activeProjectDir).lastPathComponent + ".prj")
+                        .font(.caption.monospaced().bold())
+                        .foregroundStyle(SuiteColorTokens.hubAccent)
+                        .lineLimit(1)
+                    Text("Rev #\(String(bibleRevisionHash, radix: 16).prefix(6).uppercased())")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(SuiteColorTokens.hubAccent.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("outline/toc.xml (\(tocEntries.count))")
+                        .font(.caption2.monospaced().bold())
+                        .foregroundStyle(.secondary)
+                    ForEach(tocEntries) { ch in
+                        HStack(spacing: 6) {
+                            Text("Ch.\(ch.number)")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundStyle(SuiteColorTokens.hubAccent)
+                            Text(ch.titleZh.isEmpty ? ch.titleEn : ch.titleZh)
+                                .font(.caption2)
+                                .lineLimit(1)
+                            Spacer()
+                            Text(ch.status)
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("bible/characters.xml (\(bibleCharacters.count))")
+                        .font(.caption2.monospaced().bold())
+                        .foregroundStyle(.secondary)
+                    ForEach(bibleCharacters) { char in
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(SuiteColorTokens.hubAccent)
+                                .frame(width: 7, height: 7)
+                            Text("\(char.nameZh) · \(char.nameEn)")
+                                .font(.caption2)
+                                .lineLimit(1)
+                        }
+                    }
+                    Button {
+                        selectedSection = .storyBible
+                    } label: {
+                        Label("Edit Story Bible", systemImage: "pencil")
+                            .font(.caption2.bold())
+                            .foregroundStyle(SuiteColorTokens.hubAccent)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
+                }
+
+                Divider()
+
+                Button {
+                    runT03S4Gate(on: activeProjectDir)
+                } label: {
+                    Label("Run T0.3-S4 Gate", systemImage: "checkmark.seal.fill")
+                        .font(.caption2.bold())
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background(SuiteColorTokens.hubAccent)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
+                }
+                .buttonStyle(.plain)
+
+                Text(gateStatusLine)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(12)
+        }
+        .background(SuiteColorTokens.hubCard)
+    }
+
     // MARK: - Main Cards
 
     private var headerBanner: some View {
@@ -165,6 +310,19 @@ public struct HubWorkspaceView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            Button {
+                selectedSection = .storyBible
+            } label: {
+                Label("Story Bible", systemImage: "book.closed")
+                    .font(.caption.bold())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(SuiteColorTokens.hubAccent.opacity(0.14))
+                    .foregroundStyle(SuiteColorTokens.hubAccent)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+
             Button {
                 selectedSection = .newProject
             } label: {
@@ -183,10 +341,116 @@ public struct HubWorkspaceView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
+    private var storyBibleAndTocEditorCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Live Story Bible & TOC Atomic Editor (S1 v0.3.2)")
+                        .font(.subheadline.bold())
+                    Text("Writes atomically to bible/characters.xml & outline/toc.xml; S3 文心 hot-reloads changes in < 300ms.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("Rev #\(String(bibleRevisionHash, radix: 16).prefix(8).uppercased())")
+                    .font(.caption2.monospaced().bold())
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(SuiteColorTokens.hubAccent.opacity(0.14))
+                    .foregroundStyle(SuiteColorTokens.hubAccent)
+                    .clipShape(Capsule())
+            }
+
+            // Upsert Character Card
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Add / Update Character (`bible/characters.xml`)")
+                    .font(.caption.bold())
+                HStack(spacing: 8) {
+                    TextField("ID (char-sora)", text: $newCharId).textFieldStyle(.roundedBorder)
+                    TextField("中文名", text: $newCharNameZh).textFieldStyle(.roundedBorder)
+                    TextField("English Name", text: $newCharNameEn).textFieldStyle(.roundedBorder)
+                }
+                HStack(spacing: 8) {
+                    TextField("Role", text: $newCharRole).textFieldStyle(.roundedBorder)
+                    TextField("Palette #HEX", text: $newCharPalette).textFieldStyle(.roundedBorder)
+                    Button {
+                        upsertCharacterViaRust()
+                    } label: {
+                        Label("Save Character", systemImage: "person.badge.plus")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(SuiteColorTokens.hubAccent)
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Divider()
+
+            // Upsert Chapter TOC Entry
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Add / Update Master TOC Chapter (`outline/toc.xml`)")
+                    .font(.caption.bold())
+                HStack(spacing: 8) {
+                    TextField("ch003", text: $newChapterId).textFieldStyle(.roundedBorder)
+                    TextField("章节中文名", text: $newChapterZh).textFieldStyle(.roundedBorder)
+                    TextField("Chapter Title (EN)", text: $newChapterEn).textFieldStyle(.roundedBorder)
+                    Button {
+                        upsertTocChapterViaRust()
+                    } label: {
+                        Label("Save Chapter", systemImage: "list.bullet.rectangle")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(SuiteColorTokens.novelAccent)
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                Button {
+                    runT03S4Gate(on: activeProjectDir)
+                } label: {
+                    Label("Run T0.3-S4 Gate (Bible + 13 Cel Modes)", systemImage: "checkmark.shield.fill")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(SuiteColorTokens.hubAccent.opacity(0.15))
+                        .foregroundStyle(SuiteColorTokens.hubAccent)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+
+                Button("Verify Hot-Reload in S3 文心 →") {
+                    onOpenTool(.novel)
+                }
+                .font(.caption.bold())
+                .foregroundStyle(SuiteColorTokens.novelAccent)
+                .buttonStyle(.plain)
+            }
+
+            Text(gateStatusLine)
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .background(SuiteColorTokens.hubCard)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
     private var overviewCards: some View {
         VStack(alignment: .leading, spacing: 14) {
             let paths = [
                 "SampleManga.prj",
+                "bible/characters.xml",
                 "outline/toc.xml",
                 "chapters/ch001/manuscript/p001.mnga",
                 "chapters/ch001/novel/prose/zh-Hans.md",
@@ -305,7 +569,7 @@ public struct HubWorkspaceView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Ch.001 · Starlight Awakening")
                         .font(.caption.bold())
-                    Text("Manga: B4 600DPI + Webtoon · 24p")
+                    Text("Manga: B4 600DPI + Webtoon · 13 Cel Modes")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     Button("Open in S2 雕龙 / DracoNib →") {
@@ -323,7 +587,7 @@ public struct HubWorkspaceView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Ch.001 · Light Novel Final")
                         .font(.caption.bold())
-                    Text("Prose: zh-Hans / en · Human Locked")
+                    Text("Prose: zh-Hans / en · <300ms Bible Sync")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     Button("Open in S3 文心 / LitteraCore →") {
@@ -372,7 +636,50 @@ public struct HubWorkspaceView: View {
         #if canImport(MangaCoreFFI)
         return MangaSuitePolicy.canWrite(app: .hub, relativePath: path)
         #else
-        return path.hasSuffix(".prj") || path.hasPrefix("outline/")
+        return path.hasSuffix(".prj") || path.hasPrefix("outline/") || path.hasPrefix("bible/")
+        #endif
+    }
+
+    private func reloadProjectTree() {
+        #if canImport(MangaCoreFFI)
+        bibleCharacters = MangaStoryBible.readCharacters(projectDir: activeProjectDir)
+        tocEntries = MangaStoryBible.readTocEntries(projectDir: activeProjectDir)
+        bibleRevisionHash = MangaStoryBible.revisionHash(projectDir: activeProjectDir)
+        #endif
+    }
+
+    private func upsertCharacterViaRust() {
+        #if canImport(MangaCoreFFI)
+        let ok = MangaStoryBible.upsertCharacter(
+            projectDir: activeProjectDir,
+            id: newCharId.trimmingCharacters(in: .whitespacesAndNewlines),
+            nameZh: newCharNameZh.trimmingCharacters(in: .whitespacesAndNewlines),
+            nameEn: newCharNameEn.trimmingCharacters(in: .whitespacesAndNewlines),
+            role: newCharRole.trimmingCharacters(in: .whitespacesAndNewlines),
+            paletteHex: newCharPalette.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        reloadProjectTree()
+        gateStatusLine = ok
+            ? "OK [S1 Atomic]: Saved '\(newCharNameZh)' to bible/characters.xml (total=\(bibleCharacters.count))."
+            : "FAIL: Could not save character (check non-empty ID)."
+        #endif
+    }
+
+    private func upsertTocChapterViaRust() {
+        #if canImport(MangaCoreFFI)
+        let nextNum = UInt32(tocEntries.count + 1)
+        let ok = MangaStoryBible.upsertTocEntry(
+            projectDir: activeProjectDir,
+            chapterId: newChapterId.trimmingCharacters(in: .whitespacesAndNewlines),
+            number: nextNum,
+            titleZh: newChapterZh.trimmingCharacters(in: .whitespacesAndNewlines),
+            titleEn: newChapterEn.trimmingCharacters(in: .whitespacesAndNewlines),
+            status: "draft"
+        )
+        reloadProjectTree()
+        gateStatusLine = ok
+            ? "OK [S1 Atomic]: Saved '\(newChapterId)' to outline/toc.xml (total=\(tocEntries.count))."
+            : "FAIL: Could not save TOC entry."
         #endif
     }
 
@@ -394,6 +701,8 @@ public struct HubWorkspaceView: View {
         if ok {
             let target = baseURL.appendingPathComponent(folder).path
             lastCreatedPath = target
+            activeProjectDir = target
+            reloadProjectTree()
             let status = MangaHubProjectBootstrap.resolvePrjStatus(projectDir: target)
             let statusLabel = status == .exactMatch ? "ExactMatch" : (status == .renamedFolderFallback ? "RenamedFolderFallback" : "Invalid")
             bootstrapStatus = "OK [\(statusLabel)]: Rust core initialized '\(folder).prj' with Git LFS & 5-locale structure."
@@ -416,6 +725,20 @@ public struct HubWorkspaceView: View {
             : "FAIL [T0.2-S4 Soak]: Gate failed on \(projectPath)."
         #else
         bootstrapStatus = "MangaCoreFFI not linked in preview mode."
+        #endif
+    }
+
+    private func runT03S4Gate(on projectPath: String) {
+        #if canImport(MangaCoreFFI)
+        let t0 = Date()
+        let passed = MangaSuiteS4Gate.runT03S4(projectDir: projectPath)
+        let elapsedMs = Date().timeIntervalSince(t0) * 1000.0
+        reloadProjectTree()
+        gateStatusLine = passed
+            ? String(format: "OK [T0.3-S4 PASS in %.1fms]: Bible+TOC <300ms hot-reload, 13 cel blend modes & R/Clip/Lock/B verified.", elapsedMs)
+            : "FAIL [T0.3-S4]: Gate failed on \(projectPath)."
+        #else
+        gateStatusLine = "MangaCoreFFI not linked in preview mode."
         #endif
     }
 }

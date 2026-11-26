@@ -272,6 +272,31 @@ uint8_t manga_project_set_layer_flags(
     uint8_t blue_sketch_tint
 );
 
+/* --- v0.3.2 & T0.3-S4 Live Story Bible / TOC Summary & Integration Gate API --- */
+
+size_t manga_bible_read_summary(
+    const char *project_dir_utf8,
+    char *out_buf,
+    size_t out_cap
+);
+
+uint8_t manga_toc_upsert_entry(
+    const char *project_dir_utf8,
+    const char *chapter_id_utf8,
+    uint32_t number,
+    const char *title_zh_utf8,
+    const char *title_en_utf8,
+    const char *status_utf8
+);
+
+size_t manga_toc_read_summary(
+    const char *project_dir_utf8,
+    char *out_buf,
+    size_t out_cap
+);
+
+uint8_t manga_suite_run_t03_s4_gate(const char *project_dir_utf8);
+
 #ifdef __cplusplus
 }
 #endif

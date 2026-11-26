@@ -44,9 +44,11 @@ public struct AppleWorkspaceState: Sendable {
 public struct AppleWorkspaceShellView: View {
     @State private var state: AppleWorkspaceState
     @State private var hintModeActive: Bool = false
+    @State private var activeProjectDir: String
 
     public init(initialState: AppleWorkspaceState) {
         self._state = State(initialValue: initialState)
+        self._activeProjectDir = State(initialValue: SuiteSharedWorkspace.bootstrapDefaultWorkspaceIfNeeded())
     }
 
     public var body: some View {
@@ -145,7 +147,8 @@ public struct AppleWorkspaceShellView: View {
                 NovelStudioView(
                     layout: .singlePaneCompact,
                     hintModeActive: hintModeActive,
-                    hingeAvoidanceWidthPt: state.hingeAvoidanceWidthPt
+                    hingeAvoidanceWidthPt: state.hingeAvoidanceWidthPt,
+                    activeProjectDir: activeProjectDir
                 )
                 .frame(minWidth: 320, maxWidth: .infinity)
 
@@ -161,7 +164,8 @@ public struct AppleWorkspaceShellView: View {
             case .hub:
                 HubWorkspaceView(
                     layout: layout,
-                    hintModeActive: hintModeActive
+                    hintModeActive: hintModeActive,
+                    activeProjectDir: $activeProjectDir
                 ) { targetTool in
                     state.activeSuiteApp = targetTool
                 }
@@ -175,7 +179,8 @@ public struct AppleWorkspaceShellView: View {
                 NovelStudioView(
                     layout: layout,
                     hintModeActive: hintModeActive,
-                    hingeAvoidanceWidthPt: state.hingeAvoidanceWidthPt
+                    hingeAvoidanceWidthPt: state.hingeAvoidanceWidthPt,
+                    activeProjectDir: activeProjectDir
                 )
             }
         }
@@ -191,7 +196,7 @@ public struct AppleWorkspaceShellView: View {
             Text("·")
             Text("Budget: \(ramBudgetMb(for: state.activeSuiteApp)) MB")
             Spacer()
-            Text("CPFF v1.0 · MIT · v0.3.1 Tri-App")
+            Text("CPFF v1.0 · MIT · v0.3.2 / T0.3-S4")
         }
         .font(.caption2.monospaced())
         .foregroundStyle(isDarkHeader ? Color.white.opacity(0.65) : .secondary)

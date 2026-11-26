@@ -116,6 +116,104 @@ public enum SuiteAppKind: UInt32, CaseIterable, Sendable {
     case novel = 2
 }
 
+/// Read-only Story Bible character projection (`bible/characters.xml`) shared across S1/S2/S3.
+public struct StoryBibleCharacterSummary: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let nameZh: String
+    public let nameEn: String
+    public let role: String
+    public let paletteHex: String
+
+    public init(id: String, nameZh: String, nameEn: String, role: String, paletteHex: String) {
+        self.id = id
+        self.nameZh = nameZh
+        self.nameEn = nameEn
+        self.role = role
+        self.paletteHex = paletteHex
+    }
+}
+
+/// Read-only Master TOC chapter projection (`outline/toc.xml`) shared across S1/S2/S3.
+public struct ProjectTocEntrySummary: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let number: UInt32
+    public let titleZh: String
+    public let titleEn: String
+    public let status: String
+
+    public init(id: String, number: UInt32, titleZh: String, titleEn: String, status: String) {
+        self.id = id
+        self.number = number
+        self.titleZh = titleZh
+        self.titleEn = titleEn
+        self.status = status
+    }
+}
+
+/// Shared on-disk `.prj` sandbox workspace so `S1` (Hub), `S2` (Manga), and `S3` (Novel)
+/// demonstrate live `< 300ms` cross-app hot-reload immediately on launch.
+public enum SuiteSharedWorkspace {
+    public static var defaultProjectDir: String {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("AboutPaintLiveWorkspace", isDirectory: true)
+            .appendingPathComponent("StarlightLive", isDirectory: true)
+            .path
+    }
+
+    public static func bootstrapDefaultWorkspaceIfNeeded() -> String {
+        let parent = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AboutPaintLiveWorkspace", isDirectory: true)
+        let projectDir = parent.appendingPathComponent("StarlightLive", isDirectory: true).path
+        try? FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        #if canImport(MangaCoreFFI)
+        if MangaHubProjectBootstrap.resolvePrjStatus(projectDir: projectDir) == .invalid {
+            _ = MangaHubProjectBootstrap.initProject(
+                parentDir: parent.path,
+                folderName: "StarlightLive",
+                author: "Studio Creator"
+            )
+        }
+        if MangaStoryBible.characterCount(projectDir: projectDir) == 0 {
+            _ = MangaStoryBible.upsertCharacter(
+                projectDir: projectDir,
+                id: "char-lin",
+                nameZh: "林晓",
+                nameEn: "Lin Xiao",
+                role: "protagonist",
+                paletteHex: "#4F7CFF"
+            )
+            _ = MangaStoryBible.upsertCharacter(
+                projectDir: projectDir,
+                id: "char-ren",
+                nameZh: "墨凛",
+                nameEn: "Mo Lin",
+                role: "rival",
+                paletteHex: "#FF6B4A"
+            )
+        }
+        if MangaStoryBible.readTocEntries(projectDir: projectDir).isEmpty {
+            _ = MangaStoryBible.upsertTocEntry(
+                projectDir: projectDir,
+                chapterId: "ch001",
+                number: 1,
+                titleZh: "星辉觉醒",
+                titleEn: "Starlight Awakening",
+                status: "in_progress"
+            )
+            _ = MangaStoryBible.upsertTocEntry(
+                projectDir: projectDir,
+                chapterId: "ch002",
+                number: 2,
+                titleZh: "墨影回廊",
+                titleEn: "Ink Shadow Corridor",
+                status: "draft"
+            )
+        }
+        #endif
+        return projectDir
+    }
+}
+
 #if canImport(MangaCoreFFI)
 import MangaCoreFFI
 
@@ -244,11 +342,17 @@ public enum MangaNovelMetrics {
     }
 }
 
-/// `T0.2-S4` — Tri-App Integration & 100-Round Concurrency Soak Gate over Rust C-ABI.
+/// `T0.2-S4` & `T0.3-S4` — Tri-App Integration & Compatibility Gates over Rust C-ABI.
 public enum MangaSuiteS4Gate {
     public static func run(projectDir: String, soakRounds: UInt32 = 100) -> Bool {
         projectDir.withCString { cDir in
             manga_suite_run_s4_gate(cDir, soakRounds) != 0
+        }
+    }
+
+    public static func runT03S4(projectDir: String) -> Bool {
+        projectDir.withCString { cDir in
+            manga_suite_run_t03_s4_gate(cDir) != 0
         }
     }
 }
@@ -504,6 +608,72 @@ public enum MangaStoryBible {
     public static func revisionHash(projectDir: String) -> UInt64 {
         projectDir.withCString { cDir in
             manga_bible_revision_hash(cDir)
+        }
+    }
+
+    public static func readCharacters(projectDir: String) -> [StoryBibleCharacterSummary] {
+        var buffer = [CChar](repeating: 0, count: 16_384)
+        let written = projectDir.withCString { cDir in
+            buffer.withUnsafeMutableBufferPointer { buf in
+                manga_bible_read_summary(cDir, buf.baseAddress, buf.count)
+            }
+        }
+        guard written > 0 else { return [] }
+        let raw = String(decoding: buffer.prefix(Int(written)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
+        return raw.split(separator: "\n", omittingEmptySubsequences: true).compactMap { line in
+            let parts = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+            guard parts.count >= 5 else { return nil }
+            return StoryBibleCharacterSummary(
+                id: parts[0],
+                nameZh: parts[1],
+                nameEn: parts[2],
+                role: parts[3],
+                paletteHex: parts[4]
+            )
+        }
+    }
+
+    @discardableResult
+    public static func upsertTocEntry(
+        projectDir: String,
+        chapterId: String,
+        number: UInt32,
+        titleZh: String,
+        titleEn: String,
+        status: String = "draft"
+    ) -> Bool {
+        projectDir.withCString { cDir in
+            chapterId.withCString { cId in
+                titleZh.withCString { cZh in
+                    titleEn.withCString { cEn in
+                        status.withCString { cStatus in
+                            manga_toc_upsert_entry(cDir, cId, number, cZh, cEn, cStatus) != 0
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public static func readTocEntries(projectDir: String) -> [ProjectTocEntrySummary] {
+        var buffer = [CChar](repeating: 0, count: 16_384)
+        let written = projectDir.withCString { cDir in
+            buffer.withUnsafeMutableBufferPointer { buf in
+                manga_toc_read_summary(cDir, buf.baseAddress, buf.count)
+            }
+        }
+        guard written > 0 else { return [] }
+        let raw = String(decoding: buffer.prefix(Int(written)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
+        return raw.split(separator: "\n", omittingEmptySubsequences: true).compactMap { line in
+            let parts = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+            guard parts.count >= 5 else { return nil }
+            return ProjectTocEntrySummary(
+                id: parts[0],
+                number: UInt32(parts[1]) ?? 1,
+                titleZh: parts[2],
+                titleEn: parts[3],
+                status: parts[4]
+            )
         }
     }
 }

@@ -160,9 +160,42 @@ impl StoryBible {
         can_write_relative_path(SuiteApp::Hub, STORY_BIBLE_REL_PATH)?;
         atomic_write_xml(&project_dir.join(STORY_BIBLE_REL_PATH), &self.to_xml())
     }
+
+    /// Exports compact tab-delimited summary lines (`id\tname_zh\tname_en\trole\tpalette_hex`)
+    /// for zero-allocation C-ABI read-only display in `S1`/`S2`/`S3` UI shells.
+    pub fn export_summary_lines(&self) -> String {
+        self.characters
+            .iter()
+            .map(|c| {
+                format!(
+                    "{}\t{}\t{}\t{}\t{}",
+                    c.id.replace(['\t', '\n', '\r'], " "),
+                    c.name_zh.replace(['\t', '\n', '\r'], " "),
+                    c.name_en.replace(['\t', '\n', '\r'], " "),
+                    c.role.replace(['\t', '\n', '\r'], " "),
+                    c.palette_hex.replace(['\t', '\n', '\r'], " "),
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
 }
 
 impl ProjectToc {
+    pub fn upsert_entry(&mut self, entry: TocChapterEntry) {
+        if let Some(existing) = self
+            .entries
+            .iter_mut()
+            .find(|e| e.chapter_id == entry.chapter_id)
+        {
+            *existing = entry;
+        } else {
+            self.entries.push(entry);
+        }
+        self.entries
+            .sort_by(|a, b| a.number.cmp(&b.number).then_with(|| a.chapter_id.cmp(&b.chapter_id)));
+    }
+
     pub fn to_xml(&self) -> String {
         let mut out = format!(
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
@@ -207,10 +240,39 @@ impl ProjectToc {
         Ok(Self { entries })
     }
 
+    pub fn load_from_project(project_dir: &Path) -> Result<Self, String> {
+        let path = project_dir.join(PROJECT_TOC_REL_PATH);
+        if !path.is_file() {
+            return Ok(Self::default());
+        }
+        let xml = fs::read_to_string(&path)
+            .map_err(|e| format!("Failed reading '{}': {e}", path.display()))?;
+        Self::parse_xml(&xml)
+    }
+
     /// Atomically persists `outline/toc.xml` strictly under `SuiteApp::Hub` write ownership.
     pub fn save_atomic(&self, project_dir: &Path) -> Result<PathBuf, String> {
         can_write_relative_path(SuiteApp::Hub, PROJECT_TOC_REL_PATH)?;
         atomic_write_xml(&project_dir.join(PROJECT_TOC_REL_PATH), &self.to_xml())
+    }
+
+    /// Exports compact tab-delimited summary lines (`chapter_id\tnumber\ttitle_zh\ttitle_en\tstatus`)
+    /// for zero-allocation C-ABI read-only display in `S1`/`S2`/`S3` UI shells.
+    pub fn export_summary_lines(&self) -> String {
+        self.entries
+            .iter()
+            .map(|e| {
+                format!(
+                    "{}\t{}\t{}\t{}\t{}",
+                    e.chapter_id.replace(['\t', '\n', '\r'], " "),
+                    e.number,
+                    e.title_zh.replace(['\t', '\n', '\r'], " "),
+                    e.title_en.replace(['\t', '\n', '\r'], " "),
+                    e.status.replace(['\t', '\n', '\r'], " "),
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
 
@@ -259,19 +321,34 @@ mod tests {
 
         let loaded = StoryBible::load_from_project(&root).unwrap();
         assert_eq!(loaded, bible);
+        assert_eq!(
+            loaded.export_summary_lines(),
+            "char-lin\t林晓\tLin Xiao\tprotagonist\t#4F7CFF"
+        );
 
-        let toc = ProjectToc {
-            entries: vec![TocChapterEntry {
-                chapter_id: "ch001".into(),
-                number: 1,
-                title_zh: "星辉觉醒".into(),
-                title_en: "Starlight Awakening".into(),
-                status: "in_progress".into(),
-            }],
-        };
+        let mut toc = ProjectToc::default();
+        toc.upsert_entry(TocChapterEntry {
+            chapter_id: "ch002".into(),
+            number: 2,
+            title_zh: "墨影回廊".into(),
+            title_en: "Ink Shadow Corridor".into(),
+            status: "draft".into(),
+        });
+        toc.upsert_entry(TocChapterEntry {
+            chapter_id: "ch001".into(),
+            number: 1,
+            title_zh: "星辉觉醒".into(),
+            title_en: "Starlight Awakening".into(),
+            status: "in_progress".into(),
+        });
         toc.save_atomic(&root).unwrap();
         let rev2 = story_bible_revision_hash(&root);
         assert_ne!(rev1, rev2);
+
+        let loaded_toc = ProjectToc::load_from_project(&root).unwrap();
+        assert_eq!(loaded_toc.entries.len(), 2);
+        assert_eq!(loaded_toc.entries[0].chapter_id, "ch001");
+        assert!(loaded_toc.export_summary_lines().contains("ch001\t1\t星辉觉醒"));
 
         // Enforce write-ownership isolation: only S1 Hub may write bible/ and outline/
         assert!(can_write_relative_path(SuiteApp::Hub, STORY_BIBLE_REL_PATH).is_ok());

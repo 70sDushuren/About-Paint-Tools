@@ -165,41 +165,60 @@ public struct CelLayerDrawerView: View {
     private func layerRow(index: Int) -> some View {
         let item = layers[index]
         let selected = item.id == selectedLayerId
-        return Button {
-            selectedLayerId = item.id
-        } label: {
-            HStack(spacing: 6) {
-                if item.clippingMask {
-                    Text("↳")
-                        .font(.caption2.bold())
-                        .foregroundStyle(SuiteColorTokens.mangaAccent)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.name)
-                        .font(.caption.weight(selected ? .bold : .regular))
-                        .foregroundStyle(item.blueSketchTint ? Color(red: 0.38, green: 0.68, blue: 1.0) : .white)
-                        .lineLimit(1)
-                    Text("\(item.blendMode.displayName) · \(Int(item.opacity * 100))%")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(Color.white.opacity(0.55))
-                }
-                Spacer()
-                HStack(spacing: 3) {
-                    if item.isReference { badge("R") }
-                    if item.alphaLock { badge("🔒") }
-                    if item.blueSketchTint { badge("B") }
+        return HStack(spacing: 6) {
+            Button {
+                layers[index].visible.toggle()
+                onUpdateLayer(layers[index])
+            } label: {
+                Image(systemName: item.visible ? "eye.fill" : "eye.slash")
+                    .font(.caption2)
+                    .foregroundStyle(item.visible ? Color.white.opacity(0.85) : Color.white.opacity(0.32))
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Toggle layer visibility")
+
+            Button {
+                selectedLayerId = item.id
+            } label: {
+                HStack(spacing: 6) {
+                    if item.clippingMask {
+                        Text("↳")
+                            .font(.caption2.bold())
+                            .foregroundStyle(SuiteColorTokens.mangaAccent)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.name)
+                            .font(.caption.weight(selected ? .bold : .regular))
+                            .foregroundStyle(
+                                !item.visible
+                                    ? Color.white.opacity(0.35)
+                                    : (item.blueSketchTint ? Color(red: 0.38, green: 0.68, blue: 1.0) : .white)
+                            )
+                            .lineLimit(1)
+                        Text("\(item.blendMode.displayName) · \(Int(item.opacity * 100))%")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(Color.white.opacity(0.55))
+                    }
+                    Spacer()
+                    HStack(spacing: 3) {
+                        if item.isReference { badge("R") }
+                        if item.clippingMask { badge("✂") }
+                        if item.alphaLock { badge("🔒") }
+                        if item.blueSketchTint { badge("B") }
+                    }
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 7)
-            .background(selected ? SuiteColorTokens.mangaAccent.opacity(0.22) : Color.white.opacity(0.04))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .strokeBorder(selected ? SuiteColorTokens.mangaAccent : Color.clear, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background(selected ? SuiteColorTokens.mangaAccent.opacity(0.22) : Color.white.opacity(0.04))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(selected ? SuiteColorTokens.mangaAccent : Color.clear, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private func badge(_ text: String) -> some View {

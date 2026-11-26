@@ -832,6 +832,118 @@ pub unsafe extern "C" fn manga_project_set_layer_flags(
     1
 }
 
+unsafe fn write_utf8_to_c_buf(text: &str, out_buf: *mut c_char, out_cap: usize) -> usize {
+    if out_buf.is_null() || out_cap == 0 {
+        return 0;
+    }
+    let bytes = text.as_bytes();
+    let max_copy = out_cap.saturating_sub(1);
+    let mut n = bytes.len().min(max_copy);
+    // Avoid splitting multi-byte UTF-8 characters when truncated.
+    while n > 0 && !text.is_char_boundary(n) {
+        n -= 1;
+    }
+    unsafe {
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), out_buf.cast::<u8>(), n);
+        *out_buf.add(n) = 0;
+    }
+    n
+}
+
+/// Reads tab-delimited Story Bible summary lines into caller-owned UTF-8 buffer (`S1`/`S3` RO, `v0.3.2`).
+/// Returns bytes written (excluding NUL terminator).
+///
+/// # Safety
+/// `project_dir_utf8` must be a valid NUL-terminated string; `out_buf` must have capacity `out_cap`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_bible_read_summary(
+    project_dir_utf8: *const c_char,
+    out_buf: *mut c_char,
+    out_cap: usize,
+) -> usize {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    if dir.is_empty() {
+        return 0;
+    }
+    let Ok(bible) = crate::bible::StoryBible::load_from_project(std::path::Path::new(&dir)) else {
+        return 0;
+    };
+    let summary = bible.export_summary_lines();
+    unsafe { write_utf8_to_c_buf(&summary, out_buf, out_cap) }
+}
+
+/// Atomically upserts a chapter entry into `outline/toc.xml` under `SuiteApp::Hub` (`S1 v0.3.2`).
+///
+/// # Safety
+/// All non-null string pointers must be valid NUL-terminated UTF-8 strings.
+#[no_mangle]
+pub unsafe extern "C" fn manga_toc_upsert_entry(
+    project_dir_utf8: *const c_char,
+    chapter_id_utf8: *const c_char,
+    number: u32,
+    title_zh_utf8: *const c_char,
+    title_en_utf8: *const c_char,
+    status_utf8: *const c_char,
+) -> u8 {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    let chapter_id = unsafe { cstr_to_string(chapter_id_utf8, "") };
+    if dir.is_empty() || chapter_id.is_empty() {
+        return 0;
+    }
+    let title_zh = unsafe { cstr_to_string(title_zh_utf8, "") };
+    let title_en = unsafe { cstr_to_string(title_en_utf8, "") };
+    let status = unsafe { cstr_to_string(status_utf8, "draft") };
+    let root = std::path::Path::new(&dir);
+    let mut toc = match crate::bible::ProjectToc::load_from_project(root) {
+        Ok(t) => t,
+        Err(_) => return 0,
+    };
+    toc.upsert_entry(crate::bible::TocChapterEntry {
+        chapter_id,
+        number,
+        title_zh,
+        title_en,
+        status,
+    });
+    u8::from(toc.save_atomic(root).is_ok())
+}
+
+/// Reads tab-delimited Master TOC summary lines into caller-owned UTF-8 buffer (`S1`/`S3` RO, `v0.3.2`).
+/// Returns bytes written (excluding NUL terminator).
+///
+/// # Safety
+/// `project_dir_utf8` must be a valid NUL-terminated string; `out_buf` must have capacity `out_cap`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_toc_read_summary(
+    project_dir_utf8: *const c_char,
+    out_buf: *mut c_char,
+    out_cap: usize,
+) -> usize {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    if dir.is_empty() {
+        return 0;
+    }
+    let Ok(toc) = crate::bible::ProjectToc::load_from_project(std::path::Path::new(&dir)) else {
+        return 0;
+    };
+    let summary = toc.export_summary_lines();
+    unsafe { write_utf8_to_c_buf(&summary, out_buf, out_cap) }
+}
+
+/// Executes the **`T0.3-S4` Story Bible Hot-Reload (`< 300ms`) & 13-Mode Cel Layer Gate**.
+/// Returns `1` on PASS, `0` on failure.
+///
+/// # Safety
+/// `project_dir_utf8` must be null or a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn manga_suite_run_t03_s4_gate(project_dir_utf8: *const c_char) -> u8 {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    if dir.is_empty() {
+        return 0;
+    }
+    u8::from(crate::suite::run_t03_s4_bible_layers_gate(std::path::Path::new(&dir)).is_ok())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1022,6 +1134,49 @@ mod tests {
 
             // T0.2-S4 100-round Tri-App concurrency soak gate!
             assert_eq!(manga_suite_run_s4_gate(c_renamed.as_ptr(), 100), 1);
+
+            let _ = std::fs::remove_dir_all(&parent);
+        }
+    }
+
+    #[test]
+    fn c_abi_v032_summary_and_t03_s4_gate_pass() {
+        unsafe {
+            let parent = std::env::temp_dir().join(format!("manga_v032_ffi_{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&parent);
+            std::fs::create_dir_all(&parent).unwrap();
+
+            let c_parent = CString::new(parent.to_str().unwrap()).unwrap();
+            let c_folder = CString::new("V032Prj").unwrap();
+            let c_author = CString::new("S4Runner").unwrap();
+            assert_eq!(manga_hub_init_project(c_parent.as_ptr(), c_folder.as_ptr(), c_author.as_ptr()), 1);
+
+            let prj = parent.join("V032Prj");
+            let c_prj = CString::new(prj.to_str().unwrap()).unwrap();
+
+            // Run full T0.3-S4 gate via C-ABI
+            assert_eq!(manga_suite_run_t03_s4_gate(c_prj.as_ptr()), 1);
+
+            // Read back Story Bible & TOC summaries via caller-owned UTF-8 buffer
+            let mut buf = vec![0 as c_char; 4096];
+            let bible_len = manga_bible_read_summary(c_prj.as_ptr(), buf.as_mut_ptr(), buf.len());
+            assert!(bible_len > 0);
+            let bible_str = std::ffi::CStr::from_ptr(buf.as_ptr()).to_str().unwrap().to_string();
+            assert!(bible_str.contains("char-lin\t林晓\tLin Xiao"));
+
+            let toc_len = manga_toc_read_summary(c_prj.as_ptr(), buf.as_mut_ptr(), buf.len());
+            assert!(toc_len > 0);
+            let toc_str = std::ffi::CStr::from_ptr(buf.as_ptr()).to_str().unwrap().to_string();
+            assert!(toc_str.contains("ch001\t1\t星辉觉醒"));
+
+            // Upsert a 4th chapter via C-ABI
+            let cid = CString::new("ch004").unwrap();
+            let zh = CString::new("星门彼岸").unwrap();
+            let en = CString::new("Beyond Star Gate").unwrap();
+            let st = CString::new("draft").unwrap();
+            assert_eq!(manga_toc_upsert_entry(c_prj.as_ptr(), cid.as_ptr(), 4, zh.as_ptr(), en.as_ptr(), st.as_ptr()), 1);
+            let toc_len2 = manga_toc_read_summary(c_prj.as_ptr(), buf.as_mut_ptr(), buf.len());
+            assert!(toc_len2 > toc_len);
 
             let _ = std::fs::remove_dir_all(&parent);
         }

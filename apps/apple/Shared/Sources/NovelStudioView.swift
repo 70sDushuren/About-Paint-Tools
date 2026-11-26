@@ -43,20 +43,25 @@ private struct NovelChapterItem: Identifiable {
     let humanLocked: Bool
 }
 
-/// `S3 v0.2.2` — `文心 / LitteraCore` (Working Codename) light-novel studio:
+/// `S3 v0.3.2` — `文心 / LitteraCore` (Working Codename) light-novel studio:
 /// 「素笺」3 eye-friendly themes (Warm Paper / Sepia / Night Ink) + Calm Sage (#2FA88B) +
-/// Zen mode + read-only outline sidebar + live Rust `MangaNovelMetrics.countUnits` +
-/// dashed read-only AI reference drawer (zero auto-overwrite of human canon).
+/// Zen mode + live `< 300ms` disk revision-hash watcher for RO `Story Bible` & `CPFF TOC` +
+/// live Rust `MangaNovelMetrics.countUnits` + dashed read-only AI reference drawer.
 public struct NovelStudioView: View {
     public let layout: WorkspaceLayoutHintKind
     public let hintModeActive: Bool
     public let hingeAvoidanceWidthPt: CGFloat
+    public let activeProjectDir: String
 
     @State private var theme: PaperThemeKind = .warmPaper
     @State private var zenMode: Bool = false
     @State private var showOutline: Bool = true
     @State private var showAiRefDrawer: Bool = false
     @State private var selectedChapterId: String = "ch001"
+    @State private var liveBibleCharacters: [StoryBibleCharacterSummary] = []
+    @State private var liveTocEntries: [ProjectTocEntrySummary] = []
+    @State private var observedRevisionHash: UInt64 = 0
+    @State private var lastHotReloadMs: Double = 0.0
     @State private var proseText: String = """
     # 第一话 星辉觉醒 / Episode 1: Starlight Awakening
 
@@ -72,7 +77,7 @@ public struct NovelStudioView: View {
     - Starlight crest pulsing softly before the first ink stroke lands
     """
 
-    private let chapters: [NovelChapterItem] = [
+    private let fallbackChapters: [NovelChapterItem] = [
         NovelChapterItem(id: "ch001", title: "Ch.001 星辉觉醒", hasDivergence: true, humanLocked: true),
         NovelChapterItem(id: "ch002", title: "Ch.002 墨影回廊", hasDivergence: false, humanLocked: false),
         NovelChapterItem(id: "ch003", title: "Ch.003 双生分镜", hasDivergence: false, humanLocked: false),
@@ -81,11 +86,13 @@ public struct NovelStudioView: View {
     public init(
         layout: WorkspaceLayoutHintKind,
         hintModeActive: Bool,
-        hingeAvoidanceWidthPt: CGFloat = 0
+        hingeAvoidanceWidthPt: CGFloat = 0,
+        activeProjectDir: String = SuiteSharedWorkspace.defaultProjectDir
     ) {
         self.layout = layout
         self.hintModeActive = hintModeActive
         self.hingeAvoidanceWidthPt = hingeAvoidanceWidthPt
+        self.activeProjectDir = activeProjectDir
     }
 
     public var body: some View {
@@ -97,7 +104,7 @@ public struct NovelStudioView: View {
 
             if !zenMode && showOutline && layout != .singlePaneCompact {
                 outlineSidebar
-                    .frame(width: 224)
+                    .frame(width: 236)
                 Divider()
             }
 
@@ -111,6 +118,34 @@ public struct NovelStudioView: View {
             }
         }
         .background(theme.background)
+        .task(id: activeProjectDir) {
+            // S3 v0.3.2 Live <300ms SLA disk revision watcher (250ms poll interval; zero cursor disruption)
+            await runHotReloadWatcher()
+        }
+    }
+
+    @MainActor
+    private func runHotReloadWatcher() async {
+        syncStoryBibleFromDisk(force: true)
+        while !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { break }
+            syncStoryBibleFromDisk(force: false)
+        }
+    }
+
+    @MainActor
+    private func syncStoryBibleFromDisk(force: Bool) {
+        #if canImport(MangaCoreFFI)
+        let t0 = Date()
+        let currentHash = MangaStoryBible.revisionHash(projectDir: activeProjectDir)
+        if force || currentHash != observedRevisionHash {
+            observedRevisionHash = currentHash
+            liveBibleCharacters = MangaStoryBible.readCharacters(projectDir: activeProjectDir)
+            liveTocEntries = MangaStoryBible.readTocEntries(projectDir: activeProjectDir)
+            lastHotReloadMs = Date().timeIntervalSince(t0) * 1000.0
+        }
+        #endif
     }
 
     // MARK: - 56px Calm Sage Icon Rail
@@ -155,9 +190,9 @@ public struct NovelStudioView: View {
                 glyph: .novelOutline,
                 title: "Chapter Outline (RO)",
                 roleBadge: "Shared .prj",
-                summary: "Toggle read-only CPFF chapter tree synced from S1 outline/toc.xml.",
+                summary: "Toggle live read-only CPFF chapter tree & Story Bible synced from S1 (< 300ms).",
                 shortcut: "⌘\\",
-                ownershipCue: "RO Mirror from S1"
+                ownershipCue: "RO Hot-Reload from S1"
             ),
             ToolHintSpec(
                 id: "theme",
@@ -200,84 +235,115 @@ public struct NovelStudioView: View {
 
     // MARK: - Outline Sidebar & Editor Canvas
 
-    private var outlineSidebar: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("CPFF Chapters (RO)")
-                .font(.caption.bold())
-                .foregroundStyle(theme.textColor.opacity(0.75))
+    private var displayedChapters: [NovelChapterItem] {
+        if liveTocEntries.isEmpty {
+            return fallbackChapters
+        }
+        return liveTocEntries.map { entry in
+            let title = entry.titleZh.isEmpty ? entry.titleEn : entry.titleZh
+            return NovelChapterItem(
+                id: entry.id,
+                title: "Ch.\(String(format: "%03d", entry.number)) \(title)",
+                hasDivergence: entry.id == "ch001",
+                humanLocked: entry.id == "ch001"
+            )
+        }
+    }
 
-            ForEach(chapters) { ch in
-                let active = ch.id == selectedChapterId
-                Button {
-                    selectedChapterId = ch.id
-                } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(ch.title)
-                                .font(.caption.weight(active ? .bold : .regular))
-                                .foregroundStyle(theme.textColor)
-                            Spacer()
-                            if ch.humanLocked {
-                                Image(systemName: "lock.fill")
-                                    .font(.caption2)
-                                    .foregroundStyle(SuiteColorTokens.novelAccent)
+    private var outlineSidebar: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("CPFF Chapters (RO)")
+                    .font(.caption.bold())
+                    .foregroundStyle(theme.textColor.opacity(0.75))
+
+                ForEach(displayedChapters) { ch in
+                    let active = ch.id == selectedChapterId
+                    Button {
+                        selectedChapterId = ch.id
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text(ch.title)
+                                    .font(.caption.weight(active ? .bold : .regular))
+                                    .foregroundStyle(theme.textColor)
+                                    .lineLimit(1)
+                                Spacer()
+                                if ch.humanLocked {
+                                    Image(systemName: "lock.fill")
+                                        .font(.caption2)
+                                        .foregroundStyle(SuiteColorTokens.novelAccent)
+                                }
+                            }
+                            if ch.hasDivergence {
+                                Text("DivergenceNote · Manga ↔ Novel")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(SuiteColorTokens.divergenceAmber.opacity(0.16))
+                                    .foregroundStyle(SuiteColorTokens.divergenceAmber)
+                                    .clipShape(Capsule())
                             }
                         }
-                        if ch.hasDivergence {
-                            Text("DivergenceNote · Manga ↔ Novel")
-                                .font(.system(size: 10, weight: .semibold))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(SuiteColorTokens.divergenceAmber.opacity(0.16))
-                                .foregroundStyle(SuiteColorTokens.divergenceAmber)
-                                .clipShape(Capsule())
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(active ? SuiteColorTokens.novelAccent.opacity(0.15) : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Story Bible (RO)")
+                            .font(.caption.bold())
+                            .foregroundStyle(theme.textColor.opacity(0.75))
+                        Spacer()
+                        Text(String(format: "%.1fms", max(0.1, lastHotReloadMs)))
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(SuiteColorTokens.novelAccent.opacity(0.15))
+                            .foregroundStyle(SuiteColorTokens.novelAccent)
+                            .clipShape(Capsule())
+                    }
+
+                    if liveBibleCharacters.isEmpty {
+                        HStack(spacing: 6) {
+                            Circle().fill(SuiteColorTokens.hubAccent).frame(width: 8, height: 8)
+                            Text("林晓 · Lin Xiao (Protagonist)")
+                                .font(.caption2)
+                                .foregroundStyle(theme.textColor.opacity(0.85))
+                        }
+                    } else {
+                        ForEach(liveBibleCharacters) { character in
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(character.role == "rival" ? SuiteColorTokens.mangaAccent : SuiteColorTokens.hubAccent)
+                                    .frame(width: 8, height: 8)
+                                Text("\(character.nameZh) · \(character.nameEn) (\(character.role))")
+                                    .font(.caption2)
+                                    .foregroundStyle(theme.textColor.opacity(0.88))
+                                    .lineLimit(1)
+                            }
                         }
                     }
-                    .padding(8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(active ? SuiteColorTokens.novelAccent.opacity(0.15) : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                    Text("Hash #\(String(observedRevisionHash, radix: 16).prefix(6).uppercased()) · 250ms watch")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundStyle(theme.textColor.opacity(0.55))
                 }
-                .buttonStyle(.plain)
+
+                Divider()
+
+                Text("RAM Budget: \(novelRamBudgetMb) MB · GPU: Off")
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(theme.textColor.opacity(0.6))
             }
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text("Story Bible (RO)")
-                        .font(.caption.bold())
-                        .foregroundStyle(theme.textColor.opacity(0.75))
-                    Spacer()
-                    Text("<300ms")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(SuiteColorTokens.novelAccent.opacity(0.15))
-                        .foregroundStyle(SuiteColorTokens.novelAccent)
-                        .clipShape(Capsule())
-                }
-                HStack(spacing: 6) {
-                    Circle().fill(SuiteColorTokens.hubAccent).frame(width: 8, height: 8)
-                    Text("林晓 · Lin Xiao (Protagonist)")
-                        .font(.caption2)
-                        .foregroundStyle(theme.textColor.opacity(0.85))
-                }
-                HStack(spacing: 6) {
-                    Circle().fill(SuiteColorTokens.mangaAccent).frame(width: 8, height: 8)
-                    Text("墨凛 · Mo Lin (Rival)")
-                        .font(.caption2)
-                        .foregroundStyle(theme.textColor.opacity(0.85))
-                }
-            }
-
-            Spacer()
-
-            Text("RAM Budget: \(novelRamBudgetMb) MB · GPU: Off")
-                .font(.caption2.monospaced())
-                .foregroundStyle(theme.textColor.opacity(0.6))
+            .padding(12)
         }
-        .padding(12)
         .background(theme.chromeBackground)
     }
 
@@ -342,11 +408,9 @@ public struct NovelStudioView: View {
 
     private func performAtomicDraftSave() {
         #if canImport(MangaCoreFFI)
-        let sandbox = FileManager.default.temporaryDirectory
-            .appendingPathComponent("AboutPaintNovelSandbox", isDirectory: true)
-        try? FileManager.default.createDirectory(at: sandbox, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(atPath: activeProjectDir, withIntermediateDirectories: true)
         _ = MangaNovelMetrics.saveProseAtomic(
-            projectDir: sandbox.path,
+            projectDir: activeProjectDir,
             relPath: "chapters/\(selectedChapterId)/novel/prose/zh-Hans.md",
             markdown: proseText,
             isLocked: false,

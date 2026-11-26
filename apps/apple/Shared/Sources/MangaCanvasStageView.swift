@@ -21,15 +21,37 @@ public struct BrushPresetDescriptor: Identifiable, Sendable {
 
 private struct CanvasStrokeRecord: Identifiable {
     let id = UUID()
+    var layerId: UInt64
     var points: [CGPoint]
     var widths: [CGFloat]
     var color: Color
     var isEraser: Bool
 }
 
-/// `S2 v0.2.2` — `雕龙 / DracoNib` (Working Codename) studio workspace:
+extension LayerBlendMode {
+    /// Maps all 13 Rust `BlendMode` values to SwiftUI `GraphicsContext.BlendMode` for live `S2 v0.3.2` cel preview.
+    public var swiftUIBlendMode: GraphicsContext.BlendMode {
+        switch self {
+        case .normal: return .normal
+        case .multiply: return .multiply
+        case .screen: return .screen
+        case .overlay: return .overlay
+        case .glowDodge: return .plusLighter
+        case .linearBurn: return .colorBurn
+        case .hardLight: return .hardLight
+        case .softLight: return .softLight
+        case .darken: return .darken
+        case .lighten: return .lighten
+        case .colorBurn: return .colorBurn
+        case .colorDodge: return .colorDodge
+        case .add: return .plusLighter
+        }
+    }
+}
+
+/// `S2 v0.3.2` — `雕龙 / DracoNib` (Working Codename) studio workspace:
 /// Zero-tint OLED Studio Charcoal (#111216) + Crimson-Coral (#FF6B4A) + 56px Icon Rail +
-/// 8 Dual-Track Anime Brush Presets + live Rust `MangaBrushDynamics` & `MangaCanvasEngine` FFI.
+/// 8 Dual-Track Anime Brush Presets + live multi-layer 13-mode cel compositing preview (`R`/`✂`/`🔒`/`B`).
 public struct MangaCanvasStageView: View {
     public let layout: WorkspaceLayoutHintKind
     public let hintModeActive: Bool
@@ -172,7 +194,7 @@ public struct MangaCanvasStageView: View {
                 glyph: .mangaLayers,
                 title: "Cel Layer Stack",
                 roleBadge: "13 Modes",
-                summary: "13 cel blend modes, clipping masks & alpha lock (v0.3 drawer).",
+                summary: "Live 13 cel blend modes, visibility, clipping masks, alpha lock & blue sketch tint.",
                 shortcut: "L",
                 ownershipCue: "256×256 Sparse Tiles"
             ),
@@ -210,9 +232,15 @@ public struct MangaCanvasStageView: View {
                     .background(SuiteColorTokens.mangaAccent)
                     .clipShape(Capsule())
 
+                if let activeLayer = selectedCelLayer {
+                    Text("Layer: \(activeLayer.name) [\(activeLayer.blendMode.displayName)\(activeLayer.alphaLock ? " 🔒" : "")\(activeLayer.blueSketchTint ? " B" : "")]")
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(activeLayer.blueSketchTint ? Color(red: 0.45, green: 0.72, blue: 1.0) : Color.white.opacity(0.8))
+                }
+
                 Text(canvasDimensions)
                     .font(.caption2.monospaced())
-                    .foregroundStyle(Color.white.opacity(0.7))
+                    .foregroundStyle(Color.white.opacity(0.6))
 
                 Spacer()
 
@@ -242,12 +270,7 @@ public struct MangaCanvasStageView: View {
                     .shadow(color: .black.opacity(0.45), radius: 14, y: 4)
 
                 Canvas { context, _ in
-                    for stroke in strokes {
-                        render(stroke, in: &context)
-                    }
-                    if let activeStroke {
-                        render(activeStroke, in: &context)
-                    }
+                    renderAllCelLayers(in: &context)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .gesture(
@@ -260,7 +283,7 @@ public struct MangaCanvasStageView: View {
                         }
                 )
 
-                Text("Rust CoW Tiles: \(allocatedTiles) · Effective Radius: \(String(format: "%.1fpx", currentRustRadius)) · Rope: \(String(format: "%.1fpx", currentAdaptiveRope))")
+                Text("Rust CoW Tiles: \(allocatedTiles) · Radius: \(String(format: "%.1fpx", currentRustRadius)) · Rope: \(String(format: "%.1fpx", currentAdaptiveRope)) · Layers: \(celLayers.filter { $0.visible }.count)/\(celLayers.count)")
                     .font(.caption2.monospaced())
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
@@ -517,10 +540,26 @@ public struct MangaCanvasStageView: View {
         #endif
     }
 
+    private var selectedCelLayer: CelLayerRowItem? {
+        celLayers.first(where: { $0.id == selectedLayerId })
+    }
+
     private func handleDragChanged(at point: CGPoint) {
+        if let activeLayer = selectedCelLayer {
+            if !activeLayer.visible {
+                statusLine = "Layer '\(activeLayer.name)' is hidden — toggle eye icon to draw."
+                return
+            }
+            if activeLayer.alphaLock && !strokes.contains(where: { $0.layerId == activeLayer.id }) {
+                statusLine = "Alpha Lock (🔒) blocked stroke on empty layer '\(activeLayer.name)'."
+                return
+            }
+        }
+
         let radius = max(1.0, CGFloat(currentRustRadius))
         if activeStroke == nil {
             activeStroke = CanvasStrokeRecord(
+                layerId: selectedLayerId,
                 points: [point],
                 widths: [radius],
                 color: activePreset.baseColor,
@@ -600,9 +639,56 @@ public struct MangaCanvasStageView: View {
         initRustCanvas()
     }
 
-    private func render(_ stroke: CanvasStrokeRecord, in context: inout GraphicsContext) {
+    /// `S2 v0.3.2` — Live multi-layer cel compositing preview honoring visibility, opacity,
+    /// all 13 `LayerBlendMode`s, non-destructive `B` blue sketch tint, and `✂` clipping mask.
+    private func renderAllCelLayers(in context: inout GraphicsContext) {
+        let activeLayers = celLayers.isEmpty
+            ? [CelLayerRowItem(id: selectedLayerId, name: "Default")]
+            : celLayers
+
+        var lastBaseHasContent = false
+        for layer in activeLayers {
+            let layerStrokes = strokes.filter { $0.layerId == layer.id }
+            let liveStroke = (activeStroke?.layerId == layer.id) ? activeStroke : nil
+            let hasContent = !layerStrokes.isEmpty || liveStroke != nil
+
+            if !layer.visible || layer.opacity <= 0.001 {
+                if !layer.clippingMask {
+                    lastBaseHasContent = false
+                }
+                continue
+            }
+
+            if !layer.clippingMask {
+                lastBaseHasContent = hasContent
+            } else if !lastBaseHasContent {
+                // Clipping mask restricts visibility strictly when the base layer below has content.
+                continue
+            }
+
+            context.drawLayer { layerCtx in
+                layerCtx.opacity = layer.opacity
+                layerCtx.blendMode = layer.blendMode.swiftUIBlendMode
+                for stroke in layerStrokes {
+                    render(stroke, blueSketchTint: layer.blueSketchTint, in: &layerCtx)
+                }
+                if let liveStroke {
+                    render(liveStroke, blueSketchTint: layer.blueSketchTint, in: &layerCtx)
+                }
+            }
+        }
+    }
+
+    private func render(_ stroke: CanvasStrokeRecord, blueSketchTint: Bool, in context: inout GraphicsContext) {
         guard stroke.points.count >= 2 else { return }
-        let color: Color = stroke.isEraser ? .white : stroke.color
+        let color: Color
+        if stroke.isEraser {
+            color = .white
+        } else if blueSketchTint {
+            color = Color(red: 0.30, green: 0.65, blue: 1.0)
+        } else {
+            color = stroke.color
+        }
         for idx in 1..<stroke.points.count {
             var seg = Path()
             seg.move(to: stroke.points[idx - 1])

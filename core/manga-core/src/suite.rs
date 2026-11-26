@@ -481,6 +481,217 @@ pub fn run_t02_s4_concurrency_soak(
     })
 }
 
+/// Summary produced by the **`T0.3-S4` Story Bible Hot-Reload (`< 300ms`) & 13-Mode Cel Layer Gate**.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct T03S4GateReport {
+    pub bible_characters_verified: usize,
+    pub toc_entries_verified: usize,
+    pub hot_reload_latency_ms: u64,
+    pub cel_blend_modes_verified: usize,
+    pub clipping_mask_verified: bool,
+    pub alpha_lock_verified: bool,
+    pub blue_sketch_tint_verified: bool,
+    pub write_isolation_verified: bool,
+    pub temp_files_remaining: usize,
+}
+
+/// Executes the **`T0.3-S4` Integration & Compatibility Gate** over a CPFF v1.0 `.prj` workspace:
+/// - `S1`: Atomically writes 3 Story Bible characters (`bible/characters.xml`) and 3 TOC entries
+///   (`outline/toc.xml`), confirming monotonic revision hash changes and zero leaked `.tmp.*`.
+/// - `S2`: Exercises all **13 anime cel-shading blend modes**, `R` reference layer query,
+///   `✂` clipping mask alpha restriction, `🔒` alpha lock preservation, and `B` non-destructive
+///   blue sketch tinting inside `LayerStack::composite_pixel`.
+/// - `S3`: Measures live cross-app hot-reload (`story_bible_revision_hash` + RO reload of Story Bible
+///   & TOC) strictly under the `< 300ms` SLA, and asserts `S2`/`S3` write attempts to `bible/` and
+///   `outline/` are blocked.
+pub fn run_t03_s4_bible_layers_gate(project_dir: &Path) -> Result<T03S4GateReport, String> {
+    let _ = run_tri_app_compatibility_check(project_dir)?;
+
+    // 1. S1 atomic Story Bible + TOC persistence
+    let rev_start = crate::bible::story_bible_revision_hash(project_dir);
+    let mut bible = crate::bible::StoryBible::load_from_project(project_dir)?;
+    for (id, zh, en, role, hex) in [
+        ("char-lin", "林晓", "Lin Xiao", "protagonist", "#4F7CFF"),
+        ("char-ren", "墨凛", "Mo Lin", "rival", "#FF6B4A"),
+        ("char-sora", "苍月", "Sora Tsuki", "mentor", "#2FA88B"),
+    ] {
+        bible.upsert_character(crate::bible::BibleCharacter {
+            id: id.into(),
+            name_zh: zh.into(),
+            name_en: en.into(),
+            role: role.into(),
+            palette_hex: hex.into(),
+            visual_anchors: vec![format!("{en} signature silhouette")],
+        });
+    }
+    bible.save_atomic(project_dir)?;
+    let rev_after_bible = crate::bible::story_bible_revision_hash(project_dir);
+    if rev_after_bible == rev_start {
+        return Err("T0.3-S4 S1 revision hash did not change after StoryBible atomic save".into());
+    }
+
+    let mut toc = crate::bible::ProjectToc::load_from_project(project_dir)?;
+    for (cid, num, zh, en, status) in [
+        ("ch001", 1, "星辉觉醒", "Starlight Awakening", "in_progress"),
+        ("ch002", 2, "墨影回廊", "Ink Shadow Corridor", "draft"),
+        ("ch003", 3, "双生分镜", "Twin Storyboards", "planned"),
+    ] {
+        toc.upsert_entry(crate::bible::TocChapterEntry {
+            chapter_id: cid.into(),
+            number: num,
+            title_zh: zh.into(),
+            title_en: en.into(),
+            status: status.into(),
+        });
+    }
+    toc.save_atomic(project_dir)?;
+    let rev_after_toc = crate::bible::story_bible_revision_hash(project_dir);
+    if rev_after_toc == rev_after_bible {
+        return Err("T0.3-S4 S1 revision hash did not change after ProjectToc atomic save".into());
+    }
+
+    // 2. S3 read-only hot-reload SLA (< 300ms) + write-ownership isolation check
+    let t0 = std::time::Instant::now();
+    let observed_rev = crate::bible::story_bible_revision_hash(project_dir);
+    let reloaded_bible = crate::bible::StoryBible::load_from_project(project_dir)?;
+    let reloaded_toc = crate::bible::ProjectToc::load_from_project(project_dir)?;
+    let hot_reload_latency_ms = t0.elapsed().as_millis() as u64;
+
+    if observed_rev != rev_after_toc {
+        return Err("T0.3-S4 S3 observed inconsistent revision hash".into());
+    }
+    if reloaded_bible.characters.len() < 3 || reloaded_toc.entries.len() < 3 {
+        return Err("T0.3-S4 S3 reloaded incomplete StoryBible or ProjectToc".into());
+    }
+    if hot_reload_latency_ms >= 300 {
+        return Err(format!(
+            "T0.3-S4 S3 hot-reload exceeded 300ms SLA ({hot_reload_latency_ms}ms)"
+        ));
+    }
+
+    if can_write_relative_path(SuiteApp::Manga, crate::bible::STORY_BIBLE_REL_PATH).is_ok()
+        || can_write_relative_path(SuiteApp::Novel, crate::bible::STORY_BIBLE_REL_PATH).is_ok()
+        || can_write_relative_path(SuiteApp::Novel, crate::bible::PROJECT_TOC_REL_PATH).is_ok()
+    {
+        return Err("T0.3-S4 write isolation failed: S2/S3 must never write bible/ or outline/".into());
+    }
+
+    // 3. S2 13 cel blend modes + R / Clip / AlphaLock / BlueSketch live compositing gate
+    let all_modes = [
+        crate::layer::BlendMode::Normal,
+        crate::layer::BlendMode::Multiply,
+        crate::layer::BlendMode::Screen,
+        crate::layer::BlendMode::Overlay,
+        crate::layer::BlendMode::GlowDodge,
+        crate::layer::BlendMode::LinearBurn,
+        crate::layer::BlendMode::HardLight,
+        crate::layer::BlendMode::SoftLight,
+        crate::layer::BlendMode::Darken,
+        crate::layer::BlendMode::Lighten,
+        crate::layer::BlendMode::ColorBurn,
+        crate::layer::BlendMode::ColorDodge,
+        crate::layer::BlendMode::Add,
+    ];
+    for mode in all_modes {
+        let blended = crate::layer::blend_rgba([180, 140, 120, 255], [90, 110, 200, 200], mode);
+        if blended[3] == 0 {
+            return Err(format!("T0.3-S4 S2 blend mode {:?} produced zero alpha", mode));
+        }
+    }
+
+    let mut stack = crate::layer::LayerStack::new(64, 64);
+    let sketch_id = stack.add_raster_layer("Sketch_Rough");
+    let base_id = stack.add_raster_layer("Base_Flat");
+    let shadow_id = stack.add_raster_layer("Cel_Shadow");
+    let ink_id = stack.add_raster_layer("Ink_Lineart");
+
+    // Blue sketch tint (B)
+    {
+        let sketch = stack.get_mut(sketch_id).unwrap();
+        sketch.tint_rgba = Some([77, 166, 255, 255]);
+        sketch.write_pixel(4, 4, [20, 20, 20, 255]);
+    }
+    let tinted = stack.get(sketch_id).unwrap().sample_display_pixel(4, 4);
+    let blue_sketch_tint_verified = tinted[2] > tinted[0] && tinted[2] >= 200;
+    if !blue_sketch_tint_verified {
+        return Err("T0.3-S4 S2 blue sketch tint failed to recolor dark sketch stroke".into());
+    }
+
+    // Base flat + Alpha Lock (🔒)
+    {
+        let base = stack.get_mut(base_id).unwrap();
+        base.write_pixel(10, 10, [220, 180, 160, 255]);
+        base.alpha_lock = true;
+        // Must reject writing transparent pixel (11,11) and allow recoloring opaque (10,10)
+        if base.write_pixel(11, 11, [255, 0, 0, 255]) {
+            return Err("T0.3-S4 S2 alpha lock failed to block transparent pixel write".into());
+        }
+        if !base.write_pixel(10, 10, [200, 160, 140, 128]) {
+            return Err("T0.3-S4 S2 alpha lock failed to update existing opaque pixel".into());
+        }
+    }
+    let alpha_lock_verified = stack.get(base_id).unwrap().sample_display_pixel(10, 10)[3] == 255;
+    if !alpha_lock_verified {
+        return Err("T0.3-S4 S2 alpha lock did not preserve existing alpha channel".into());
+    }
+
+    // Clipped Multiply Shadow (✂)
+    {
+        let shadow = stack.get_mut(shadow_id).unwrap();
+        shadow.blend_mode = crate::layer::BlendMode::Multiply;
+        shadow.clipping_mask = true;
+        shadow.opacity = 0.75;
+        shadow.write_pixel(10, 10, [100, 100, 160, 255]);
+        shadow.write_pixel(20, 20, [100, 100, 160, 255]); // outside base alpha -> must clip out!
+    }
+    let clipped_inside = stack.composite_pixel(10, 10);
+    let clipped_outside = stack.composite_pixel(20, 20);
+    let clipping_mask_verified = clipped_inside[0] < 200 && clipped_outside[3] == 0;
+    if !clipping_mask_verified {
+        return Err("T0.3-S4 S2 clipping mask failed to clip outside base alpha".into());
+    }
+
+    // Reference Layer (R)
+    {
+        let ink = stack.get_mut(ink_id).unwrap();
+        ink.is_reference = true;
+    }
+    if stack.reference_layer_ids() != vec![ink_id] {
+        return Err("T0.3-S4 S2 reference layer query mismatch".into());
+    }
+
+    // Confirm zero leaked `.tmp.*` in bible/ and outline/
+    let mut temp_files_remaining = 0usize;
+    for sub in ["bible", "outline"] {
+        if let Ok(entries) = std::fs::read_dir(project_dir.join(sub)) {
+            for entry in entries.flatten() {
+                if let Some(name) = entry.file_name().to_str() {
+                    if name.contains(".tmp.") {
+                        temp_files_remaining += 1;
+                    }
+                }
+            }
+        }
+    }
+    if temp_files_remaining > 0 {
+        return Err(format!(
+            "T0.3-S4 leaked {temp_files_remaining} temp files in bible/ or outline/"
+        ));
+    }
+
+    Ok(T03S4GateReport {
+        bible_characters_verified: reloaded_bible.characters.len(),
+        toc_entries_verified: reloaded_toc.entries.len(),
+        hot_reload_latency_ms,
+        cel_blend_modes_verified: all_modes.len(),
+        clipping_mask_verified,
+        alpha_lock_verified,
+        blue_sketch_tint_verified,
+        write_isolation_verified: true,
+        temp_files_remaining,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -531,5 +742,28 @@ mod tests {
         assert!(report.write_isolation_verified);
         assert!(report.ai_redline_verified);
         assert!(report.deep_link_handoff_verified);
+    }
+
+    #[test]
+    fn t03_s4_bible_hot_reload_and_13_blend_mode_gate_passes() {
+        let parent = std::env::temp_dir().join(format!("manga_t03_s4_unit_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&parent);
+        std::fs::create_dir_all(&parent).unwrap();
+        let opts = crate::project_init::ProjectInitOptions::dual_engine_default("T03GatePrj", "S4Tester");
+        crate::project_init::init_cpff_project(&parent, &opts).unwrap();
+
+        let report = run_t03_s4_bible_layers_gate(&parent.join("T03GatePrj"))
+            .expect("T0.3-S4 gate must pass");
+        assert_eq!(report.bible_characters_verified, 3);
+        assert_eq!(report.toc_entries_verified, 3);
+        assert!(report.hot_reload_latency_ms < 300);
+        assert_eq!(report.cel_blend_modes_verified, 13);
+        assert!(report.clipping_mask_verified);
+        assert!(report.alpha_lock_verified);
+        assert!(report.blue_sketch_tint_verified);
+        assert!(report.write_isolation_verified);
+        assert_eq!(report.temp_files_remaining, 0);
+
+        let _ = std::fs::remove_dir_all(&parent);
     }
 }

@@ -65,8 +65,9 @@ pub use ruler::RulerKind;
 pub use screentone::{ScreentoneSpec, TonePattern};
 pub use stroke::{RopeStabilizer, StrokePoint};
 pub use suite::{
-    can_write_relative_path, run_t02_s4_concurrency_soak, run_tri_app_compatibility_check,
-    DeepLinkAction, SuiteApp, SuiteAppMetadata, T02S4ConcurrencyReport, TriAppIntegrationReport,
+    can_write_relative_path, run_t02_s4_concurrency_soak, run_t03_s4_bible_layers_gate,
+    run_tri_app_compatibility_check, DeepLinkAction, SuiteApp, SuiteAppMetadata,
+    T02S4ConcurrencyReport, T03S4GateReport, TriAppIntegrationReport,
 };
 pub use tile::{TileCoord, TileData, TileLayer, TILE_SIZE};
 pub use undo::{TileDiff, TileUndoStack};

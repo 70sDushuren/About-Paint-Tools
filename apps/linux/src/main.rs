@@ -2,8 +2,8 @@ use std::env;
 use std::path::PathBuf;
 
 use manga_core::{
-    init_cpff_project, run_t02_s4_concurrency_soak, run_tri_app_compatibility_check, CanvasPreset,
-    ProjectInitOptions, SuiteApp, TargetPlatform,
+    init_cpff_project, run_t02_s4_concurrency_soak, run_t03_s4_bible_layers_gate,
+    run_tri_app_compatibility_check, CanvasPreset, ProjectInitOptions, SuiteApp, TargetPlatform,
 };
 use manga_linux_shell::{LinuxStudioShell, WaylandTabletToolEvent, WaylandTabletTouchAdapter};
 
@@ -77,13 +77,16 @@ fn main() {
             std::process::exit(1);
         }
         let opts = ProjectInitOptions::dual_engine_default("SoakVerify", "S4Gate");
-        let soak_result = init_cpff_project(&soak_parent, &opts).and_then(|_| {
-            run_t02_s4_concurrency_soak(&soak_parent.join("SoakVerify"), 100)
+        let soak_prj = soak_parent.join("SoakVerify");
+        let gate_result = init_cpff_project(&soak_parent, &opts).and_then(|_| {
+            let soak = run_t02_s4_concurrency_soak(&soak_prj, 100)?;
+            let t03 = run_t03_s4_bible_layers_gate(&soak_prj)?;
+            Ok((soak, t03))
         });
         let _ = std::fs::remove_dir_all(&soak_parent);
 
-        match soak_result {
-            Ok(soak) => {
+        match gate_result {
+            Ok((soak, t03)) => {
                 println!(
                     "OK [T0.2-S4 Concurrency Soak]: {} rounds passed (S1_reads={}, S2_stamps={}, S3_atomic_saves={}, locked_rejections={}, leaked_tmp={})",
                     soak.rounds_completed,
@@ -93,10 +96,21 @@ fn main() {
                     soak.locked_overwrite_rejections,
                     soak.temp_files_remaining
                 );
+                println!(
+                    "OK [T0.3-S4 Bible & Cel Gate]: bible_chars={}, toc_entries={}, hot_reload_ms={}ms (<300ms), cel_blend_modes={}, clip={}, alpha_lock={}, blue_sketch={}, leaked_tmp={}",
+                    t03.bible_characters_verified,
+                    t03.toc_entries_verified,
+                    t03.hot_reload_latency_ms,
+                    t03.cel_blend_modes_verified,
+                    t03.clipping_mask_verified,
+                    t03.alpha_lock_verified,
+                    t03.blue_sketch_tint_verified,
+                    t03.temp_files_remaining
+                );
                 return;
             }
             Err(err) => {
-                eprintln!("FAILED [T0.2-S4 Concurrency Soak]: {err}");
+                eprintln!("FAILED [S4 Release Gate]: {err}");
                 std::process::exit(1);
             }
         }
