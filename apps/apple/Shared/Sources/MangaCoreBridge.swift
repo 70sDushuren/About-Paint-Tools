@@ -179,6 +179,43 @@ public enum IngestAssetKindBridge: UInt32, CaseIterable, Sendable, Identifiable 
     }
 }
 
+/// 5-language canonical glossary suggestion projected from `bible/glossary.xml` (`S1`/`S3 v0.5`).
+public struct GlossaryTermSummary: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let localizedValue: String
+    public let en: String
+    public let zhHans: String
+    public let status: String
+
+    public init(id: String, localizedValue: String, en: String, zhHans: String, status: String) {
+        self.id = id
+        self.localizedValue = localizedValue
+        self.en = en
+        self.zhHans = zhHans
+        self.status = status
+    }
+}
+
+/// Active manga drawing ruler mode (`S2 v0.5`).
+public enum RulerModeKind: UInt32, CaseIterable, Sendable, Identifiable {
+    case off = 99
+    case symmetry = 0
+    case parallel = 1
+    case perspective2Pt = 2
+    case focusLines = 3
+
+    public var id: UInt32 { rawValue }
+    public var displayName: String {
+        switch self {
+        case .off: return "Off"
+        case .symmetry: return "Symmetry"
+        case .parallel: return "Parallel"
+        case .perspective2Pt: return "2-Pt Persp"
+        case .focusLines: return "Focus Lines"
+        }
+    }
+}
+
 /// Shared on-disk `.prj` sandbox workspace so `S1` (Hub), `S2` (Manga), and `S3` (Novel)
 /// demonstrate live `< 300ms` cross-app hot-reload immediately on launch.
 public enum SuiteSharedWorkspace {
@@ -470,7 +507,104 @@ public enum MangaSelectionEngine {
     }
 }
 
-/// `T0.2-S4`, `T0.3-S4` & `T0.4-S4` — Tri-App Integration & Compatibility Gates over Rust C-ABI.
+/// `S2 v0.5` — Symmetry, Parallel, 2-Point Perspective & Radial Focus-Line Manga Rulers.
+public enum MangaRulerEngine {
+    public static func transformPoint(
+        mode: RulerModeKind,
+        paramX: Float,
+        paramY: Float,
+        paramAux: Float,
+        anchorX: Float,
+        anchorY: Float,
+        inX: Float,
+        inY: Float
+    ) -> (x: Float, y: Float) {
+        guard mode != .off else { return (inX, inY) }
+        var ox: Float = inX
+        var oy: Float = inY
+        _ = manga_ruler_transform_point(
+            mode.rawValue,
+            paramX,
+            paramY,
+            paramAux,
+            anchorX,
+            anchorY,
+            inX,
+            inY,
+            &ox,
+            &oy
+        )
+        return (ox, oy)
+    }
+}
+
+/// `S1/S3 v0.5` — 5-Locale Project Glossary (`bible/glossary.xml`) atomic writer (`S1`) & RO autocomplete (`S3`).
+public enum MangaGlossary {
+    @discardableResult
+    public static func upsertTerm(
+        projectDir: String,
+        key: String,
+        en: String,
+        zhHans: String,
+        zhHant: String,
+        yueHant: String,
+        es: String,
+        locked: Bool = true
+    ) -> Bool {
+        projectDir.withCString { cDir in
+            key.withCString { cKey in
+                en.withCString { cEn in
+                    zhHans.withCString { cZhS in
+                        zhHant.withCString { cZhT in
+                            yueHant.withCString { cYue in
+                                es.withCString { cEs in
+                                    manga_glossary_upsert_term(
+                                        cDir,
+                                        cKey,
+                                        cEn,
+                                        cZhS,
+                                        cZhT,
+                                        cYue,
+                                        cEs,
+                                        locked ? 1 : 0
+                                    ) != 0
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public static func suggestTerms(projectDir: String, query: String, locale: String) -> [GlossaryTermSummary] {
+        var buffer = [CChar](repeating: 0, count: 16_384)
+        let written = projectDir.withCString { cDir in
+            query.withCString { cQ in
+                locale.withCString { cLoc in
+                    buffer.withUnsafeMutableBufferPointer { buf in
+                        manga_glossary_suggest_terms(cDir, cQ, cLoc, buf.baseAddress, buf.count)
+                    }
+                }
+            }
+        }
+        guard written > 0 else { return [] }
+        let raw = String(decoding: buffer.prefix(Int(written)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
+        return raw.split(separator: "\n", omittingEmptySubsequences: true).compactMap { line in
+            let parts = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+            guard parts.count >= 5 else { return nil }
+            return GlossaryTermSummary(
+                id: parts[0],
+                localizedValue: parts[1],
+                en: parts[2],
+                zhHans: parts[3],
+                status: parts[4]
+            )
+        }
+    }
+}
+
+/// `T0.2-S4`, `T0.3-S4`, `T0.4-S4` & `T0.5-S4` — Tri-App Integration & Compatibility Gates over Rust C-ABI.
 public enum MangaSuiteS4Gate {
     public static func run(projectDir: String, soakRounds: UInt32 = 100) -> Bool {
         projectDir.withCString { cDir in
@@ -487,6 +621,12 @@ public enum MangaSuiteS4Gate {
     public static func runT04S4(projectDir: String) -> Bool {
         projectDir.withCString { cDir in
             manga_suite_run_t04_s4_gate(cDir) != 0
+        }
+    }
+
+    public static func runT05S4(projectDir: String) -> Bool {
+        projectDir.withCString { cDir in
+            manga_suite_run_t05_s4_gate(cDir) != 0
         }
     }
 }
@@ -652,6 +792,34 @@ public final class MangaProjectEngine {
                 expandPx
             )
         )
+    }
+
+    @discardableResult
+    public func addVectorStroke(
+        xs: [Float],
+        ys: [Float],
+        widths: [Float],
+        rgba: (UInt8, UInt8, UInt8, UInt8)
+    ) -> UInt64 {
+        let count = min(xs.count, min(ys.count, widths.count))
+        guard count >= 2 else { return 0 }
+        return xs.withUnsafeBufferPointer { xBuf in
+            ys.withUnsafeBufferPointer { yBuf in
+                widths.withUnsafeBufferPointer { wBuf in
+                    manga_project_add_vector_stroke(
+                        handle,
+                        xBuf.baseAddress,
+                        yBuf.baseAddress,
+                        wBuf.baseAddress,
+                        count,
+                        rgba.0,
+                        rgba.1,
+                        rgba.2,
+                        rgba.3
+                    )
+                }
+            }
+        }
     }
 
     @discardableResult

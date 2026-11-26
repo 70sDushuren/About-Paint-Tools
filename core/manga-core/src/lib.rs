@@ -14,6 +14,7 @@ pub mod canvas;
 pub mod continuity;
 pub mod ffi;
 pub mod fill;
+pub mod glossary;
 pub mod ingest;
 pub mod layer;
 pub mod novel;
@@ -47,6 +48,9 @@ pub use continuity::{
     CONTINUITY_SQLITE_DDL,
 };
 pub use fill::{close_gap_expand_fill, FillOptions, FillResult};
+pub use glossary::{
+    GlossaryAuditReport, GlossaryTerm, ProjectGlossary, PROJECT_GLOSSARY_REL_PATH,
+};
 pub use ingest::{ingest_bytes_atomic, sanitize_ingest_filename, IngestAssetKind, IngestResult};
 pub use layer::{blend_rgba, BlendMode, LayerId, LayerKind, LayerNode, LayerStack};
 pub use novel::{
@@ -70,8 +74,9 @@ pub use selection::SelectionMask;
 pub use stroke::{RopeStabilizer, StrokePoint};
 pub use suite::{
     can_write_relative_path, run_t02_s4_concurrency_soak, run_t03_s4_bible_layers_gate,
-    run_t04_s4_ingest_fill_divergence_gate, run_tri_app_compatibility_check, DeepLinkAction,
-    SuiteApp, SuiteAppMetadata, T02S4ConcurrencyReport, T03S4GateReport, T04S4GateReport,
+    run_t04_s4_ingest_fill_divergence_gate, run_t05_s4_vector_ruler_glossary_gate,
+    run_tri_app_compatibility_check, DeepLinkAction, SuiteApp, SuiteAppMetadata,
+    T02S4ConcurrencyReport, T03S4GateReport, T04S4GateReport, T05S4GateReport,
     TriAppIntegrationReport,
 };
 pub use tile::{TileCoord, TileData, TileLayer, TILE_SIZE};

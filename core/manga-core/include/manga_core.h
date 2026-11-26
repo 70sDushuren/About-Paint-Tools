@@ -335,6 +335,42 @@ size_t manga_novel_read_divergence_notes(
 
 uint8_t manga_suite_run_t04_s4_gate(const char *project_dir_utf8);
 
+/* --- v0.5.0 & T0.5-S4 Manga Rulers, 5-Locale Glossary & Vector Gate API --- */
+
+uint8_t manga_ruler_transform_point(
+    uint32_t ruler_kind,
+    float param_x,
+    float param_y,
+    float param_aux,
+    float anchor_x,
+    float anchor_y,
+    float in_x,
+    float in_y,
+    float *out_x,
+    float *out_y
+);
+
+uint8_t manga_glossary_upsert_term(
+    const char *project_dir_utf8,
+    const char *key_utf8,
+    const char *en_utf8,
+    const char *zh_hans_utf8,
+    const char *zh_hant_utf8,
+    const char *yue_hant_utf8,
+    const char *es_utf8,
+    uint8_t locked
+);
+
+size_t manga_glossary_suggest_terms(
+    const char *project_dir_utf8,
+    const char *query_utf8,
+    const char *locale_utf8,
+    char *out_buf,
+    size_t out_cap
+);
+
+uint8_t manga_suite_run_t05_s4_gate(const char *project_dir_utf8);
+
 #ifdef __cplusplus
 }
 #endif

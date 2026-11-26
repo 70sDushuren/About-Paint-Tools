@@ -818,6 +818,136 @@ pub fn run_t04_s4_ingest_fill_divergence_gate(project_dir: &Path) -> Result<T04S
     })
 }
 
+/// Summary produced by the **`T0.5-S4` Vector Lineart + Rulers + 5-Locale Glossary Gate**.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct T05S4GateReport {
+    pub glossary_5_locale_complete: usize,
+    pub glossary_missing_cells: usize,
+    pub vector_intersection_erased: bool,
+    pub vector_4x_lossless_scaled: bool,
+    pub rulers_verified: usize,
+    pub novel_autocomplete_hits: usize,
+}
+
+/// Executes the **`T0.5-S4` Integration & Compatibility Gate** over a CPFF v1.0 `.prj` workspace:
+/// - `S1`: Atomically writes 5-locale `bible/glossary.xml` strictly under `SuiteApp::Hub`,
+///   audits 100% 5-locale completeness, and verifies `S2`/`S3` write attempts are blocked.
+/// - `S2`: Verifies variable-width `VectorLayer` 4x lossless scaling, single-swipe Vector
+///   Intersection Eraser trimming overshoot tails, and Symmetry + 2-Point Perspective + FocusLines rulers.
+/// - `S3`: Verifies localized proper-noun autocomplete across `zh-Hans`, `en`, and `es`.
+pub fn run_t05_s4_vector_ruler_glossary_gate(project_dir: &Path) -> Result<T05S4GateReport, String> {
+    let _ = run_tri_app_compatibility_check(project_dir)?;
+
+    // 1. S1 5-Locale Glossary atomic write + completeness audit + write-ownership isolation
+    let mut glossary = crate::glossary::ProjectGlossary::load_from_project(project_dir)?;
+    for (key, en, zh_s, zh_t, yue, es) in [
+        ("weapon.starlight_blade", "Starlight Blade", "星辉之刃", "星輝之刃", "星輝之刃", "Hoja Estelar"),
+        ("place.ink_corridor", "Ink Corridor", "墨影回廊", "墨影迴廊", "墨影迴廊", "Corredor de Tinta"),
+        ("skill.cel_flash", "Cel Flash", "赛璐璐瞬斩", "賽璐璐瞬斬", "賽璐璐瞬斬", "Destello Cel"),
+    ] {
+        glossary.upsert_term(crate::glossary::GlossaryTerm {
+            key: key.into(),
+            en: en.into(),
+            zh_hans: zh_s.into(),
+            zh_hant: zh_t.into(),
+            yue_hant: yue.into(),
+            es: es.into(),
+            locked: true,
+        });
+    }
+    glossary.save_atomic(project_dir)?;
+    if can_write_relative_path(SuiteApp::Novel, crate::glossary::PROJECT_GLOSSARY_REL_PATH).is_ok()
+        || can_write_relative_path(SuiteApp::Manga, crate::glossary::PROJECT_GLOSSARY_REL_PATH).is_ok()
+    {
+        return Err("T0.5-S4 write isolation failed: only S1 Hub may write bible/glossary.xml".into());
+    }
+    let reloaded = crate::glossary::ProjectGlossary::load_from_project(project_dir)?;
+    let audit = reloaded.audit_completeness();
+    if audit.complete_5_locale_terms < 3 || audit.missing_cells != 0 {
+        return Err("T0.5-S4 S1 5-locale glossary audit found incomplete entries".into());
+    }
+
+    // 2. S2 Vector Layer 4x lossless scaling + Vector Intersection Eraser + 3 Manga Rulers
+    let mut vlayer = crate::vector::VectorLayer::new();
+    let _horiz = vlayer.add_stroke(
+        [0, 0, 0, 255],
+        vec![
+            crate::vector::VectorNode { x: 0.0, y: 50.0, width: 2.0 },
+            crate::vector::VectorNode { x: 100.0, y: 50.0, width: 2.0 },
+        ],
+    );
+    let _vert = vlayer.add_stroke(
+        [0, 0, 0, 255],
+        vec![
+            crate::vector::VectorNode { x: 50.0, y: 0.0, width: 2.0 },
+            crate::vector::VectorNode { x: 50.0, y: 100.0, width: 2.0 },
+        ],
+    );
+    let vector_intersection_erased = vlayer.erase_to_intersection(80.0, 50.0, 6.0);
+    if !vector_intersection_erased {
+        return Err("T0.5-S4 S2 Vector Intersection Eraser failed to trim overshoot".into());
+    }
+    let mut scaled_ok = false;
+    if let Some(stroke) = vlayer
+        .strokes_mut()
+        .iter_mut()
+        .find(|s| s.nodes.first().map(|n| (n.y - 50.0).abs() < 1.0).unwrap_or(false))
+    {
+        let before_max_x = stroke.nodes.last().map(|n| n.x).unwrap_or(0.0);
+        stroke.scale(4.0);
+        let after_max_x = stroke.nodes.last().map(|n| n.x).unwrap_or(0.0);
+        scaled_ok = (after_max_x - before_max_x * 4.0).abs() < 1e-2 && after_max_x <= 205.0;
+    }
+    if !scaled_ok {
+        return Err("T0.5-S4 S2 Vector 4x lossless scale check failed".into());
+    }
+
+    let sym = crate::ruler::RulerKind::Symmetry {
+        axis_x: 200.0,
+        axis_y: 0.0,
+        angle_rad: std::f32::consts::FRAC_PI_2,
+    };
+    let mirrored = sym
+        .mirror_point(crate::stroke::StrokePoint::simple(140.0, 80.0, 0.9))
+        .ok_or_else(|| "T0.5-S4 Symmetry mirror returned None".to_string())?;
+    if (mirrored.x - 260.0).abs() > 1e-2 {
+        return Err("T0.5-S4 Symmetry ruler mirror math mismatch".into());
+    }
+    let persp = crate::ruler::RulerKind::Perspective {
+        vanishing_points: vec![(0.0, 500.0), (1000.0, 500.0)],
+    };
+    let p_snap = persp.snap_point(500.0, 0.0, crate::stroke::StrokePoint::simple(600.0, 90.0, 1.0));
+    if ((p_snap.x - 500.0) - p_snap.y).abs() > 1e-2 {
+        return Err("T0.5-S4 2-Point Perspective ruler snap mismatch".into());
+    }
+    let focus = crate::ruler::RulerKind::FocusLines {
+        center_x: 500.0,
+        center_y: 500.0,
+    };
+    let f_snap = focus.snap_point(800.0, 500.0, crate::stroke::StrokePoint::simple(700.0, 520.0, 1.0));
+    if (f_snap.y - 500.0).abs() > 1e-2 {
+        return Err("T0.5-S4 FocusLines ruler snap mismatch".into());
+    }
+
+    // 3. S3 5-locale proper-noun autocomplete
+    let hits_zh = reloaded.suggest_terms("星辉", "zh-Hans").len();
+    let hits_es = reloaded.suggest_terms("estelar", "es").len();
+    let hits_en = reloaded.suggest_terms("corridor", "en").len();
+    let novel_autocomplete_hits = hits_zh + hits_es + hits_en;
+    if novel_autocomplete_hits < 3 {
+        return Err("T0.5-S4 S3 localized glossary autocomplete returned fewer than 3 hits".into());
+    }
+
+    Ok(T05S4GateReport {
+        glossary_5_locale_complete: audit.complete_5_locale_terms,
+        glossary_missing_cells: audit.missing_cells,
+        vector_intersection_erased,
+        vector_4x_lossless_scaled: scaled_ok,
+        rulers_verified: 3,
+        novel_autocomplete_hits,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -909,6 +1039,26 @@ mod tests {
         assert!(report.anti_halo_expanded);
         assert_eq!(report.lasso_selected_pixels, 1024);
         assert!(report.divergence_notes_verified >= 1);
+
+        let _ = std::fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn t05_s4_vector_ruler_and_5_locale_glossary_gate_passes() {
+        let parent = std::env::temp_dir().join(format!("manga_t05_s4_unit_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&parent);
+        std::fs::create_dir_all(&parent).unwrap();
+        let opts = crate::project_init::ProjectInitOptions::dual_engine_default("T05GatePrj", "S4Tester");
+        crate::project_init::init_cpff_project(&parent, &opts).unwrap();
+
+        let report = run_t05_s4_vector_ruler_glossary_gate(&parent.join("T05GatePrj"))
+            .expect("T0.5-S4 gate must pass");
+        assert_eq!(report.glossary_5_locale_complete, 3);
+        assert_eq!(report.glossary_missing_cells, 0);
+        assert!(report.vector_intersection_erased);
+        assert!(report.vector_4x_lossless_scaled);
+        assert_eq!(report.rulers_verified, 3);
+        assert_eq!(report.novel_autocomplete_hits, 3);
 
         let _ = std::fs::remove_dir_all(&parent);
     }

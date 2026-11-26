@@ -1078,6 +1078,137 @@ pub unsafe extern "C" fn manga_suite_run_t04_s4_gate(project_dir_utf8: *const c_
     u8::from(crate::suite::run_t04_s4_ingest_fill_divergence_gate(std::path::Path::new(&dir)).is_ok())
 }
 
+/// Evaluates manga drawing ruler snapping or symmetry mirroring (`S2 v0.5`).
+/// `ruler_kind`: `0 = Symmetry (axis_x, axis_y, angle_rad)`, `1 = Parallel (angle_rad in param_aux)`,
+/// `2 = 2-Point Perspective (vp1=(param_x, param_y), vp2=(param_aux, param_y))`,
+/// `3 = FocusLines (center_x=param_x, center_y=param_y)`.
+///
+/// # Safety
+/// `out_x` and `out_y` must be non-null writable pointers.
+#[no_mangle]
+pub unsafe extern "C" fn manga_ruler_transform_point(
+    ruler_kind: u32,
+    param_x: f32,
+    param_y: f32,
+    param_aux: f32,
+    anchor_x: f32,
+    anchor_y: f32,
+    in_x: f32,
+    in_y: f32,
+    out_x: *mut f32,
+    out_y: *mut f32,
+) -> u8 {
+    if out_x.is_null() || out_y.is_null() {
+        return 0;
+    }
+    let pt = StrokePoint::simple(in_x, in_y, 1.0);
+    let result = match ruler_kind {
+        0 => {
+            let r = crate::ruler::RulerKind::Symmetry {
+                axis_x: param_x,
+                axis_y: param_y,
+                angle_rad: param_aux,
+            };
+            r.mirror_point(pt).unwrap_or(pt)
+        }
+        1 => crate::ruler::RulerKind::Parallel {
+            angle_rad: param_aux,
+        }
+        .snap_point(anchor_x, anchor_y, pt),
+        2 => crate::ruler::RulerKind::Perspective {
+            vanishing_points: vec![(param_x, param_y), (param_aux, param_y)],
+        }
+        .snap_point(anchor_x, anchor_y, pt),
+        3 => crate::ruler::RulerKind::FocusLines {
+            center_x: param_x,
+            center_y: param_y,
+        }
+        .snap_point(anchor_x, anchor_y, pt),
+        _ => return 0,
+    };
+    unsafe {
+        *out_x = result.x;
+        *out_y = result.y;
+    }
+    1
+}
+
+/// Atomically upserts a 5-language glossary term into `bible/glossary.xml` under `SuiteApp::Hub` (`S1 v0.5`).
+///
+/// # Safety
+/// All non-null string pointers must be valid NUL-terminated UTF-8 strings.
+#[no_mangle]
+pub unsafe extern "C" fn manga_glossary_upsert_term(
+    project_dir_utf8: *const c_char,
+    key_utf8: *const c_char,
+    en_utf8: *const c_char,
+    zh_hans_utf8: *const c_char,
+    zh_hant_utf8: *const c_char,
+    yue_hant_utf8: *const c_char,
+    es_utf8: *const c_char,
+    locked: u8,
+) -> u8 {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    let key = unsafe { cstr_to_string(key_utf8, "") };
+    if dir.is_empty() || key.is_empty() {
+        return 0;
+    }
+    let root = std::path::Path::new(&dir);
+    let mut g = match crate::glossary::ProjectGlossary::load_from_project(root) {
+        Ok(g) => g,
+        Err(_) => return 0,
+    };
+    g.upsert_term(crate::glossary::GlossaryTerm {
+        key,
+        en: unsafe { cstr_to_string(en_utf8, "") },
+        zh_hans: unsafe { cstr_to_string(zh_hans_utf8, "") },
+        zh_hant: unsafe { cstr_to_string(zh_hant_utf8, "") },
+        yue_hant: unsafe { cstr_to_string(yue_hant_utf8, "") },
+        es: unsafe { cstr_to_string(es_utf8, "") },
+        locked: locked != 0,
+    });
+    u8::from(g.save_atomic(root).is_ok())
+}
+
+/// Returns tab-delimited localized glossary suggestions for `S1`/`S3` RO autocomplete (`v0.5`).
+///
+/// # Safety
+/// String pointers must be valid UTF-8 C strings; `out_buf` must have capacity `out_cap`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_glossary_suggest_terms(
+    project_dir_utf8: *const c_char,
+    query_utf8: *const c_char,
+    locale_utf8: *const c_char,
+    out_buf: *mut c_char,
+    out_cap: usize,
+) -> usize {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    let query = unsafe { cstr_to_string(query_utf8, "") };
+    let locale = unsafe { cstr_to_string(locale_utf8, "en") };
+    if dir.is_empty() {
+        return 0;
+    }
+    let Ok(g) = crate::glossary::ProjectGlossary::load_from_project(std::path::Path::new(&dir))
+    else {
+        return 0;
+    };
+    let lines = g.export_suggestions_lines(&query, &locale);
+    unsafe { write_utf8_to_c_buf(&lines, out_buf, out_cap) }
+}
+
+/// Executes the **`T0.5-S4` Vector Lineart + Rulers + 5-Locale Glossary Gate**.
+///
+/// # Safety
+/// `project_dir_utf8` must be null or a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn manga_suite_run_t05_s4_gate(project_dir_utf8: *const c_char) -> u8 {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    if dir.is_empty() {
+        return 0;
+    }
+    u8::from(crate::suite::run_t05_s4_vector_ruler_glossary_gate(std::path::Path::new(&dir)).is_ok())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

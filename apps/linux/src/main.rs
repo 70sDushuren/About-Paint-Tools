@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use manga_core::{
     init_cpff_project, run_t02_s4_concurrency_soak, run_t03_s4_bible_layers_gate,
-    run_t04_s4_ingest_fill_divergence_gate, run_tri_app_compatibility_check, CanvasPreset,
-    ProjectInitOptions, SuiteApp, TargetPlatform,
+    run_t04_s4_ingest_fill_divergence_gate, run_t05_s4_vector_ruler_glossary_gate,
+    run_tri_app_compatibility_check, CanvasPreset, ProjectInitOptions, SuiteApp, TargetPlatform,
 };
 use manga_linux_shell::{LinuxStudioShell, WaylandTabletToolEvent, WaylandTabletTouchAdapter};
 
@@ -83,12 +83,13 @@ fn main() {
             let soak = run_t02_s4_concurrency_soak(&soak_prj, 100)?;
             let t03 = run_t03_s4_bible_layers_gate(&soak_prj)?;
             let t04 = run_t04_s4_ingest_fill_divergence_gate(&soak_prj)?;
-            Ok((soak, t03, t04))
+            let t05 = run_t05_s4_vector_ruler_glossary_gate(&soak_prj)?;
+            Ok((soak, t03, t04, t05))
         });
         let _ = std::fs::remove_dir_all(&soak_parent);
 
         match gate_result {
-            Ok((soak, t03, t04)) => {
+            Ok((soak, t03, t04, t05)) => {
                 println!(
                     "OK [T0.2-S4 Concurrency Soak]: {} rounds passed (S1_reads={}, S2_stamps={}, S3_atomic_saves={}, locked_rejections={}, leaked_tmp={})",
                     soak.rounds_completed,
@@ -118,6 +119,15 @@ fn main() {
                     t04.anti_halo_expanded,
                     t04.lasso_selected_pixels,
                     t04.divergence_notes_verified
+                );
+                println!(
+                    "OK [T0.5-S4 Vector/Ruler/Glossary Gate]: glossary_5_locale={}, missing_cells={}, vec_intersection_erased={}, vec_4x_scaled={}, rulers={}, novel_hits={}",
+                    t05.glossary_5_locale_complete,
+                    t05.glossary_missing_cells,
+                    t05.vector_intersection_erased,
+                    t05.vector_4x_lossless_scaled,
+                    t05.rulers_verified,
+                    t05.novel_autocomplete_hits
                 );
                 return;
             }

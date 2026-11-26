@@ -412,6 +412,19 @@ public struct MangaCanvasStageView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 7))
                     }
                     .buttonStyle(.plain)
+
+                    Button {
+                        runLiveVectorIntersectionAndRulerVerify()
+                    } label: {
+                        Label("v0.5 Vector Erase + Rulers", systemImage: "ruler")
+                            .font(.caption2.bold())
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(SuiteColorTokens.hubAccent)
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 7))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(12)
@@ -443,6 +456,34 @@ public struct MangaCanvasStageView: View {
             expandPx: 1
         ) ?? 0
         statusLine = "v0.4 Fill+Lasso OK: closeGap=3px, expand=1px (filled=\(filled)), lasso+1px=\(lassoPx)px."
+        #else
+        statusLine = "MangaCoreFFI not linked."
+        #endif
+    }
+
+    private func runLiveVectorIntersectionAndRulerVerify() {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return }
+        _ = proj.addVectorStroke(xs: [0, 100], ys: [50, 50], widths: [2.5, 2.5], rgba: (0, 0, 0, 255))
+        _ = proj.addVectorStroke(xs: [50, 50], ys: [0, 100], widths: [2.5, 2.5], rgba: (0, 0, 0, 255))
+        let erased = proj.eraseVectorToIntersection(hitX: 80, hitY: 50, hitRadius: 6)
+        let mirrored = MangaRulerEngine.transformPoint(
+            mode: .symmetry,
+            paramX: 200,
+            paramY: 0,
+            paramAux: .pi / 2,
+            anchorX: 140,
+            anchorY: 80,
+            inX: 140,
+            inY: 80
+        )
+        statusLine = String(
+            format: "v0.5 Vector+Ruler OK: strokes=%d, intersectionErased=%@, symMirror=(%.0f,%.0f).",
+            proj.vectorStrokeCount,
+            erased ? "true" : "false",
+            mirrored.x,
+            mirrored.y
+        )
         #else
         statusLine = "MangaCoreFFI not linked."
         #endif

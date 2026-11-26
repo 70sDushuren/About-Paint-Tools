@@ -410,6 +410,39 @@ public struct NovelStudioView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 10)
 
+            #if canImport(MangaCoreFFI)
+            if !zenMode {
+                let suggestions = MangaGlossary.suggestTerms(
+                    projectDir: activeProjectDir,
+                    query: "",
+                    locale: activeProseLocale
+                )
+                if !suggestions.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            Text("Glossary (\(activeProseLocale)):")
+                                .font(.caption2.monospaced().bold())
+                                .foregroundStyle(theme.textColor.opacity(0.6))
+                            ForEach(suggestions) { term in
+                                Button("+ \(term.localizedValue)") {
+                                    proseText.append(term.localizedValue)
+                                }
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(SuiteColorTokens.novelAccent.opacity(0.14))
+                                .foregroundStyle(SuiteColorTokens.novelAccent)
+                                .clipShape(Capsule())
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 4)
+                    }
+                }
+            }
+            #endif
+
             TextEditor(text: $proseText)
                 .font(.system(size: 16, design: .serif))
                 .foregroundStyle(theme.textColor)

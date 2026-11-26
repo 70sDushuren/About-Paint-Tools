@@ -84,7 +84,9 @@ public struct HubWorkspaceView: View {
                         dualEngineBoardCard
                     case .ingest:
                         assetIngestCard
-                    case .localeAudit, .publish:
+                    case .localeAudit:
+                        localeGlossaryAuditCard
+                    case .publish:
                         milestonePreviewCard(for: selectedSection)
                     }
                     AiSandboxReadOnlyBanner(
@@ -680,6 +682,86 @@ public struct HubWorkspaceView: View {
             }
 
             Text(ingestStatusLine)
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .background(SuiteColorTokens.hubCard)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var localeGlossaryAuditCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("S1 v0.5 · 5-Locale Glossary & Completeness Audit Matrix")
+                .font(.subheadline.bold())
+            Text("Persists locked 5-language proper nouns (en / zh-Hans / zh-Hant / yue-Hant / es) to bible/glossary.xml for S3 autocomplete.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 10) {
+                Button {
+                    #if canImport(MangaCoreFFI)
+                    _ = MangaGlossary.upsertTerm(
+                        projectDir: activeProjectDir,
+                        key: "weapon.starlight_blade",
+                        en: "Starlight Blade",
+                        zhHans: "星辉之刃",
+                        zhHant: "星輝之刃",
+                        yueHant: "星輝之刃",
+                        es: "Hoja Estelar",
+                        locked: true
+                    )
+                    gateStatusLine = "OK [S1 v0.5]: Upserted 5-locale term 'weapon.starlight_blade' (5/5 complete)."
+                    #endif
+                } label: {
+                    Label("Add 5-Locale Term", systemImage: "character.book.closed.fill")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(SuiteColorTokens.hubAccent)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    #if canImport(MangaCoreFFI)
+                    let ok = MangaSuiteS4Gate.runT05S4(projectDir: activeProjectDir)
+                    gateStatusLine = ok
+                        ? "OK [T0.5-S4 Gate PASS]: 5-locale glossary (0 missing), Vector Intersection Eraser, 4x scale & 3 Rulers verified."
+                        : "FAIL [T0.5-S4 Gate]: Check workspace state."
+                    #endif
+                } label: {
+                    Label("Run T0.5-S4 Gate", systemImage: "checkmark.seal.fill")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(SuiteColorTokens.novelAccent.opacity(0.16))
+                        .foregroundStyle(SuiteColorTokens.novelAccent)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+            }
+
+            #if canImport(MangaCoreFFI)
+            let terms = MangaGlossary.suggestTerms(projectDir: activeProjectDir, query: "", locale: "en")
+            ForEach(terms) { term in
+                HStack {
+                    Text(term.id).font(.caption2.monospaced())
+                    Spacer()
+                    Text("\(term.zhHans) · \(term.en)").font(.caption2)
+                    Text(term.status)
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.green.opacity(0.16))
+                        .foregroundStyle(Color.green)
+                        .clipShape(Capsule())
+                }
+            }
+            #endif
+
+            Text(gateStatusLine)
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
         }

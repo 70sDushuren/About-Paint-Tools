@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "order_id": "20261126-224015_v050-t05-s4-release-gate",
+  "created_at_utc": "2026-11-26T22:40:15Z",
+  "milestone": "v0.5.0",
+  "title": "Verify v0.5.0 + T0.5-S4 (S1 5-Locale Glossary Audit, S2 Vector Intersection Eraser + 3 Manga Rulers, S3 Proper-Noun Autocomplete & 21 live macOS FFI XCTests)",
+  "summary": "Rebuild 3-slice MangaCore.xcframework with v0.5.0 glossary/ruler/T0.5-S4, compile all 3 Wave 1 Apple targets, run 21 live Apple Silicon Swift<->Rust XCTests, and pass full CI + T0.2..T0.5-S4 gates.",
+  "steps": [
+    {
+      "action": "env-info"
+    },
+    {
+      "action": "build-rust"
+    },
+    {
+      "action": "xcode-gen"
+    },
+    {
+      "action": "build-mac"
+    },
+    {
+      "action": "test-mac"
+    },
+    {
+      "action": "build-ipad"
+    },
+    {
+      "action": "build-duo"
+    },
+    {
+      "action": "check"
+    }
+  ],
+  "notify": true
+}
