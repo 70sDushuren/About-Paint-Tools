@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "order_id": "20261126-091903_v022-tri-app-ui-shells",
+  "created_at_utc": "2026-11-26T09:19:03Z",
+  "milestone": "v0.2.2",
+  "title": "Verify v0.2.2 Tri-App UI Shells (S1 Hub + S2 Manga + S3 Novel + 18 MIT Icons + 4-Element Hint) across all 3 Apple targets",
+  "summary": "Added SuiteDesignSystem.swift (18 clean-room geometric MIT icons, 4-element Hint Popover, Decision #1 color tokens), HubWorkspaceView.swift (S1 live Rust .prj bootstrap), MangaCanvasStageView.swift (S2 OLED charcoal + 8 presets + Rust dynamics micro-caliper), NovelStudioView.swift (S3 3 paper themes + Zen + Rust unit counter + read-only AI drawer), and refactored AppleWorkspaceShell.swift.",
+  "steps": [
+    {
+      "action": "env-info"
+    },
+    {
+      "action": "build-rust"
+    },
+    {
+      "action": "xcode-gen"
+    },
+    {
+      "action": "build-mac"
+    },
+    {
+      "action": "build-ipad"
+    },
+    {
+      "action": "build-duo"
+    },
+    {
+      "action": "check"
+    }
+  ],
+  "notify": true
+}
