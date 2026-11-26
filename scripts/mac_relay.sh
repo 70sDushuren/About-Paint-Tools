@@ -774,9 +774,11 @@ cmd_uninstall_agent() {
   fi
   local uid
   uid="$(id -u)"
+  # Remove plist & budget files FIRST because calling `launchctl bootout` from inside
+  # the LaunchAgent itself immediately terminates this process with SIGTERM.
+  rm -f "$AGENT_PLIST" "$AGENT_BUDGET_FILE"
   launchctl bootout "gui/${uid}/${AGENT_LABEL}" >/dev/null 2>&1 || true
   launchctl unload "$AGENT_PLIST" >/dev/null 2>&1 || true
-  rm -f "$AGENT_PLIST" "$AGENT_BUDGET_FILE"
   echo "OK: Uninstalled LaunchAgent '${AGENT_LABEL}'."
 }
 
@@ -831,8 +833,15 @@ cmd_status() {
     fi
   fi
   if is_macos; then
+    local uid loaded
+    uid="$(id -u)"
+    if launchctl print "gui/${uid}/${AGENT_LABEL}" >/dev/null 2>&1; then
+      loaded="RUNNING (loaded in launchd)"
+    else
+      loaded="STOPPED (not loaded in launchd)"
+    fi
     if [ -f "$AGENT_PLIST" ]; then
-      echo "LaunchAgent  : INSTALLED ($AGENT_PLIST)"
+      echo "LaunchAgent  : ${loaded} ($AGENT_PLIST)"
       if [ -f "$AGENT_BUDGET_FILE" ]; then
         # shellcheck disable=SC1090
         source "$AGENT_BUDGET_FILE"
@@ -848,7 +857,7 @@ cmd_status() {
       fi
       echo "Log file     : $AGENT_LOG"
     else
-      echo "LaunchAgent  : NOT INSTALLED"
+      echo "LaunchAgent  : NOT INSTALLED (${loaded})"
     fi
   else
     echo "Host OS      : $(uname -s) (Cloud/Linux mode)"
