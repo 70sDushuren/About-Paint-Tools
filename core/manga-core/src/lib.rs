@@ -8,15 +8,18 @@
 //! and a transactional `ActionBus` for local Gemma 4 Function Calling.
 
 pub mod action_bus;
+pub mod brush;
 pub mod canvas;
 pub mod continuity;
 pub mod ffi;
 pub mod fill;
 pub mod layer;
+pub mod novel;
 pub mod panel;
 pub mod platform;
 pub mod preset;
 pub mod project;
+pub mod project_init;
 pub mod ruler;
 pub mod screentone;
 pub mod stroke;
@@ -27,6 +30,10 @@ pub mod vector;
 pub mod webtoon;
 
 pub use action_bus::{ActionBus, ActionCommand, ActionPlan, ActionPreview, ProjectDocument};
+pub use brush::{
+    sample_effective_radius, starter_brush_presets, zoom_adaptive_rope_radius, BrushPresetId,
+    BrushStamp, BrushStampingEngine, BrushTipPreset, ResponseCurve,
+};
 pub use canvas::{CanvasSession, ViewportTransform};
 pub use continuity::{
     CharacterSheet, ContinuityEntry, ContinuityLog, ContinuityReviewPin, NoteSource,
@@ -34,6 +41,9 @@ pub use continuity::{
 };
 pub use fill::{close_gap_expand_fill, FillOptions, FillResult};
 pub use layer::{blend_rgba, BlendMode, LayerId, LayerKind, LayerNode, LayerStack};
+pub use novel::{
+    count_novel_words, write_novel_prose_atomic, DivergenceNote, NovelChapterMeta, NovelWordStats,
+};
 pub use panel::{PanelFrame, PanelId, PanelLayout, PanelPolygon};
 pub use platform::{
     recommend_workspace_layout, FoldPosture, HingeBounds, InputCapabilities, TargetPlatform,
@@ -45,6 +55,7 @@ pub use project::{
     EditionRef, NovelIllustrationMode, PrjResolution, ReadingDirection, WorkType,
     CPFF_SCHEMA_VERSION, CPFF_XML_NAMESPACE,
 };
+pub use project_init::{init_cpff_project, ProjectInitOptions};
 pub use ruler::RulerKind;
 pub use screentone::{ScreentoneSpec, TonePattern};
 pub use stroke::{RopeStabilizer, StrokePoint};

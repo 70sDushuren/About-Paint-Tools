@@ -562,6 +562,67 @@ pub extern "C" fn manga_suite_ram_budget_mb(app_code: u32) -> u32 {
         .unwrap_or(0)
 }
 
+// ============================================================================
+// v0.2.1 Tri-App Core C-ABI (S1 Project Init, S2 Brush Dynamics, S3 Novel Core)
+// ============================================================================
+
+/// Bootstraps a new dual-engine CPFF v1.0 project at `<parent_dir>/<folder_name>/`.
+/// Returns `1` on success, `0` on invalid input or I/O error.
+///
+/// # Safety
+/// Pointer parameters must be null or valid NUL-terminated UTF-8 strings.
+#[no_mangle]
+pub unsafe extern "C" fn manga_hub_init_project(
+    parent_dir_utf8: *const c_char,
+    folder_name_utf8: *const c_char,
+    author_utf8: *const c_char,
+) -> u8 {
+    let parent = unsafe { cstr_to_string(parent_dir_utf8, "") };
+    let folder = unsafe { cstr_to_string(folder_name_utf8, "") };
+    let author = unsafe { cstr_to_string(author_utf8, "Creator") };
+    if parent.is_empty() || folder.is_empty() {
+        return 0;
+    }
+    let opts = crate::project_init::ProjectInitOptions::dual_engine_default(&folder, &author);
+    u8::from(crate::project_init::init_cpff_project(std::path::Path::new(&parent), &opts).is_ok())
+}
+
+/// Returns the number of built-in dual-track starter brush presets (`8`).
+#[no_mangle]
+pub extern "C" fn manga_brush_preset_count() -> u32 {
+    crate::brush::starter_brush_presets().len() as u32
+}
+
+/// Samples effective brush radius in pixels for `preset_code`, `pressure`, and stylus `altitude`.
+#[no_mangle]
+pub extern "C" fn manga_brush_sample_radius(
+    preset_code: u32,
+    pressure: f32,
+    altitude: f32,
+) -> f32 {
+    let presets = crate::brush::starter_brush_presets();
+    let Some(id) = crate::brush::BrushPresetId::from_u32(preset_code) else {
+        return 0.0;
+    };
+    crate::brush::sample_effective_radius(&presets[id as usize], pressure, altitude)
+}
+
+/// Computes zoom-adaptive rope stabilizer radius in canvas pixels.
+#[no_mangle]
+pub extern "C" fn manga_brush_zoom_adaptive_rope(base_screen_px: f32, viewport_zoom: f32) -> f32 {
+    crate::brush::zoom_adaptive_rope_radius(base_screen_px, viewport_zoom)
+}
+
+/// Counts combined CJK characters + Latin words for light novel prose (`S3 v0.2.1`).
+///
+/// # Safety
+/// `text_utf8` must be null or a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn manga_novel_count_units(text_utf8: *const c_char) -> usize {
+    let text = unsafe { cstr_to_string(text_utf8, "") };
+    crate::novel::count_novel_words(&text).total_units
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -688,13 +749,30 @@ mod tests {
     fn c_abi_suite_write_ownership_and_ram_budget_match_contract() {
         unsafe {
             let novel_path = CString::new("chapters/ch001/novel/prose/zh-Hans.md").unwrap();
+            let novel_meta = CString::new("chapters/ch001/novel/novel_meta.xml").unwrap();
             let manga_path = CString::new("chapters/ch001/manuscript/p001.mnga").unwrap();
             assert_eq!(manga_suite_can_write_path(SuiteApp::Novel as u32, novel_path.as_ptr()), 1);
+            assert_eq!(manga_suite_can_write_path(SuiteApp::Novel as u32, novel_meta.as_ptr()), 1);
+            assert_eq!(manga_suite_can_write_path(SuiteApp::Manga as u32, novel_meta.as_ptr()), 0);
             assert_eq!(manga_suite_can_write_path(SuiteApp::Manga as u32, novel_path.as_ptr()), 0);
             assert_eq!(manga_suite_can_write_path(SuiteApp::Manga as u32, manga_path.as_ptr()), 1);
             assert_eq!(manga_suite_can_write_path(SuiteApp::Novel as u32, manga_path.as_ptr()), 0);
             assert_eq!(manga_suite_ram_budget_mb(SuiteApp::Novel as u32), 120);
             assert_eq!(manga_suite_ram_budget_mb(SuiteApp::Hub as u32), 200);
+        }
+    }
+
+    #[test]
+    fn c_abi_v021_brush_and_novel_endpoints_match_contract() {
+        unsafe {
+            assert_eq!(manga_brush_preset_count(), 8);
+            let r_light = manga_brush_sample_radius(0, 0.1, 1.5);
+            let r_heavy = manga_brush_sample_radius(0, 0.95, 1.5);
+            assert!(r_heavy > r_light * 4.0);
+            assert!((manga_brush_zoom_adaptive_rope(6.0, 2.0) - 3.0).abs() < 1e-5);
+
+            let text = CString::new("星光之刃 Starlight Blade").unwrap();
+            assert_eq!(manga_novel_count_units(text.as_ptr()), 6);
         }
     }
 }

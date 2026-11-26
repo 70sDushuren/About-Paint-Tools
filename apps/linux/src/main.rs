@@ -2,7 +2,8 @@ use std::env;
 use std::path::PathBuf;
 
 use manga_core::{
-    run_tri_app_compatibility_check, CanvasPreset, SuiteApp, TargetPlatform,
+    init_cpff_project, run_tri_app_compatibility_check, CanvasPreset, ProjectInitOptions, SuiteApp,
+    TargetPlatform,
 };
 use manga_linux_shell::{LinuxStudioShell, WaylandTabletToolEvent, WaylandTabletTouchAdapter};
 
@@ -19,6 +20,29 @@ fn parse_app_arg(args: &[String]) -> SuiteApp {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+    if let Some(pos) = args.iter().position(|a| a == "--init-project") {
+        let Some(parent_dir) = args.get(pos + 1) else {
+            eprintln!("Usage: manga-linux-shell --init-project <parent_dir> <folder_name> [author]");
+            std::process::exit(2);
+        };
+        let Some(folder_name) = args.get(pos + 2) else {
+            eprintln!("Usage: manga-linux-shell --init-project <parent_dir> <folder_name> [author]");
+            std::process::exit(2);
+        };
+        let author = args.get(pos + 3).map(String::as_str).unwrap_or("Creator");
+        let opts = ProjectInitOptions::dual_engine_default(folder_name, author);
+        match init_cpff_project(std::path::Path::new(parent_dir), &opts) {
+            Ok(prj_path) => {
+                println!("OK [S1 v0.2.1]: Bootstrapped CPFF v1.0 project at '{}'", prj_path.display());
+                return;
+            }
+            Err(err) => {
+                eprintln!("FAILED [S1 v0.2.1]: {err}");
+                std::process::exit(1);
+            }
+        }
+    }
+
     let self_check = args.iter().any(|a| a == "--self-check");
     let integration_check = args.iter().any(|a| a == "--integration-check");
     let selected_app = parse_app_arg(&args);

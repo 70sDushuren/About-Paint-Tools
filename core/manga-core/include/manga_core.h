@@ -208,6 +208,18 @@ typedef enum MangaSuiteApp {
 uint8_t manga_suite_can_write_path(uint32_t app_code, const char *rel_path_utf8);
 uint32_t manga_suite_ram_budget_mb(uint32_t app_code);
 
+/* --- v0.2.1 Tri-App Core API (S1 Project Init, S2 Brush Dynamics, S3 Novel Core) --- */
+
+uint8_t manga_hub_init_project(
+    const char *parent_dir_utf8,
+    const char *folder_name_utf8,
+    const char *author_utf8
+);
+uint32_t manga_brush_preset_count(void);
+float manga_brush_sample_radius(uint32_t preset_code, float pressure, float altitude);
+float manga_brush_zoom_adaptive_rope(float base_screen_px, float viewport_zoom);
+size_t manga_novel_count_units(const char *text_utf8);
+
 #ifdef __cplusplus
 }
 #endif

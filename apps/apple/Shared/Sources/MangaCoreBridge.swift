@@ -134,6 +134,42 @@ public enum MangaSuitePolicy {
     }
 }
 
+/// `S1 v0.2.1` — Bootstraps a CPFF v1.0 dual-engine `.prj` folder via Rust `manga-core`.
+public enum MangaHubProjectBootstrap {
+    @discardableResult
+    public static func initProject(parentDir: String, folderName: String, author: String) -> Bool {
+        parentDir.withCString { cParent in
+            folderName.withCString { cFolder in
+                author.withCString { cAuthor in
+                    manga_hub_init_project(cParent, cFolder, cAuthor) != 0
+                }
+            }
+        }
+    }
+}
+
+/// `S2 v0.2.1` — Deterministic anime brush dynamics & zoom-adaptive Rope Stabilizer queries.
+public enum MangaBrushDynamics {
+    public static var presetCount: UInt32 { manga_brush_preset_count() }
+
+    public static func sampleRadius(presetCode: UInt32, pressure: Float, altitude: Float) -> Float {
+        manga_brush_sample_radius(presetCode, pressure, altitude)
+    }
+
+    public static func zoomAdaptiveRope(baseScreenPx: Float, viewportZoom: Float) -> Float {
+        manga_brush_zoom_adaptive_rope(baseScreenPx, viewportZoom)
+    }
+}
+
+/// `S3 v0.2.1` — Mixed CJK + Latin light novel publishing unit counter.
+public enum MangaNovelMetrics {
+    public static func countUnits(in text: String) -> Int {
+        text.withCString { cText in
+            Int(manga_novel_count_units(cText))
+        }
+    }
+}
+
 /// Type-safe RAII wrapper over the Rust `MangaCanvasHandle` C-ABI (single-canvas low-latency path).
 public final class MangaCanvasEngine {
     private var handle: OpaquePointer

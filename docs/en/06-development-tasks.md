@@ -61,7 +61,7 @@ This document decomposes [04. Phased Development Roadmap](./04-roadmap.md) into 
 | `T0.2-03` | `[S2 Manga]` `[B&W Manga]` | `core/manga-core` | Tuned G-Pen / Maru entry-exit taper physics & zoom-adaptive Rope Stabilizer | Jitter-free slow hair curves verified in blind artist tests |
 | `T0.2-04` | `[S2 Manga]` `[Color Webtoon]` | `core/manga-gpu` | Solid cel flatting pen, soft airbrush, and wet-blend brush presets (8 starter brushes) | Crisp solid edges without muddy halos; band-free airbrush gradients |
 | `T0.2-05` | `[S1 Hub]` `[Dual]` | `apps/apple` + `core` | Project overview grid, new `.prj` wizard (Dual-Track / Dual-Engine templates) & read-only chapter/page thumbnail browser | Cold start `< 500ms`, peak RAM `< 180 MB` |
-| `T0.2-06` | `[S3 Novel]` `[Dual]` | `apps/apple` + `core` | Plaintext/Markdown novel editor, live word counter, and read-only split view for `outline/master_outline.md` | `120fps` scrolling on 100k-word chapter, RAM `< 100 MB` |
+| `T0.2-06` | `[S3 Novel]` `[Dual]` | `apps/apple` + `core` | Plaintext/Markdown novel editor, live word counter, and read-only split view for `outline/synopsis.md` + `outline/toc.xml` | `120fps` scrolling on 100k-word chapter, RAM `< 100 MB` |
 | `T0.2-S4` | `[S4 Integration→PR]` | `core` + `apps/*` | **v0.2 Tri-App Integration Revision**: verify Hub-created `.prj` opens cleanly in both Manga and Novel apps with zero lock contention before unified PR | 100 consecutive cross-app open/save cycles with 0 corruption |
 
 ### `v0.3` — Cel Layer Stack, Series Bible Editor & Novel Scene Sync
@@ -106,7 +106,7 @@ This document decomposes [04. Phased Development Roadmap](./04-roadmap.md) into 
 | `T0.6-03` | `[S2 Manga]` `[Dual]` | `apps/apple` + `core` | Speech bubble presets + CoreText **vertical CJK (punctuation compression) & horizontal EN/ES** with locale-switchable text layers | Single page toggles cleanly across EN/CN/ES bubble sets |
 | `T0.6-04` | `[S2 Manga]` `[Color Webtoon]` | `core/manga-io` | Webtoon mobile viewport frame preview + automated height slicing (e.g., `800×1280`) lossless batch export | ✅ `webtoon.rs` (slice calculator & zero-seam RGBA8 renderer) landed; PNG encoder wiring pending |
 | `T0.6-05` | `[S1 Hub]` `[i18n]` | `apps/apple` + `core` | **Multi-Language Release Matrix**: unified inspector auditing 5-locale `i18n/dictionary.xml`, bubble translation gaps, and novel locale coverage | One-click highlight of missing translations and unlocked (`locked="false"`) terms |
-| `T0.6-06` | `[S3 Novel]` `[i18n]` | `apps/apple` + `core` | 5-language novel prose editor (`prose.<lang>.md`), vertical/horizontal reading preview, and manual lock protection | Smooth 5-locale split drafting; zero overwrites of locked prose |
+| `T0.6-06` | `[S3 Novel]` `[i18n]` | `apps/apple` + `core` | 5-language novel prose editor (`novel/prose/<lang>.md`), vertical/horizontal reading preview, and manual lock protection | Smooth 5-locale split drafting; zero overwrites of locked prose |
 | `T0.6-S4` | `[S4 Integration→PR]` | `core` + `apps/*` | **v0.6 Tri-App Integration Revision**: verify three-way consistency between Manga `script.xml` bubbles, Novel multilingual prose, and Hub 5-locale dictionary audit before PR | Zero locale drift across all 5 languages and multi-locale exports |
 
 ### `v0.7` — Open `.mnga`, PSD Interop, `ActionBus` & Multi-Edition Publishing

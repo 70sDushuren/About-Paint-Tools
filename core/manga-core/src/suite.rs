@@ -154,7 +154,7 @@ pub fn can_write_relative_path(app: SuiteApp, rel_path: &str) -> Result<(), Stri
             parts.len() >= 4
                 && parts[0] == "chapters"
                 && ((parts[2] == "novel"
-                    && matches!(parts[3], "prose" | "illustrations"))
+                    && matches!(parts[3], "prose" | "illustrations" | "novel_meta.xml"))
                     || (parts[2] == "ai_assist"
                         && matches!(parts[3], "manga_to_novel" | "completion_queue.xml")))
         }
@@ -374,9 +374,12 @@ mod tests {
         assert!(can_write_relative_path(SuiteApp::Hub, "outline/toc.xml").is_ok());
         assert!(can_write_relative_path(SuiteApp::Manga, "chapters/ch001/manuscript/p01.mnga").is_ok());
         assert!(can_write_relative_path(SuiteApp::Novel, "chapters/ch001/novel/prose/en.md").is_ok());
+        assert!(can_write_relative_path(SuiteApp::Novel, "chapters/ch001/novel/novel_meta.xml").is_ok());
 
         // Cross-app writes are strictly blocked
         assert!(can_write_relative_path(SuiteApp::Manga, "chapters/ch001/novel/prose/en.md").is_err());
+        assert!(can_write_relative_path(SuiteApp::Manga, "chapters/ch001/novel/novel_meta.xml").is_err());
+        assert!(can_write_relative_path(SuiteApp::Hub, "chapters/ch001/novel/novel_meta.xml").is_err());
         assert!(can_write_relative_path(SuiteApp::Novel, "chapters/ch001/manuscript/p01.mnga").is_err());
         assert!(can_write_relative_path(SuiteApp::Novel, "SampleManga.prj").is_err());
         assert!(can_write_relative_path(SuiteApp::Manga, "../escape.prj").is_err());
