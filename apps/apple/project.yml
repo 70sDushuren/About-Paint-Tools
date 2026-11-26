@@ -12,6 +12,7 @@ settings:
     SWIFT_STRICT_CONCURRENCY: complete
     GENERATE_INFOPLIST_FILE: YES
     DEVELOPMENT_LANGUAGE: en
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
 
 targets:
   MangaStudio-iPadOS:
@@ -25,6 +26,11 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown"
         TARGETED_DEVICE_FAMILY: "2"
+    preBuildScripts:
+      - name: "Sync Rust MangaCore XCFramework (Incremental)"
+        script: |
+          "$SRCROOT/../../scripts/dev.sh" ensure-rust-xcode
+        basedOnDependencyAnalysis: false
     dependencies:
       - framework: Frameworks/MangaCore.xcframework
         embed: false
@@ -42,6 +48,11 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: "AboutPaint Mac"
         INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.graphics-design"
         ENABLE_HARDENED_RUNTIME: YES
+    preBuildScripts:
+      - name: "Sync Rust MangaCore XCFramework (Incremental)"
+        script: |
+          "$SRCROOT/../../scripts/dev.sh" ensure-rust-xcode
+        basedOnDependencyAnalysis: false
     dependencies:
       - framework: Frameworks/MangaCore.xcframework
         embed: false
@@ -62,6 +73,11 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown"
         TARGETED_DEVICE_FAMILY: "1,2"
+    preBuildScripts:
+      - name: "Sync Rust MangaCore XCFramework (Incremental)"
+        script: |
+          "$SRCROOT/../../scripts/dev.sh" ensure-rust-xcode
+        basedOnDependencyAnalysis: false
     dependencies:
       - framework: Frameworks/MangaCore.xcframework
         embed: false

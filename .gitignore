@@ -5,6 +5,8 @@
 /apps/apple/.build/
 /apps/apple/DerivedData/
 /apps/apple/Frameworks/
+/apps/apple/*.xcodeproj/
+/apps/apple/.xcframework.stamp
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
 

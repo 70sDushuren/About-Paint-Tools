@@ -79,11 +79,37 @@ flowchart LR
 - **Cost & Recommended Hybrid Architecture**: Every **Apple Developer Program membership (\$99/year)** includes **25 free compute hours/month** (paid tiers start at \$49.99/100h). Combine **Local MacBook Pro** + **GitHub Actions** (cross-platform Rust/i18n/Android/Win/Linux CI) + **Xcode Cloud** (free 25h/month dedicated to Apple signing, TestFlight & Store release).
 
 ### 3.2 Configuring Xcode Cloud for Rust + XcodeGen in 4 Steps
-1. **Commit Thin `.xcodeproj`**: Run `cd apps/apple && xcodegen generate` and commit `MangaStudioApple.xcodeproj` (excluding `xcuserdata/`) so Xcode Cloud can discover schemes; keep `Frameworks/MangaCore.xcframework` `.gitignored`.
-2. **Add `apps/apple/ci_scripts/ci_post_clone.sh` (`chmod +x`)**: Installs minimal `rustup` + the 3 Apple targets, runs `cargo test -p manga-core`, and assembles `MangaCore.xcframework` prior to `xcodebuild`.
+1. **Keep `project.yml` as the Daily Single Source of Truth**: During active `v0.2`–`v0.8` development, keep `/apps/apple/*.xcodeproj/` and `/apps/apple/Frameworks/` in `.gitignore` to eliminate `.pbxproj` merge noise; when activating Xcode Cloud workflows (`v0.9+`), either let `ci_post_clone.sh` generate the project via `xcodegen` or run `git add -f` on the thin `MangaStudioApple.xcodeproj` if App Store Connect scheme discovery requires it.
+2. **Add `apps/apple/ci_scripts/ci_post_clone.sh` (`chmod +x`)**: Installs minimal `rustup` + the 3 Apple targets, runs `cargo test -p manga-core`, builds `MangaCore.xcframework` via `scripts/dev.sh build-rust --force`, and generates `.xcodeproj` if absent.
 3. **Create Workflows** (`Xcode → Integrate → Xcode Cloud → Create Workflow`):
    - `Wave1-Beta-TestFlight`: Triggered on `main` / `v0.9*-beta*` → auto-signed TestFlight distribution;
    - `Wave1-Release-Store`: Triggered on S4-verified `v1.0.*` tags → full XCTest + App Store Connect & macOS notarization.
 4. **Reserve Semantic Bundle IDs & Shared App Group**:
    - `org.aboutpainttools.suite.hub` (S1) / `org.aboutpainttools.suite.manga` (S2) / `org.aboutpainttools.suite.novel` (S3)
    - Shared App Group `group.org.aboutpainttools.shared` to share `.prj` security-scoped bookmarks and a single cached copy of offline Gemma 4 weights across all 3 tools.
+
+---
+
+## 4. Unified Workflow Driver (`Makefile` + `scripts/dev.sh`) & Daily Playbook
+
+To keep local MacBook Pro Xcode iteration and cloud Linux VM development completely frictionless, the repository ships a unified root [`Makefile`](../../Makefile) + [`scripts/dev.sh`](../../scripts/dev.sh), paired with an incremental `preBuildScripts` hook in [`apps/apple/project.yml`](../../apps/apple/project.yml).
+
+### 4.1 Single-Project Multi-Target Architecture (Three Apps from One Workspace)
+- **One Xcode project during development**: `apps/apple/project.yml` → `MangaStudioApple.xcodeproj`. Switch Schemes in the Xcode toolbar to run each hardware target or standalone app (`S1`/`S2`/`S3` share `Shared/Sources/` bridges and common UI components).
+- **Three independent apps at release**: Each tool ships with its own Bundle ID, independent memory budget, and URL Scheme (`noemadock://`, `draconib://`, `litteracore://`) for Split View concurrency on iPad and Mac.
+
+### 4.2 Clear Division of Labor: Terminal vs. Xcode Window
+- **Terminal (4 unified commands)**: Git sync, incremental Rust XCFramework builds, XcodeGen project regeneration, and CI-gated Git pushes.
+- **Xcode Window**: Scheme/device selection, **`⌘R`** device/simulator launch, **`⌥⌘Enter`** live SwiftUI Previews, and **`⌘7` / `⌘I`** Memory & Metal GPU profiling.
+- **Automatic Incremental Rust Sync in Xcode**: Every target runs `Sync Rust MangaCore XCFramework (Incremental)` before building, checking a SHA-256 fingerprint of `core/`: pure Swift edits skip in **< 50ms**, while Rust edits rebuild the 3-slice XCFramework automatically on `⌘R`.
+
+### 4.3 Daily Command Cheatsheet (Run `make` from repo root or `./scripts/dev.sh` from anywhere)
+
+| Command | Action |
+| :--- | :--- |
+| `make sync` | `git pull --rebase` (when clean) → incremental `MangaCore.xcframework` rebuild → `xcodegen generate` → open Xcode |
+| `make run-mac` / `make run-ipad` / `make run-duo` | Headless `xcodebuild` compile (and launch `.app` on Mac) for rapid local or AI-agent verification |
+| `make check` | Exact local mirror of GitHub Actions CI + `S4` Integration Gate (5-locale i18n, `.xcstrings`/Android sync, CPFF v1.0, C11 zero-warning header, Rust workspace tests, 3 feature slices, `S4` check) |
+| `make push MSG="feat(...): ..."` | Runs `make check` first; only if green does it commit, `git pull --rebase`, and push to `origin` |
+| `make status` | Displays current branch, git status, and `MangaCore.xcframework` freshness |
+

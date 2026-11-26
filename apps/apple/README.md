@@ -33,11 +33,15 @@ apps/apple/
     └── IphoneDuoPostureAdapter.swift   # Folded/Unfolded posture & HingeSafeArea crease avoidance
 ```
 
-## Building & Running on macOS (Xcode + XcodeGen)
+## Building & Running on macOS (Unified Workflow)
 ```bash
-# 1. Build 3-slice Rust MangaCore.xcframework (iOS Device + Apple Silicon Simulator + macOS)
-./scripts/build_apple_xcframework.sh
+# One-command sync: git pull --rebase + incremental 3-slice Rust XCFramework + XcodeGen + open Xcode
+make sync
 
-# 2. Generate Xcode project for all 3 targets and open in Xcode (press Cmd+R to run!)
-cd apps/apple && xcodegen generate && open MangaStudioApple.xcodeproj
+# Or build/run directly from terminal (great for local Antigravity / CI verification)
+make run-mac       # Builds & launches MangaStudio-macOS-Touch on My Mac
+make run-ipad      # Builds MangaStudio-iPadOS for Apple Silicon iOS Simulator
+make check         # Runs full CI + S4 Tri-App integration gates locally
+make push MSG="feat(apple): your change"
 ```
+> Every Xcode target in `project.yml` also runs an incremental Rust pre-build script (`scripts/dev.sh ensure-rust-xcode`): pure Swift edits skip Rust compilation in `< 50ms`, while edits under `core/` automatically rebuild `MangaCore.xcframework` on `⌘R`.

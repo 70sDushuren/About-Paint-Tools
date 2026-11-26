@@ -79,11 +79,37 @@ flowchart LR
 - **成本与推荐架构**：**Apple Developer Program（\$99/年）免费赠送 25 计算小时/月**（超额 \$49.99/100h）。推荐 **「本地 MacBook Pro + GitHub Actions（全平台 Rust/i18n/Android/Win/Linux CI）+ Xcode Cloud（免费 25h/月专攻 Apple 自动签名与 TestFlight）」** 双云混合架构。
 
 ### 3.2 Xcode Cloud 接入本 Rust + XcodeGen 仓库的 4 步实操
-1. **提交轻量 `.xcodeproj`**：运行 `cd apps/apple && xcodegen generate` 后将 `MangaStudioApple.xcodeproj`（排除 `xcuserdata/`）入库，确保 Xcode Cloud 可扫描 Scheme；将 `Frameworks/MangaCore.xcframework` 保持在 `.gitignore`。
-2. **配置 `apps/apple/ci_scripts/ci_post_clone.sh`（`chmod +x`）**：在云端自动安装最小化 `rustup` + 3 个 Apple Targets，跑 `cargo test -p manga-core` 并组装 `MangaCore.xcframework`。
+1. **保持 `project.yml` 为日常唯一真相源**：日常开发期（`v0.2`–`v0.8`）将 `/apps/apple/*.xcodeproj/` 与 `/apps/apple/Frameworks/` 留在 `.gitignore` 避免 `.pbxproj` 冲突；正式开通 Xcode Cloud Workflow（`v0.9+`）时，既可由 `ci_post_clone.sh` 自动调用 `xcodegen`，也可按 App Store Connect 扫描要求对轻量 `MangaStudioApple.xcodeproj` 执行一次 `git add -f` 入库。
+2. **配置 `apps/apple/ci_scripts/ci_post_clone.sh`（`chmod +x`）**：在云端自动安装最小化 `rustup` + 3 个 Apple Targets，跑 `cargo test -p manga-core`，通过 `scripts/dev.sh build-rust --force` 组装 `MangaCore.xcframework` 并按需生成 `.xcodeproj`。
 3. **配置 3 条 Workflow**（`Xcode → Integrate → Xcode Cloud → Create Workflow`）：
    - `Wave1-Beta-TestFlight`：`main` 或 `v0.9*-beta*` 触发 → 自动签名并分发至 TestFlight；
    - `Wave1-Release-Store`：通过 `S4` 门禁打标 `v1.0.*` → 全量 XCTest + App Store Connect 提审与 macOS 公证。
 4. **预留语义化 Bundle ID 与共享 App Group**：
    - `org.aboutpainttools.suite.hub`（S1） / `org.aboutpainttools.suite.manga`（S2） / `org.aboutpainttools.suite.novel`（S3）
    - 共享 App Group：`group.org.aboutpainttools.shared`（跨工具共享 `.prj` 书签权限与单份本地 Gemma 4 离线模型权重缓存）。
+
+---
+
+## 4. 统一工作流驱动（`Makefile` + `scripts/dev.sh`）与日常操作手册
+
+为消除 MacBook Pro 本地 Xcode 与云端 Linux VM 之间的零散命令行操作，仓库根目录提供了统一的 [`Makefile`](../../Makefile) 与 [`scripts/dev.sh`](../../scripts/dev.sh)，并在 [`apps/apple/project.yml`](../../apps/apple/project.yml) 中为全部 Apple Target 配置了增量 `preBuildScripts` 钩子。
+
+### 4.1 单工程多 Target：无需切换子项目即可产出三款 App
+- **开发期只打开 1 个工程**：`apps/apple/project.yml` → `MangaStudioApple.xcodeproj`，在 Xcode 顶部栏直接切换 Scheme 即可调试不同硬件形态与独立产品（`S1`/`S2`/`S3` 共享 `Shared/Sources/` 桥接与公共组件）。
+- **发版期独立安装**：三款 App 使用独立 Bundle ID、独立进程预算与独立 URL Scheme（`noemadock://`、`draconib://`、`litteracore://`），可在 iPad / Mac 上分屏并行。
+
+### 4.2 Terminal 与 Xcode 窗口黄金分工
+- **Terminal（统一 4 指令）**：负责拉取同步、Rust 增量编译、XcodeGen 工程刷新与带门禁的 Git 提交。
+- **Xcode 窗口**：负责选择 Scheme/设备、按 **`⌘R`** 真机/模拟器运行、**`⌥⌘Enter`** SwiftUI 实时预览、**`⌘7` / `⌘I`** 内存与 Metal GPU 帧率剖析。
+- **Xcode 内自动增量同步**：各 Target 已内置 `Sync Rust MangaCore XCFramework (Incremental)` 构建前脚本，基于 `core/` 内容 SHA-256 指纹判断：仅改 Swift 时 **< 50ms 跳过**，改过 Rust 时按 `⌘R` 自动重编三切片 XCFramework。
+
+### 4.3 日常 4 条一键指令（可在仓库任意子目录运行 `scripts/dev.sh`，或在根目录运行 `make`）
+
+| 指令 | 作用 |
+| :--- | :--- |
+| `make sync` | 自动回到根目录 → 工作区干净时 `git pull --rebase` → 按指纹增量更新 `MangaCore.xcframework` → `xcodegen generate` → 打开 Xcode |
+| `make run-mac` / `make run-ipad` / `make run-duo` | 命令行直接调用 `xcodebuild` 编译（Mac 自动启动 `.app`），便于本机 Antigravity 自动化验证 |
+| `make check` | 一键执行与 GitHub Actions 完全一致的全套门禁（5 语 i18n、双端词条同步、CPFF v1.0、C11 零警告、Rust 全测、3 个 Feature 分片与 `S4` 集成检查） |
+| `make push MSG="feat(...): ..."` | 自动先跑 `make check`，全绿后才 `commit` → `git pull --rebase` → `git push` |
+| `make status` | 查看当前分支、工作区状态与 `MangaCore.xcframework` 是否最新 |
+
