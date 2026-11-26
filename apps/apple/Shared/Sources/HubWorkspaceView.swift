@@ -43,7 +43,11 @@ public struct HubWorkspaceView: View {
     @State private var newChapterId: String = "ch003"
     @State private var newChapterZh: String = "双生分镜"
     @State private var newChapterEn: String = "Twin Storyboards"
-    @State private var gateStatusLine: String = "T0.3-S4 Gate ready."
+    @State private var gateStatusLine: String = "T0.4-S4 Gate ready."
+    @State private var ingestKind: IngestAssetKindBridge = .referenceArt
+    @State private var ingestFilename: String = "Character Palette (Draft).txt"
+    @State private var ingestPayload: String = "Primary Accent #4F7CFF / Cel Shadow Multiply 75%"
+    @State private var ingestStatusLine: String = "Ready to normalize & ingest external assets without clobbering human finals."
 
     public init(
         layout: WorkspaceLayoutHintKind,
@@ -78,7 +82,9 @@ public struct HubWorkspaceView: View {
                         storyBibleAndTocEditorCard
                     case .dualBoard:
                         dualEngineBoardCard
-                    case .ingest, .localeAudit, .publish:
+                    case .ingest:
+                        assetIngestCard
+                    case .localeAudit, .publish:
                         milestonePreviewCard(for: selectedSection)
                     }
                     AiSandboxReadOnlyBanner(
@@ -602,6 +608,80 @@ public struct HubWorkspaceView: View {
                 .background(SuiteColorTokens.novelAccent.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             }
+        }
+        .padding(14)
+        .background(SuiteColorTokens.hubCard)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var assetIngestCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("S1 v0.4 · Asset & Prose Ingest Normalizer")
+                .font(.subheadline.bold())
+            Text("Sanitizes filenames, auto-versions duplicate files (-v2, -v3), and isolates imported prose inside ai_assist/ingest_staging/ so human finals are never clobbered.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Picker("Ingest Target", selection: $ingestKind) {
+                ForEach(IngestAssetKindBridge.allCases) { kind in
+                    Text(kind.displayName).tag(kind)
+                }
+            }
+            .pickerStyle(.menu)
+
+            TextField("Source Filename", text: $ingestFilename)
+                .textFieldStyle(.roundedBorder)
+            TextField("Asset / Draft Payload", text: $ingestPayload)
+                .textFieldStyle(.roundedBorder)
+
+            HStack(spacing: 10) {
+                Button {
+                    #if canImport(MangaCoreFFI)
+                    if let dest = MangaHubIngest.ingestTextAsset(
+                        projectDir: activeProjectDir,
+                        chapterId: "ch001",
+                        kind: ingestKind,
+                        filename: ingestFilename,
+                        payload: ingestPayload
+                    ) {
+                        ingestStatusLine = "OK [Atomic Ingest]: Saved -> \(dest)"
+                    } else {
+                        ingestStatusLine = "FAIL: Ingest rejected unsafe path or empty filename."
+                    }
+                    #endif
+                } label: {
+                    Label("Ingest into CPFF .prj", systemImage: "tray.and.arrow.down.fill")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(SuiteColorTokens.hubAccent)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    #if canImport(MangaCoreFFI)
+                    let ok = MangaSuiteS4Gate.runT04S4(projectDir: activeProjectDir)
+                    ingestStatusLine = ok
+                        ? "OK [T0.4-S4 Gate PASS]: Ingest auto-versioning, Close-Gap 3px + Lasso & DivergenceNote verified."
+                        : "FAIL [T0.4-S4 Gate]: Check workspace state."
+                    #endif
+                } label: {
+                    Label("Run T0.4-S4 Gate", systemImage: "checkmark.seal.fill")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(SuiteColorTokens.novelAccent.opacity(0.16))
+                        .foregroundStyle(SuiteColorTokens.novelAccent)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text(ingestStatusLine)
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
         }
         .padding(14)
         .background(SuiteColorTokens.hubCard)

@@ -14,6 +14,7 @@ pub mod canvas;
 pub mod continuity;
 pub mod ffi;
 pub mod fill;
+pub mod ingest;
 pub mod layer;
 pub mod novel;
 pub mod panel;
@@ -23,6 +24,7 @@ pub mod project;
 pub mod project_init;
 pub mod ruler;
 pub mod screentone;
+pub mod selection;
 pub mod stroke;
 pub mod suite;
 pub mod tile;
@@ -45,6 +47,7 @@ pub use continuity::{
     CONTINUITY_SQLITE_DDL,
 };
 pub use fill::{close_gap_expand_fill, FillOptions, FillResult};
+pub use ingest::{ingest_bytes_atomic, sanitize_ingest_filename, IngestAssetKind, IngestResult};
 pub use layer::{blend_rgba, BlendMode, LayerId, LayerKind, LayerNode, LayerStack};
 pub use novel::{
     count_novel_words, write_novel_prose_atomic, DivergenceNote, NovelChapterMeta, NovelWordStats,
@@ -63,11 +66,13 @@ pub use project::{
 pub use project_init::{init_cpff_project, ProjectInitOptions};
 pub use ruler::RulerKind;
 pub use screentone::{ScreentoneSpec, TonePattern};
+pub use selection::SelectionMask;
 pub use stroke::{RopeStabilizer, StrokePoint};
 pub use suite::{
     can_write_relative_path, run_t02_s4_concurrency_soak, run_t03_s4_bible_layers_gate,
-    run_tri_app_compatibility_check, DeepLinkAction, SuiteApp, SuiteAppMetadata,
-    T02S4ConcurrencyReport, T03S4GateReport, TriAppIntegrationReport,
+    run_t04_s4_ingest_fill_divergence_gate, run_tri_app_compatibility_check, DeepLinkAction,
+    SuiteApp, SuiteAppMetadata, T02S4ConcurrencyReport, T03S4GateReport, T04S4GateReport,
+    TriAppIntegrationReport,
 };
 pub use tile::{TileCoord, TileData, TileLayer, TILE_SIZE};
 pub use undo::{TileDiff, TileUndoStack};

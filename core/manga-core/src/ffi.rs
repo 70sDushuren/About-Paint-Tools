@@ -944,6 +944,140 @@ pub unsafe extern "C" fn manga_suite_run_t03_s4_gate(project_dir_utf8: *const c_
     u8::from(crate::suite::run_t03_s4_bible_layers_gate(std::path::Path::new(&dir)).is_ok())
 }
 
+/// Atomically ingests a UTF-8 asset/draft into canonical CPFF v1.0 layout (`S1 v0.4`).
+/// Writes normalized destination relative path into `out_rel_path_buf` and returns bytes written.
+///
+/// # Safety
+/// Pointer parameters must be valid NUL-terminated UTF-8 strings and `out_rel_path_buf` must have `out_rel_path_cap`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_hub_ingest_text_asset(
+    project_dir_utf8: *const c_char,
+    chapter_id_utf8: *const c_char,
+    kind_code: u32,
+    filename_utf8: *const c_char,
+    payload_utf8: *const c_char,
+    out_rel_path_buf: *mut c_char,
+    out_rel_path_cap: usize,
+) -> usize {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    let ch = unsafe { cstr_to_string(chapter_id_utf8, "ch001") };
+    let fname = unsafe { cstr_to_string(filename_utf8, "") };
+    let payload = unsafe { cstr_to_string(payload_utf8, "") };
+    let Some(kind) = crate::ingest::IngestAssetKind::from_u32(kind_code) else {
+        return 0;
+    };
+    if dir.is_empty() || fname.is_empty() {
+        return 0;
+    }
+    let Ok(res) = crate::ingest::ingest_bytes_atomic(
+        std::path::Path::new(&dir),
+        &ch,
+        kind,
+        &fname,
+        payload.as_bytes(),
+    ) else {
+        return 0;
+    };
+    unsafe { write_utf8_to_c_buf(&res.destination_rel_path, out_rel_path_buf, out_rel_path_cap) }
+}
+
+/// Evaluates a freehand lasso polygon selection mask (with optional invert & expand/contract) (`S2 v0.4`).
+///
+/// # Safety
+/// `xs` and `ys` must point to `point_count` valid `f32` values (or be null when `point_count == 0`).
+#[no_mangle]
+pub unsafe extern "C" fn manga_selection_lasso_pixel_count(
+    xs: *const f32,
+    ys: *const f32,
+    point_count: usize,
+    width: u32,
+    height: u32,
+    invert: u8,
+    border_delta_px: i32,
+) -> usize {
+    if xs.is_null() || ys.is_null() || point_count < 3 {
+        return 0;
+    }
+    let x_slice = unsafe { slice::from_raw_parts(xs, point_count) };
+    let y_slice = unsafe { slice::from_raw_parts(ys, point_count) };
+    let poly: Vec<(f32, f32)> = x_slice.iter().copied().zip(y_slice.iter().copied()).collect();
+    let mut sel = crate::selection::SelectionMask::from_lasso_polygon(width, height, &poly);
+    if border_delta_px != 0 {
+        sel.adjust_border(border_delta_px);
+    }
+    if invert != 0 {
+        sel.invert();
+    }
+    sel.selected_pixel_count()
+}
+
+/// Appends and atomically persists a `<DivergenceNote>` in `chapters/<ch>/novel/novel_meta.xml` (`S3 v0.4`).
+///
+/// # Safety
+/// All non-null string pointers must be valid NUL-terminated UTF-8 strings.
+#[no_mangle]
+pub unsafe extern "C" fn manga_novel_add_divergence_note(
+    project_dir_utf8: *const c_char,
+    chapter_id_utf8: *const c_char,
+    scene_id_utf8: *const c_char,
+    summary_utf8: *const c_char,
+) -> u8 {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    let ch = unsafe { cstr_to_string(chapter_id_utf8, "") };
+    let scene = unsafe { cstr_to_string(scene_id_utf8, "") };
+    let summary = unsafe { cstr_to_string(summary_utf8, "") };
+    if dir.is_empty() || ch.is_empty() || summary.is_empty() {
+        return 0;
+    }
+    let root = std::path::Path::new(&dir);
+    let mut meta = match crate::novel::NovelChapterMeta::load_from_project(root, &ch) {
+        Ok(m) => m,
+        Err(_) => return 0,
+    };
+    meta.divergence_notes.push(crate::novel::DivergenceNote {
+        scene_id: if scene.is_empty() { None } else { Some(scene) },
+        summary,
+    });
+    u8::from(meta.save_atomic(root).is_ok())
+}
+
+/// Reads tab-delimited `<DivergenceNote>` lines (`scene_id\tsummary`) into caller-owned UTF-8 buffer (`S3 v0.4`).
+///
+/// # Safety
+/// `project_dir_utf8` and `chapter_id_utf8` must be valid strings; `out_buf` must have `out_cap`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_novel_read_divergence_notes(
+    project_dir_utf8: *const c_char,
+    chapter_id_utf8: *const c_char,
+    out_buf: *mut c_char,
+    out_cap: usize,
+) -> usize {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    let ch = unsafe { cstr_to_string(chapter_id_utf8, "") };
+    if dir.is_empty() || ch.is_empty() {
+        return 0;
+    }
+    let Ok(meta) = crate::novel::NovelChapterMeta::load_from_project(std::path::Path::new(&dir), &ch)
+    else {
+        return 0;
+    };
+    let lines = meta.export_divergence_lines();
+    unsafe { write_utf8_to_c_buf(&lines, out_buf, out_cap) }
+}
+
+/// Executes the **`T0.4-S4` Asset Ingest + Close-Gap Anti-Halo Fill + `<DivergenceNote>` Gate**.
+///
+/// # Safety
+/// `project_dir_utf8` must be null or a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn manga_suite_run_t04_s4_gate(project_dir_utf8: *const c_char) -> u8 {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    if dir.is_empty() {
+        return 0;
+    }
+    u8::from(crate::suite::run_t04_s4_ingest_fill_divergence_gate(std::path::Path::new(&dir)).is_ok())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

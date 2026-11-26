@@ -148,6 +148,21 @@ fn xml_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
+fn xml_unescape(s: &str) -> String {
+    s.replace("&quot;", "\"")
+        .replace("&gt;", ">")
+        .replace("&lt;", "<")
+        .replace("&amp;", "&")
+}
+
+fn extract_xml_attr(tag: &str, attr: &str) -> Option<String> {
+    let needle = format!("{attr}=\"");
+    let start = tag.find(&needle)? + needle.len();
+    let rest = &tag[start..];
+    let end = rest.find('"')?;
+    Some(xml_unescape(&rest[..end]))
+}
+
 impl NovelChapterMeta {
     /// Serializes to deterministic 2-space LF CPFF v1.0 XML (zero noisy Git diffs).
     pub fn to_xml(&self) -> String {
@@ -174,6 +189,75 @@ impl NovelChapterMeta {
         }
         out.push_str("</NovelChapterMeta>\n");
         out
+    }
+
+    pub fn parse_xml(xml: &str, fallback_chapter_id: &str) -> Self {
+        let mut chapter_id = fallback_chapter_id.to_string();
+        let mut decoupled = true;
+        let mut locked = false;
+        let mut notes = Vec::new();
+        for line in xml.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("<NovelChapterMeta ") {
+                if let Some(ch) = extract_xml_attr(trimmed, "chapter") {
+                    chapter_id = ch;
+                }
+                if let Some(d) = extract_xml_attr(trimmed, "decoupledFromManga") {
+                    decoupled = d == "true";
+                }
+                if let Some(l) = extract_xml_attr(trimmed, "locked") {
+                    locked = l == "true";
+                }
+            } else if trimmed.starts_with("<DivergenceNote") && trimmed.ends_with("</DivergenceNote>") {
+                let scene_id = extract_xml_attr(trimmed, "scene");
+                if let (Some(open_end), Some(close_start)) = (trimmed.find('>'), trimmed.rfind("</DivergenceNote>")) {
+                    if open_end + 1 <= close_start {
+                        let body = xml_unescape(&trimmed[open_end + 1..close_start]);
+                        notes.push(DivergenceNote {
+                            scene_id,
+                            summary: body,
+                        });
+                    }
+                }
+            }
+        }
+        Self {
+            chapter_id,
+            decoupled_from_manga: decoupled,
+            locked,
+            divergence_notes: notes,
+        }
+    }
+
+    pub fn load_from_project(project_dir: &Path, chapter_id: &str) -> Result<Self, String> {
+        let rel = format!("chapters/{chapter_id}/novel/novel_meta.xml");
+        let path = project_dir.join(&rel);
+        if !path.is_file() {
+            return Ok(Self {
+                chapter_id: chapter_id.to_string(),
+                decoupled_from_manga: true,
+                locked: false,
+                divergence_notes: Vec::new(),
+            });
+        }
+        let xml = fs::read_to_string(&path)
+            .map_err(|e| format!("Failed reading '{}': {e}", path.display()))?;
+        Ok(Self::parse_xml(&xml, chapter_id))
+    }
+
+    /// Exports compact tab-delimited `<DivergenceNote>` lines (`scene_id\tsummary`) for C-ABI display.
+    pub fn export_divergence_lines(&self) -> String {
+        self.divergence_notes
+            .iter()
+            .map(|n| {
+                format!(
+                    "{}\t{}",
+                    n.scene_id.as_deref().unwrap_or("general").replace(['\t', '\n', '\r'], " "),
+                    n.summary.replace(['\t', '\n', '\r'], " ")
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     /// Atomically persists `chapters/<chapter_id>/novel/novel_meta.xml` under `SuiteApp::Novel`.

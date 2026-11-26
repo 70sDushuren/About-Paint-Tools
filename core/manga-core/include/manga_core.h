@@ -297,6 +297,44 @@ size_t manga_toc_read_summary(
 
 uint8_t manga_suite_run_t03_s4_gate(const char *project_dir_utf8);
 
+/* --- v0.4.0 & T0.4-S4 Asset Ingest, Lasso Selection & DivergenceNote API --- */
+
+size_t manga_hub_ingest_text_asset(
+    const char *project_dir_utf8,
+    const char *chapter_id_utf8,
+    uint32_t kind_code,
+    const char *filename_utf8,
+    const char *payload_utf8,
+    char *out_rel_path_buf,
+    size_t out_rel_path_cap
+);
+
+size_t manga_selection_lasso_pixel_count(
+    const float *xs,
+    const float *ys,
+    size_t point_count,
+    uint32_t width,
+    uint32_t height,
+    uint8_t invert,
+    int32_t border_delta_px
+);
+
+uint8_t manga_novel_add_divergence_note(
+    const char *project_dir_utf8,
+    const char *chapter_id_utf8,
+    const char *scene_id_utf8,
+    const char *summary_utf8
+);
+
+size_t manga_novel_read_divergence_notes(
+    const char *project_dir_utf8,
+    const char *chapter_id_utf8,
+    char *out_buf,
+    size_t out_cap
+);
+
+uint8_t manga_suite_run_t04_s4_gate(const char *project_dir_utf8);
+
 #ifdef __cplusplus
 }
 #endif

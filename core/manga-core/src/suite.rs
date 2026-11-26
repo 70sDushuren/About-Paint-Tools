@@ -692,6 +692,132 @@ pub fn run_t03_s4_bible_layers_gate(project_dir: &Path) -> Result<T03S4GateRepor
     })
 }
 
+/// Summary produced by the **`T0.4-S4` Asset Ingest + Close-Gap Anti-Halo Fill + `<DivergenceNote>` Gate**.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct T04S4GateReport {
+    pub ingest_collision_renamed: bool,
+    pub ingest_prose_isolated: bool,
+    pub close_gap_filled_pixels: usize,
+    pub close_gap_zero_leak: bool,
+    pub anti_halo_expanded: bool,
+    pub lasso_selected_pixels: usize,
+    pub divergence_notes_verified: usize,
+}
+
+/// Executes the **`T0.4-S4` Integration & Compatibility Gate** over a CPFF v1.0 `.prj` workspace:
+/// - `S1`: Normalizes reference art + auto-versions duplicate names without clobbering, and stages
+///   imported prose strictly inside `ai_assist/ingest_staging/` (never overwriting human finals).
+/// - `S2`: Executes Close-Gap (`3px`) + Edge-Expand (`1px`) anti-halo flood fill on a reference lineart
+///   box with a 3px break (verifying zero leak & anti-halo tucking), plus Lasso polygon selection.
+/// - `S3`: Atomically persists and reloads `<DivergenceNote>` metadata in `chapters/ch001/novel/novel_meta.xml`
+///   strictly under `SuiteApp::Novel`.
+pub fn run_t04_s4_ingest_fill_divergence_gate(project_dir: &Path) -> Result<T04S4GateReport, String> {
+    let _ = run_tri_app_compatibility_check(project_dir)?;
+
+    // 1. S1 Ingest normalization + collision auto-versioning + AI/human prose isolation
+    let r1 = crate::ingest::ingest_bytes_atomic(
+        project_dir,
+        "ch001",
+        crate::ingest::IngestAssetKind::ReferenceArt,
+        "Lead Sheet (Color).png",
+        b"PNG_REF_V1",
+    )?;
+    let r2 = crate::ingest::ingest_bytes_atomic(
+        project_dir,
+        "ch001",
+        crate::ingest::IngestAssetKind::ReferenceArt,
+        "Lead Sheet (Color).png",
+        b"PNG_REF_V2",
+    )?;
+    if !r2.conflict_renamed || r1.destination_rel_path == r2.destination_rel_path {
+        return Err("T0.4-S4 S1 ingest failed to auto-version duplicate asset".into());
+    }
+    let r_prose = crate::ingest::ingest_bytes_atomic(
+        project_dir,
+        "ch001",
+        crate::ingest::IngestAssetKind::ProseStagingDraft,
+        "external_chapter1.md",
+        b"# Imported external draft",
+    )?;
+    let ingest_prose_isolated = r_prose
+        .destination_rel_path
+        .starts_with("chapters/ch001/ai_assist/ingest_staging/");
+    if !ingest_prose_isolated {
+        return Err("T0.4-S4 S1 prose ingest escaped ai_assist/ingest_staging/".into());
+    }
+
+    // 2. S2 Close-Gap 3px anti-halo flood fill + Lasso selection
+    let mut stack = crate::layer::LayerStack::new(80, 80);
+    let flat_id = stack.add_raster_layer("Flat_Color");
+    let ink_id = stack.add_raster_layer("Ink_Ref");
+    {
+        let ink = stack.get_mut(ink_id).unwrap();
+        ink.is_reference = true;
+        for x in 10..=50 {
+            if !(28..=30).contains(&x) {
+                ink.write_pixel(x, 10, [0, 0, 0, 255]);
+            }
+            ink.write_pixel(x, 50, [0, 0, 0, 255]);
+        }
+        for y in 10..=50 {
+            ink.write_pixel(10, y, [0, 0, 0, 255]);
+            ink.write_pixel(50, y, [0, 0, 0, 255]);
+        }
+    }
+    let fill_res = crate::fill::close_gap_expand_fill(
+        &mut stack,
+        flat_id,
+        30,
+        30,
+        [255, 107, 74, 255],
+        crate::fill::FillOptions {
+            tolerance: 24,
+            close_gap_px: 3,
+            expand_px: 1,
+            reference_alpha_threshold: 64,
+        },
+    );
+    let flat_layer = stack.get(flat_id).unwrap().raster.as_ref().unwrap();
+    let close_gap_zero_leak = flat_layer.get_pixel(2, 2) == [0, 0, 0, 0];
+    let anti_halo_expanded = flat_layer.get_pixel(10, 30) == [255, 107, 74, 255];
+    if !close_gap_zero_leak || !anti_halo_expanded || fill_res.filled_pixels < 1000 {
+        return Err("T0.4-S4 S2 close-gap anti-halo fill gate failed".into());
+    }
+
+    let poly = [(10.0, 10.0), (40.0, 10.0), (40.0, 40.0), (10.0, 40.0)];
+    let mut sel = crate::selection::SelectionMask::from_lasso_polygon(80, 80, &poly);
+    sel.adjust_border(1);
+    let lasso_selected_pixels = sel.selected_pixel_count();
+    if lasso_selected_pixels != 32 * 32 {
+        return Err(format!(
+            "T0.4-S4 S2 lasso expanded pixel count mismatch: {lasso_selected_pixels}"
+        ));
+    }
+
+    // 3. S3 <DivergenceNote> round-trip under SuiteApp::Novel
+    let mut meta = crate::novel::NovelChapterMeta::load_from_project(project_dir, "ch001")?;
+    meta.locked = true;
+    meta.divergence_notes.push(crate::novel::DivergenceNote {
+        scene_id: Some("sc002".into()),
+        summary: "Novel expands rooftop dialogue while manga uses silent 3-panel beat.".into(),
+    });
+    meta.save_atomic(project_dir)?;
+    let reloaded = crate::novel::NovelChapterMeta::load_from_project(project_dir, "ch001")?;
+    if reloaded.divergence_notes.is_empty() {
+        return Err("T0.4-S4 S3 DivergenceNote failed round-trip persistence".into());
+    }
+
+    Ok(T04S4GateReport {
+        ingest_collision_renamed: r2.conflict_renamed,
+        ingest_prose_isolated,
+        close_gap_filled_pixels: fill_res.filled_pixels,
+        close_gap_zero_leak,
+        anti_halo_expanded,
+        lasso_selected_pixels,
+        divergence_notes_verified: reloaded.divergence_notes.len(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -763,6 +889,26 @@ mod tests {
         assert!(report.blue_sketch_tint_verified);
         assert!(report.write_isolation_verified);
         assert_eq!(report.temp_files_remaining, 0);
+
+        let _ = std::fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn t04_s4_ingest_fill_selection_and_divergence_gate_passes() {
+        let parent = std::env::temp_dir().join(format!("manga_t04_s4_unit_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&parent);
+        std::fs::create_dir_all(&parent).unwrap();
+        let opts = crate::project_init::ProjectInitOptions::dual_engine_default("T04GatePrj", "S4Tester");
+        crate::project_init::init_cpff_project(&parent, &opts).unwrap();
+
+        let report = run_t04_s4_ingest_fill_divergence_gate(&parent.join("T04GatePrj"))
+            .expect("T0.4-S4 gate must pass");
+        assert!(report.ingest_collision_renamed);
+        assert!(report.ingest_prose_isolated);
+        assert!(report.close_gap_zero_leak);
+        assert!(report.anti_halo_expanded);
+        assert_eq!(report.lasso_selected_pixels, 1024);
+        assert!(report.divergence_notes_verified >= 1);
 
         let _ = std::fs::remove_dir_all(&parent);
     }

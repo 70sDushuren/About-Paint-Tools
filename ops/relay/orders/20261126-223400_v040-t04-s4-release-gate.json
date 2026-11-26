@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "order_id": "20261126-223400_v040-t04-s4-release-gate",
+  "created_at_utc": "2026-11-26T22:34:00Z",
+  "milestone": "v0.4.0",
+  "title": "Verify v0.4.0 + T0.4-S4 (S1 Asset/Prose Ingest, S2 Close-Gap 3px Fill + Lasso Selection, S3 5-Locale Prose & DivergenceNote, 18 live macOS FFI XCTests)",
+  "summary": "Rebuild 3-slice MangaCore.xcframework with v0.4.0 ingest/selection/DivergenceNote/T0.4-S4, compile all 3 Wave 1 Apple targets, run 18 live Apple Silicon Swift<->Rust XCTests, and pass full CI + T0.2/T0.3/T0.4-S4 gates.",
+  "steps": [
+    {
+      "action": "env-info"
+    },
+    {
+      "action": "build-rust"
+    },
+    {
+      "action": "xcode-gen"
+    },
+    {
+      "action": "build-mac"
+    },
+    {
+      "action": "test-mac"
+    },
+    {
+      "action": "build-ipad"
+    },
+    {
+      "action": "build-duo"
+    },
+    {
+      "action": "check"
+    }
+  ],
+  "notify": true
+}

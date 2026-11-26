@@ -150,6 +150,35 @@ public struct ProjectTocEntrySummary: Identifiable, Equatable, Sendable {
     }
 }
 
+/// Intentional Manga ↔ Novel adaptation note persisted in `chapters/<ch>/novel/novel_meta.xml` (`S3 v0.4`).
+public struct DivergenceNoteSummary: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let sceneId: String
+    public let summary: String
+
+    public init(id: String = UUID().uuidString, sceneId: String, summary: String) {
+        self.id = id
+        self.sceneId = sceneId
+        self.summary = summary
+    }
+}
+
+/// Canonical asset ingest routing category (`S1 v0.4`).
+public enum IngestAssetKindBridge: UInt32, CaseIterable, Sendable, Identifiable {
+    case referenceArt = 0
+    case proseStagingDraft = 1
+    case storyboardScan = 2
+
+    public var id: UInt32 { rawValue }
+    public var displayName: String {
+        switch self {
+        case .referenceArt: return "Reference Art (assets/refs/)"
+        case .proseStagingDraft: return "Prose Staging (ai_assist/ingest_staging/)"
+        case .storyboardScan: return "Storyboard Scan (assets/ingest/)"
+        }
+    }
+}
+
 /// Shared on-disk `.prj` sandbox workspace so `S1` (Hub), `S2` (Manga), and `S3` (Novel)
 /// demonstrate live `< 300ms` cross-app hot-reload immediately on launch.
 public enum SuiteSharedWorkspace {
@@ -340,9 +369,108 @@ public enum MangaNovelMetrics {
             }
         }
     }
+
+    @discardableResult
+    public static func addDivergenceNote(
+        projectDir: String,
+        chapterId: String,
+        sceneId: String,
+        summary: String
+    ) -> Bool {
+        projectDir.withCString { cDir in
+            chapterId.withCString { cCh in
+                sceneId.withCString { cScene in
+                    summary.withCString { cSummary in
+                        manga_novel_add_divergence_note(cDir, cCh, cScene, cSummary) != 0
+                    }
+                }
+            }
+        }
+    }
+
+    public static func readDivergenceNotes(projectDir: String, chapterId: String) -> [DivergenceNoteSummary] {
+        var buffer = [CChar](repeating: 0, count: 16_384)
+        let written = projectDir.withCString { cDir in
+            chapterId.withCString { cCh in
+                buffer.withUnsafeMutableBufferPointer { buf in
+                    manga_novel_read_divergence_notes(cDir, cCh, buf.baseAddress, buf.count)
+                }
+            }
+        }
+        guard written > 0 else { return [] }
+        let raw = String(decoding: buffer.prefix(Int(written)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
+        return raw.split(separator: "\n", omittingEmptySubsequences: true).enumerated().compactMap { idx, line in
+            let parts = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+            guard parts.count >= 2 else { return nil }
+            return DivergenceNoteSummary(id: "\(chapterId)-\(idx)", sceneId: parts[0], summary: parts[1])
+        }
+    }
 }
 
-/// `T0.2-S4` & `T0.3-S4` — Tri-App Integration & Compatibility Gates over Rust C-ABI.
+/// `S1 v0.4` — Canonical CPFF asset & prose ingest normalizer with collision protection & AI/human isolation.
+public enum MangaHubIngest {
+    public static func ingestTextAsset(
+        projectDir: String,
+        chapterId: String,
+        kind: IngestAssetKindBridge,
+        filename: String,
+        payload: String
+    ) -> String? {
+        var buffer = [CChar](repeating: 0, count: 4096)
+        let written = projectDir.withCString { cDir in
+            chapterId.withCString { cCh in
+                filename.withCString { cFile in
+                    payload.withCString { cPayload in
+                        buffer.withUnsafeMutableBufferPointer { buf in
+                            manga_hub_ingest_text_asset(
+                                cDir,
+                                cCh,
+                                kind.rawValue,
+                                cFile,
+                                cPayload,
+                                buf.baseAddress,
+                                buf.count
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        guard written > 0 else { return nil }
+        return String(decoding: buffer.prefix(Int(written)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    }
+}
+
+/// `S2 v0.4` — Freehand Lasso Polygon Selection Mask with invert & morphological expand/contract.
+public enum MangaSelectionEngine {
+    public static func lassoPixelCount(
+        xs: [Float],
+        ys: [Float],
+        width: UInt32,
+        height: UInt32,
+        invert: Bool = false,
+        borderDeltaPx: Int32 = 0
+    ) -> Int {
+        guard xs.count == ys.count, xs.count >= 3 else { return 0 }
+        return xs.withUnsafeBufferPointer { xBuf in
+            ys.withUnsafeBufferPointer { yBuf in
+                Int(
+                    manga_selection_lasso_pixel_count(
+                        xBuf.baseAddress,
+                        yBuf.baseAddress,
+                        xs.count,
+                        width,
+                        height,
+                        invert ? 1 : 0,
+                        borderDeltaPx
+                    )
+                )
+            }
+        }
+    }
+}
+
+/// `T0.2-S4`, `T0.3-S4` & `T0.4-S4` — Tri-App Integration & Compatibility Gates over Rust C-ABI.
 public enum MangaSuiteS4Gate {
     public static func run(projectDir: String, soakRounds: UInt32 = 100) -> Bool {
         projectDir.withCString { cDir in
@@ -353,6 +481,12 @@ public enum MangaSuiteS4Gate {
     public static func runT03S4(projectDir: String) -> Bool {
         projectDir.withCString { cDir in
             manga_suite_run_t03_s4_gate(cDir) != 0
+        }
+    }
+
+    public static func runT04S4(projectDir: String) -> Bool {
+        projectDir.withCString { cDir in
+            manga_suite_run_t04_s4_gate(cDir) != 0
         }
     }
 }

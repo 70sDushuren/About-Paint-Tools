@@ -3,7 +3,8 @@ use std::path::PathBuf;
 
 use manga_core::{
     init_cpff_project, run_t02_s4_concurrency_soak, run_t03_s4_bible_layers_gate,
-    run_tri_app_compatibility_check, CanvasPreset, ProjectInitOptions, SuiteApp, TargetPlatform,
+    run_t04_s4_ingest_fill_divergence_gate, run_tri_app_compatibility_check, CanvasPreset,
+    ProjectInitOptions, SuiteApp, TargetPlatform,
 };
 use manga_linux_shell::{LinuxStudioShell, WaylandTabletToolEvent, WaylandTabletTouchAdapter};
 
@@ -81,12 +82,13 @@ fn main() {
         let gate_result = init_cpff_project(&soak_parent, &opts).and_then(|_| {
             let soak = run_t02_s4_concurrency_soak(&soak_prj, 100)?;
             let t03 = run_t03_s4_bible_layers_gate(&soak_prj)?;
-            Ok((soak, t03))
+            let t04 = run_t04_s4_ingest_fill_divergence_gate(&soak_prj)?;
+            Ok((soak, t03, t04))
         });
         let _ = std::fs::remove_dir_all(&soak_parent);
 
         match gate_result {
-            Ok((soak, t03)) => {
+            Ok((soak, t03, t04)) => {
                 println!(
                     "OK [T0.2-S4 Concurrency Soak]: {} rounds passed (S1_reads={}, S2_stamps={}, S3_atomic_saves={}, locked_rejections={}, leaked_tmp={})",
                     soak.rounds_completed,
@@ -106,6 +108,16 @@ fn main() {
                     t03.alpha_lock_verified,
                     t03.blue_sketch_tint_verified,
                     t03.temp_files_remaining
+                );
+                println!(
+                    "OK [T0.4-S4 Ingest/Fill/Divergence Gate]: collision_renamed={}, prose_isolated={}, close_gap_filled={}, zero_leak={}, anti_halo={}, lasso_px={}, divergence_notes={}",
+                    t04.ingest_collision_renamed,
+                    t04.ingest_prose_isolated,
+                    t04.close_gap_filled_pixels,
+                    t04.close_gap_zero_leak,
+                    t04.anti_halo_expanded,
+                    t04.lasso_selected_pixels,
+                    t04.divergence_notes_verified
                 );
                 return;
             }

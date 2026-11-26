@@ -58,8 +58,12 @@ public struct NovelStudioView: View {
     @State private var showOutline: Bool = true
     @State private var showAiRefDrawer: Bool = false
     @State private var selectedChapterId: String = "ch001"
+    @State private var activeProseLocale: String = "zh-Hans"
     @State private var liveBibleCharacters: [StoryBibleCharacterSummary] = []
     @State private var liveTocEntries: [ProjectTocEntrySummary] = []
+    @State private var divergenceNotes: [DivergenceNoteSummary] = []
+    @State private var newDivergenceScene: String = "sc002"
+    @State private var newDivergenceSummary: String = ""
     @State private var observedRevisionHash: UInt64 = 0
     @State private var lastHotReloadMs: Double = 0.0
     @State private var proseText: String = """
@@ -143,6 +147,7 @@ public struct NovelStudioView: View {
             observedRevisionHash = currentHash
             liveBibleCharacters = MangaStoryBible.readCharacters(projectDir: activeProjectDir)
             liveTocEntries = MangaStoryBible.readTocEntries(projectDir: activeProjectDir)
+            divergenceNotes = MangaNovelMetrics.readDivergenceNotes(projectDir: activeProjectDir, chapterId: selectedChapterId)
             lastHotReloadMs = Date().timeIntervalSince(t0) * 1000.0
         }
         #endif
@@ -375,6 +380,16 @@ public struct NovelStudioView: View {
 
                 Spacer()
 
+                Picker("Locale", selection: $activeProseLocale) {
+                    Text("zh-Hans").tag("zh-Hans")
+                    Text("en").tag("en")
+                    Text("zh-Hant").tag("zh-Hant")
+                    Text("yue-Hant").tag("yue-Hant")
+                    Text("es").tag("es")
+                }
+                .pickerStyle(.menu)
+                .tint(SuiteColorTokens.novelAccent)
+
                 Button {
                     performAtomicDraftSave()
                 } label: {
@@ -402,6 +417,36 @@ public struct NovelStudioView: View {
                 .padding(.horizontal, zenMode ? 56 : 24)
                 .padding(.vertical, 10)
                 .frame(maxWidth: 760, maxHeight: .infinity)
+
+            if !zenMode {
+                Divider()
+                HStack(spacing: 8) {
+                    Text("<DivergenceNote>")
+                        .font(.caption2.monospaced().bold())
+                        .foregroundStyle(SuiteColorTokens.divergenceAmber)
+                    TextField("Scene (sc002)", text: $newDivergenceScene)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 90)
+                    TextField("Intentional adaptation note (Manga ↔ Novel)...", text: $newDivergenceSummary)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Log Note") {
+                        appendDivergenceNoteViaRust()
+                    }
+                    .font(.caption.bold())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(SuiteColorTokens.divergenceAmber)
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .buttonStyle(.plain)
+                    Text("(\(divergenceNotes.count))")
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(theme.textColor.opacity(0.65))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(theme.chromeBackground)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -411,11 +456,26 @@ public struct NovelStudioView: View {
         try? FileManager.default.createDirectory(atPath: activeProjectDir, withIntermediateDirectories: true)
         _ = MangaNovelMetrics.saveProseAtomic(
             projectDir: activeProjectDir,
-            relPath: "chapters/\(selectedChapterId)/novel/prose/zh-Hans.md",
+            relPath: "chapters/\(selectedChapterId)/novel/prose/\(activeProseLocale).md",
             markdown: proseText,
             isLocked: false,
             explicitHumanEdit: true
         )
+        #endif
+    }
+
+    private func appendDivergenceNoteViaRust() {
+        #if canImport(MangaCoreFFI)
+        let trimmed = newDivergenceSummary.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        _ = MangaNovelMetrics.addDivergenceNote(
+            projectDir: activeProjectDir,
+            chapterId: selectedChapterId,
+            sceneId: newDivergenceScene.trimmingCharacters(in: .whitespacesAndNewlines),
+            summary: trimmed
+        )
+        divergenceNotes = MangaNovelMetrics.readDivergenceNotes(projectDir: activeProjectDir, chapterId: selectedChapterId)
+        newDivergenceSummary = ""
         #endif
     }
 

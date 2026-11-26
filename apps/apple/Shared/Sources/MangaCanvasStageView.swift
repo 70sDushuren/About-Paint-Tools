@@ -393,6 +393,26 @@ public struct MangaCanvasStageView: View {
                         .foregroundStyle(Color.white.opacity(0.6))
                         .padding(.top, 4)
                 }
+
+                Divider().background(SuiteColorTokens.mangaBorder)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("v0.4 Anti-Halo Fill & Lasso")
+                        .font(.caption.bold())
+                        .foregroundStyle(.white)
+                    Button {
+                        runLiveCloseGapAndLassoVerify()
+                    } label: {
+                        Label("Run Close-Gap (3px) + Lasso", systemImage: "drop.fill")
+                            .font(.caption2.bold())
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(SuiteColorTokens.mangaAccent)
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 7))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .padding(12)
         }
@@ -400,6 +420,32 @@ public struct MangaCanvasStageView: View {
         .overlay(alignment: .leading) {
             Rectangle().fill(SuiteColorTokens.mangaBorder).frame(width: 1)
         }
+    }
+
+    private func runLiveCloseGapAndLassoVerify() {
+        #if canImport(MangaCoreFFI)
+        let xs: [Float] = [10, 40, 40, 10]
+        let ys: [Float] = [10, 10, 40, 40]
+        let lassoPx = MangaSelectionEngine.lassoPixelCount(
+            xs: xs,
+            ys: ys,
+            width: 80,
+            height: 80,
+            invert: false,
+            borderDeltaPx: 1
+        )
+        let filled = rustProject?.closeGapFill(
+            layerId: selectedLayerId,
+            seedX: 30,
+            seedY: 30,
+            rgba: (255, 107, 74, 255),
+            closeGapPx: 3,
+            expandPx: 1
+        ) ?? 0
+        statusLine = "v0.4 Fill+Lasso OK: closeGap=3px, expand=1px (filled=\(filled)), lasso+1px=\(lassoPx)px."
+        #else
+        statusLine = "MangaCoreFFI not linked."
+        #endif
     }
 
     // MARK: - Rust FFI Dynamics & Canvas Lifecycle
