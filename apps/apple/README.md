@@ -16,12 +16,15 @@ This unified SwiftUI + UIKit/AppKit workspace ships **three native Apple touch &
 ## Directory Layout
 ```text
 apps/apple/
-├── project.yml                         # XcodeGen 3-target project specification
+├── project.yml                         # XcodeGen 3-target project specification (links MangaCore.xcframework)
+├── ci_scripts/
+│   └── ci_post_clone.sh                # Xcode Cloud Rust toolchain & XCFramework build hook
 ├── Shared/
 │   ├── Resources/Localizable.xcstrings # Synced 5-language catalog (en, zh-Hans, zh-Hant, yue-Hant/zh-HK, es)
 │   └── Sources/
+│       ├── MangaStudioApp.swift        # @main SwiftUI entry point (macOS Touch, iPadOS, iPhone Duo)
 │       ├── MangaCoreBridge.swift       # Type-safe Swift RAII wrapper over core/manga-core C-ABI
-│       └── AppleWorkspaceShell.swift   # 3-mode adaptive SwiftUI studio shell (Focus / Manga / Novel×Manga)
+│       └── AppleWorkspaceShell.swift   # Interactive Tri-App shell + live Rust FFI canvas & diagnostics
 ├── iPadOS/
 │   └── ApplePencilInputAdapter.swift   # 240Hz coalesced/predictedTouches + Apple Pencil Pro
 ├── macOS-Touch/
@@ -30,13 +33,11 @@ apps/apple/
     └── IphoneDuoPostureAdapter.swift   # Folded/Unfolded posture & HingeSafeArea crease avoidance
 ```
 
-## Building on macOS (Xcode + XcodeGen)
+## Building & Running on macOS (Xcode + XcodeGen)
 ```bash
-# 1. Build Rust static libraries for iOS/iPadOS and macOS Apple Silicon
-rustup target add aarch64-apple-ios aarch64-apple-darwin
-cargo build --manifest-path ../../core/Cargo.toml --release --target aarch64-apple-ios
-cargo build --manifest-path ../../core/Cargo.toml --release --target aarch64-apple-darwin
+# 1. Build 3-slice Rust MangaCore.xcframework (iOS Device + Apple Silicon Simulator + macOS)
+./scripts/build_apple_xcframework.sh
 
-# 2. Generate Xcode project for all 3 targets
-xcodegen generate
+# 2. Generate Xcode project for all 3 targets and open in Xcode (press Cmd+R to run!)
+cd apps/apple && xcodegen generate && open MangaStudioApple.xcodeproj
 ```

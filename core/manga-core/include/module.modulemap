@@ -1,0 +1,4 @@
+module MangaCoreFFI {
+    header "manga_core.h"
+    export *
+}

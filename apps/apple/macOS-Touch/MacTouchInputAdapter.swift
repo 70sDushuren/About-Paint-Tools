@@ -5,6 +5,7 @@ import AppKit
 
 /// Touchscreen MacBook (`macOS Touch`) input adapter fusing direct screen multi-touch
 /// (`NSTouch` with palm rejection) and tablet/Sidecar stylus pressure (`NSEvent.tabletPoint`).
+@MainActor
 public enum MacTouchInputAdapter {
     /// Converts a macOS pointer or pen-tablet `NSEvent` into a `NativeStrokeSample`.
     public static func sample(from event: NSEvent, in view: NSView) -> NativeStrokeSample {

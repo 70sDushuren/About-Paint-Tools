@@ -119,6 +119,21 @@ public enum MangaPlatformLayoutEngine {
     }
 }
 
+/// Queries Rust `manga-core` (`suite.rs`) for Tri-App write-ownership isolation and RAM budgets.
+public enum MangaSuitePolicy {
+    public static let isRustFfiLinked: Bool = true
+
+    public static func canWrite(app: SuiteAppKind, relativePath: String) -> Bool {
+        relativePath.withCString { cPath in
+            manga_suite_can_write_path(app.rawValue, cPath) != 0
+        }
+    }
+
+    public static func ramBudgetMb(for app: SuiteAppKind) -> UInt32 {
+        manga_suite_ram_budget_mb(app.rawValue)
+    }
+}
+
 /// Type-safe RAII wrapper over the Rust `MangaCanvasHandle` C-ABI (single-canvas low-latency path).
 public final class MangaCanvasEngine {
     private var handle: OpaquePointer

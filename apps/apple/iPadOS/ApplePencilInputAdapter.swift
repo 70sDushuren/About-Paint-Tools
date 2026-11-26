@@ -5,6 +5,7 @@ import UIKit
 
 /// Extracts 240Hz coalesced touches and low-latency predicted touches from UIKit
 /// (iPadOS & iPhone Duo) for direct forwarding into `manga-core`.
+@MainActor
 public enum ApplePencilInputAdapter {
     public static func extractSamples(
         touch: UITouch,

@@ -2,6 +2,9 @@
 /core/target/
 /apps/ipad/.build/
 /apps/ipad/DerivedData/
+/apps/apple/.build/
+/apps/apple/DerivedData/
+/apps/apple/Frameworks/
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
 

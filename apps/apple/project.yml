@@ -9,10 +9,9 @@ options:
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    HEADER_SEARCH_PATHS:
-      - "$(SRCROOT)/../../core/manga-core/include"
-    OTHER_LDFLAGS:
-      - "-lmanga_core"
+    SWIFT_STRICT_CONCURRENCY: complete
+    GENERATE_INFOPLIST_FILE: YES
+    DEVELOPMENT_LANGUAGE: en
 
 targets:
   MangaStudio-iPadOS:
@@ -21,9 +20,14 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.aboutpainttools.mangastudio.ipad
+        INFOPLIST_KEY_CFBundleDisplayName: "AboutPaint iPad"
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown"
         TARGETED_DEVICE_FAMILY: "2"
-        LIBRARY_SEARCH_PATHS:
-          - "$(SRCROOT)/../../core/target/aarch64-apple-ios/release"
+    dependencies:
+      - framework: Frameworks/MangaCore.xcframework
+        embed: false
     sources:
       - path: Shared/Sources
       - path: Shared/Resources
@@ -35,8 +39,12 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.aboutpainttools.mangastudio.macos
-        LIBRARY_SEARCH_PATHS:
-          - "$(SRCROOT)/../../core/target/aarch64-apple-darwin/release"
+        INFOPLIST_KEY_CFBundleDisplayName: "AboutPaint Mac"
+        INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.graphics-design"
+        ENABLE_HARDENED_RUNTIME: YES
+    dependencies:
+      - framework: Frameworks/MangaCore.xcframework
+        embed: false
     sources:
       - path: Shared/Sources
       - path: Shared/Resources
@@ -47,10 +55,16 @@ targets:
     platform: iOS
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: org.aboutpainttools.mangastudio.iphonedua
+        PRODUCT_BUNDLE_IDENTIFIER: org.aboutpainttools.mangastudio.iphoneduo
+        INFOPLIST_KEY_CFBundleDisplayName: "AboutPaint Duo"
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown"
         TARGETED_DEVICE_FAMILY: "1,2"
-        LIBRARY_SEARCH_PATHS:
-          - "$(SRCROOT)/../../core/target/aarch64-apple-ios/release"
+    dependencies:
+      - framework: Frameworks/MangaCore.xcframework
+        embed: false
     sources:
       - path: Shared/Sources
       - path: Shared/Resources
