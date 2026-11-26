@@ -220,7 +220,7 @@ public struct AppleWorkspaceShellView: View {
             Text("·")
             Text("Budget: \(ramBudgetMb(for: state.activeSuiteApp)) MB")
             Spacer()
-            Text("CPFF v1.0 · MIT · v0.9.0 / T0.9-S4 Beta")
+            Text("CPFF v1.0 · MIT · v1.0.0-rc1 / T1.0-S4")
         }
         .font(.caption2.monospaced())
         .foregroundStyle(isDarkHeader ? Color.white.opacity(0.65) : .secondary)

@@ -8,6 +8,7 @@
 //! and a transactional `ActionBus` for local Gemma 4 Function Calling.
 
 pub mod action_bus;
+pub mod ai_bridge;
 pub mod bible;
 pub mod brush;
 pub mod bubble;
@@ -37,6 +38,10 @@ pub mod vector;
 pub mod webtoon;
 
 pub use action_bus::{ActionBus, ActionCommand, ActionPlan, ActionPreview, ProjectDocument};
+pub use ai_bridge::{
+    file_fnv1a_64, generate_manga_to_novel_reference_atomic,
+    generate_novel_to_manga_storyboard_atomic, AiBridgeEmission, GemmaModelPack,
+};
 pub use bible::{
     story_bible_revision_hash, BibleCharacter, ProjectToc, StoryBible, TocChapterEntry,
     PROJECT_TOC_REL_PATH, STORY_BIBLE_REL_PATH,
@@ -91,9 +96,10 @@ pub use suite::{
     run_t04_s4_ingest_fill_divergence_gate, run_t05_s4_vector_ruler_glossary_gate,
     run_t06_s4_panels_tones_webtoon_epub_gate, run_t07_s4_mnga_psd_actionbus_gate,
     run_t08_s4_apple_trio_gesture_i18n_gate, run_t09_s4_wave1_beta_stress_gate,
-    run_tri_app_compatibility_check, DeepLinkAction, SuiteApp, SuiteAppMetadata,
-    T02S4ConcurrencyReport, T03S4GateReport, T04S4GateReport, T05S4GateReport, T06S4GateReport,
-    T07S4GateReport, T08S4GateReport, T09S4GateReport, TriAppIntegrationReport,
+    run_t10_s4_release_candidate_gate, run_tri_app_compatibility_check, DeepLinkAction, SuiteApp,
+    SuiteAppMetadata, T02S4ConcurrencyReport, T03S4GateReport, T04S4GateReport, T05S4GateReport,
+    T06S4GateReport, T07S4GateReport, T08S4GateReport, T09S4GateReport, T10S4GateReport,
+    TriAppIntegrationReport,
 };
 pub use tile::{TileCoord, TileData, TileLayer, TILE_SIZE};
 pub use undo::{TileDiff, TileUndoStack};

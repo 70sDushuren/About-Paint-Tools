@@ -6,7 +6,8 @@ use manga_core::{
     run_t04_s4_ingest_fill_divergence_gate, run_t05_s4_vector_ruler_glossary_gate,
     run_t06_s4_panels_tones_webtoon_epub_gate, run_t07_s4_mnga_psd_actionbus_gate,
     run_t08_s4_apple_trio_gesture_i18n_gate, run_t09_s4_wave1_beta_stress_gate,
-    run_tri_app_compatibility_check, CanvasPreset, ProjectInitOptions, SuiteApp, TargetPlatform,
+    run_t10_s4_release_candidate_gate, run_tri_app_compatibility_check, CanvasPreset,
+    ProjectInitOptions, SuiteApp, TargetPlatform,
 };
 use manga_linux_shell::{LinuxStudioShell, WaylandTabletToolEvent, WaylandTabletTouchAdapter};
 
@@ -90,12 +91,13 @@ fn main() {
             let t07 = run_t07_s4_mnga_psd_actionbus_gate(&soak_prj)?;
             let t08 = run_t08_s4_apple_trio_gesture_i18n_gate(&soak_prj)?;
             let t09 = run_t09_s4_wave1_beta_stress_gate(&soak_prj)?;
-            Ok((soak, t03, t04, t05, t06, t07, t08, t09))
+            let t10 = run_t10_s4_release_candidate_gate(&soak_prj)?;
+            Ok((soak, t03, t04, t05, t06, t07, t08, t09, t10))
         });
         let _ = std::fs::remove_dir_all(&soak_parent);
 
         match gate_result {
-            Ok((soak, t03, t04, t05, t06, t07, t08, t09)) => {
+            Ok((soak, t03, t04, t05, t06, t07, t08, t09, t10)) => {
                 println!(
                     "OK [T0.2-S4 Concurrency Soak]: {} rounds passed (S1_reads={}, S2_stamps={}, S3_atomic_saves={}, locked_rejections={}, leaked_tmp={})",
                     soak.rounds_completed,
@@ -172,6 +174,15 @@ fn main() {
                     t09.combined_ram_budget_mb,
                     t09.wave1_apple_targets_ready,
                     t09.five_locale_violations
+                );
+                println!(
+                    "OK [T1.0-S4 Wave 1 RC1 Gate]: gemma_offline_apache2={}, m2n_isolated={}, n2m_isolated={}, human_immutable={}, escapes_blocked={}, pending_brand_signoff={}",
+                    t10.gemma_offline_apache2_verified,
+                    t10.manga_to_novel_isolated,
+                    t10.novel_to_manga_isolated,
+                    t10.human_finals_byte_immutable,
+                    t10.escape_attempts_blocked,
+                    t10.pending_human_brand_signoff
                 );
                 return;
             }

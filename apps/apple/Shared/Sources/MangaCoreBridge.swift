@@ -128,6 +128,12 @@ public enum GestureActionKind: UInt32, Sendable {
     case panZoomCanvas = 5
 }
 
+/// `v1.0` — Local Apache-2.0 Gemma 4 model packs (`E2B` for 8GB, `E4B` for 16GB+).
+public enum GemmaModelPackKind: UInt32, Sendable {
+    case gemma4E2b = 0
+    case gemma4E4b = 1
+}
+
 /// Swift-side mirror of `MangaTargetPlatform` in `manga_core.h`.
 public enum TargetPlatformKind: UInt32, CaseIterable, Sendable {
     case ipadOs = 0
@@ -703,6 +709,78 @@ public enum MangaSuiteS4Gate {
         projectDir.withCString { cDir in
             manga_suite_run_t09_s4_gate(cDir) != 0
         }
+    }
+
+    public static func runT10S4(projectDir: String) -> Bool {
+        projectDir.withCString { cDir in
+            manga_suite_run_t10_s4_gate(cDir) != 0
+        }
+    }
+}
+
+/// `v1.0` — Embedded Local Gemma 4 Dual-Direction AI Reference Bridge (`ai_assist/` isolated).
+public enum MangaGemmaAiBridge {
+    public static func recommendPack(deviceRamGb: UInt32) -> GemmaModelPackKind {
+        let code = manga_ai_recommend_gemma_pack(deviceRamGb)
+        return GemmaModelPackKind(rawValue: code) ?? .gemma4E2b
+    }
+
+    public static func generateMangaToNovelRef(
+        projectDir: String,
+        chapterId: String,
+        locale: String,
+        beatSummary: String,
+        pack: GemmaModelPackKind = .gemma4E2b
+    ) -> String? {
+        var buffer = [CChar](repeating: 0, count: 4096)
+        let written = projectDir.withCString { cDir in
+            chapterId.withCString { cCh in
+                locale.withCString { cLoc in
+                    beatSummary.withCString { cBeat in
+                        buffer.withUnsafeMutableBufferPointer { buf in
+                            manga_ai_bridge_generate_manga_to_novel(
+                                cDir,
+                                cCh,
+                                cLoc,
+                                cBeat,
+                                pack.rawValue,
+                                buf.baseAddress,
+                                buf.count
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        guard written > 0 else { return nil }
+        return String(decoding: buffer.prefix(Int(written)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    }
+
+    public static func generateNovelToMangaRef(
+        projectDir: String,
+        chapterId: String,
+        proseExcerpt: String,
+        pack: GemmaModelPackKind = .gemma4E4b
+    ) -> String? {
+        var buffer = [CChar](repeating: 0, count: 4096)
+        let written = projectDir.withCString { cDir in
+            chapterId.withCString { cCh in
+                proseExcerpt.withCString { cProse in
+                    buffer.withUnsafeMutableBufferPointer { buf in
+                        manga_ai_bridge_generate_novel_to_manga(
+                            cDir,
+                            cCh,
+                            cProse,
+                            pack.rawValue,
+                            buf.baseAddress,
+                            buf.count
+                        )
+                    }
+                }
+            }
+        }
+        guard written > 0 else { return nil }
+        return String(decoding: buffer.prefix(Int(written)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
 }
 

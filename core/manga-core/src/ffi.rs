@@ -1479,6 +1479,92 @@ pub unsafe extern "C" fn manga_suite_run_t09_s4_gate(project_dir_utf8: *const c_
     u8::from(crate::suite::run_t09_s4_wave1_beta_stress_gate(std::path::Path::new(&dir)).is_ok())
 }
 
+/// Recommends local Apache-2.0 Gemma 4 model pack (`0 = E2B` for 8GB, `1 = E4B` for 16GB+) (`v1.0`).
+#[no_mangle]
+pub extern "C" fn manga_ai_recommend_gemma_pack(device_ram_gb: u32) -> u32 {
+    crate::ai_bridge::GemmaModelPack::recommend_for_device_ram_gb(device_ram_gb) as u32
+}
+
+/// Emits an isolated `Manga -> Novel` read-only AI prose reference strictly under `chapters/<ch>/ai_assist/manga_to_novel/` (`v1.0`).
+///
+/// # Safety
+/// String pointers must be valid UTF-8 C strings; `out_rel_path_buf` must have capacity `out_rel_path_cap`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_ai_bridge_generate_manga_to_novel(
+    project_dir_utf8: *const c_char,
+    chapter_id_utf8: *const c_char,
+    locale_utf8: *const c_char,
+    beat_summary_utf8: *const c_char,
+    model_pack_code: u32,
+    out_rel_path_buf: *mut c_char,
+    out_rel_path_cap: usize,
+) -> usize {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    let ch = unsafe { cstr_to_string(chapter_id_utf8, "ch001") };
+    let loc = unsafe { cstr_to_string(locale_utf8, "zh-Hans") };
+    let beat = unsafe { cstr_to_string(beat_summary_utf8, "") };
+    if dir.is_empty() {
+        return 0;
+    }
+    let pack = crate::ai_bridge::GemmaModelPack::from_u32(model_pack_code);
+    let Ok(emitted) = crate::ai_bridge::generate_manga_to_novel_reference_atomic(
+        std::path::Path::new(&dir),
+        &ch,
+        &loc,
+        &beat,
+        pack,
+        &[],
+    ) else {
+        return 0;
+    };
+    unsafe { write_utf8_to_c_buf(&emitted.artifact.output_src, out_rel_path_buf, out_rel_path_cap) }
+}
+
+/// Emits an isolated `Novel -> Manga` read-only AI storyboard proposal strictly under `chapters/<ch>/ai_assist/novel_to_manga/` (`v1.0`).
+///
+/// # Safety
+/// String pointers must be valid UTF-8 C strings; `out_rel_path_buf` must have capacity `out_rel_path_cap`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_ai_bridge_generate_novel_to_manga(
+    project_dir_utf8: *const c_char,
+    chapter_id_utf8: *const c_char,
+    prose_excerpt_utf8: *const c_char,
+    model_pack_code: u32,
+    out_rel_path_buf: *mut c_char,
+    out_rel_path_cap: usize,
+) -> usize {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    let ch = unsafe { cstr_to_string(chapter_id_utf8, "ch001") };
+    let excerpt = unsafe { cstr_to_string(prose_excerpt_utf8, "") };
+    if dir.is_empty() {
+        return 0;
+    }
+    let pack = crate::ai_bridge::GemmaModelPack::from_u32(model_pack_code);
+    let Ok(emitted) = crate::ai_bridge::generate_novel_to_manga_storyboard_atomic(
+        std::path::Path::new(&dir),
+        &ch,
+        "novel/prose/zh-Hans.md",
+        &excerpt,
+        pack,
+    ) else {
+        return 0;
+    };
+    unsafe { write_utf8_to_c_buf(&emitted.artifact.output_src, out_rel_path_buf, out_rel_path_cap) }
+}
+
+/// Executes the **`T1.0-S4` Wave 1 Release Candidate (`v1.0.0-rc1`) Dual-Engine & AI Red-Line Gate**.
+///
+/// # Safety
+/// `project_dir_utf8` must be null or a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn manga_suite_run_t10_s4_gate(project_dir_utf8: *const c_char) -> u8 {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    if dir.is_empty() {
+        return 0;
+    }
+    u8::from(crate::suite::run_t10_s4_release_candidate_gate(std::path::Path::new(&dir)).is_ok())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

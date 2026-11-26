@@ -448,6 +448,31 @@ uint8_t manga_suite_run_t08_s4_gate(const char *project_dir_utf8);
 uint64_t manga_beta_b4_50layer_undo_benchmark_us(void);
 uint8_t manga_suite_run_t09_s4_gate(const char *project_dir_utf8);
 
+/* --- v1.0.0-rc1 & T1.0-S4 Local Gemma 4 Dual-Direction AI Bridge & Red-Line Audit API --- */
+
+uint32_t manga_ai_recommend_gemma_pack(uint32_t device_ram_gb);
+
+size_t manga_ai_bridge_generate_manga_to_novel(
+    const char *project_dir_utf8,
+    const char *chapter_id_utf8,
+    const char *locale_utf8,
+    const char *beat_summary_utf8,
+    uint32_t model_pack_code,
+    char *out_rel_path_buf,
+    size_t out_rel_path_cap
+);
+
+size_t manga_ai_bridge_generate_novel_to_manga(
+    const char *project_dir_utf8,
+    const char *chapter_id_utf8,
+    const char *prose_excerpt_utf8,
+    uint32_t model_pack_code,
+    char *out_rel_path_buf,
+    size_t out_rel_path_cap
+);
+
+uint8_t manga_suite_run_t10_s4_gate(const char *project_dir_utf8);
+
 #ifdef __cplusplus
 }
 #endif

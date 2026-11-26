@@ -1421,6 +1421,113 @@ pub fn run_t09_s4_wave1_beta_stress_gate(project_dir: &Path) -> Result<T09S4Gate
     })
 }
 
+/// Summary produced by the **`T1.0-S4` Wave 1 Release Candidate (`v1.0.0-rc1`) Dual-Engine & AI Red-Line Gate**.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct T10S4GateReport {
+    pub gemma_offline_apache2_verified: bool,
+    pub manga_to_novel_isolated: bool,
+    pub novel_to_manga_isolated: bool,
+    pub human_finals_byte_immutable: bool,
+    pub escape_attempts_blocked: bool,
+    pub pending_human_brand_signoff: bool,
+}
+
+/// Executes the **`T1.0-S4` Wave 1 Release Candidate Gate (`v1.0.0-rc1`)**:
+/// - Confirms Gemma 4 E2B (8GB) & E4B (16GB+) local model pack metadata (`Apache-2.0`, offline-only, 120s idle unload).
+/// - Emits BOTH `Manga -> Novel` and `Novel -> Manga` reference drafts strictly under `chapters/ch001/ai_assist/`.
+/// - Proves via 64-bit FNV-1a digest that human authoritative prose (`novel/prose/zh-Hans.md`) is 100% byte-immutable.
+/// - Proves that any AI write targeting `novel/prose/` or `manuscript/` is hard-blocked.
+/// - Confirms working codenames remain `is_final_brand == false` until explicit human brand sign-off before `v1.0.0` GA.
+pub fn run_t10_s4_release_candidate_gate(project_dir: &Path) -> Result<T10S4GateReport, String> {
+    let _ = run_tri_app_compatibility_check(project_dir)?;
+
+    use crate::ai_bridge::{
+        file_fnv1a_64, generate_manga_to_novel_reference_atomic,
+        generate_novel_to_manga_storyboard_atomic, GemmaModelPack,
+    };
+    use crate::novel::DivergenceNote;
+    use crate::project::AiBridgeArtifact;
+
+    let e2b = GemmaModelPack::recommend_for_device_ram_gb(8);
+    let e4b = GemmaModelPack::recommend_for_device_ram_gb(16);
+    let gemma_offline_apache2_verified = e2b == GemmaModelPack::Gemma4E2b
+        && e4b == GemmaModelPack::Gemma4E4b
+        && !e2b.requires_cloud()
+        && !e4b.requires_cloud()
+        && e2b.license() == "Apache-2.0"
+        && e4b.idle_unload_seconds() == 120;
+    if !gemma_offline_apache2_verified {
+        return Err("T1.0-S4 Gemma 4 local offline/Apache-2.0 policy check failed".into());
+    }
+
+    let human_prose = project_dir.join("chapters/ch001/novel/prose/zh-Hans.md");
+    let before_hash = file_fnv1a_64(&human_prose)?;
+
+    let m2n = generate_manga_to_novel_reference_atomic(
+        project_dir,
+        "ch001",
+        "zh-Hans",
+        "Panel 1: Orbital Academy rooftop storm; Panel 2: Starlight Blade awakens.",
+        e2b,
+        &[DivergenceNote {
+            scene_id: Some("sc001".into()),
+            summary: "Human novel retains extended rooftop monologue.".into(),
+        }],
+    )?;
+    let n2m = generate_novel_to_manga_storyboard_atomic(
+        project_dir,
+        "ch001",
+        "novel/prose/zh-Hans.md",
+        "暮色尚未褪尽，轨道学院北侧天台的风压警报已经拉响。",
+        e4b,
+    )?;
+
+    let after_hash = file_fnv1a_64(&human_prose)?;
+    let human_finals_byte_immutable = before_hash == after_hash;
+    if !human_finals_byte_immutable {
+        return Err("T1.0-S4 AI bridge mutated human authoritative prose!".into());
+    }
+
+    let manga_to_novel_isolated =
+        m2n.meta_abs_path.is_file() && m2n.artifact.output_src.starts_with("ai_assist/");
+    let novel_to_manga_isolated =
+        n2m.meta_abs_path.is_file() && n2m.artifact.output_src.starts_with("ai_assist/");
+
+    let escape_prose = AiBridgeArtifact {
+        role: "ai_reference_only".into(),
+        meta_src: "ai_assist/manga_to_novel/meta.xml".into(),
+        output_src: "novel/prose/zh-Hans.md".into(),
+        derived_from: "script/script.xml".into(),
+    }
+    .validate_isolation()
+    .is_err();
+    let escape_manuscript = AiBridgeArtifact {
+        role: "ai_reference_only".into(),
+        meta_src: "ai_assist/novel_to_manga/meta.xml".into(),
+        output_src: "manuscript/p001.mnga".into(),
+        derived_from: "novel/prose/zh-Hans.md".into(),
+    }
+    .validate_isolation()
+    .is_err();
+    let escape_attempts_blocked = escape_prose && escape_manuscript;
+    if !escape_attempts_blocked {
+        return Err("T1.0-S4 AI red-line isolation failed to block human-final write escape".into());
+    }
+
+    let pending_human_brand_signoff = !SuiteApp::Hub.metadata().is_final_brand
+        && !SuiteApp::Manga.metadata().is_final_brand
+        && !SuiteApp::Novel.metadata().is_final_brand;
+
+    Ok(T10S4GateReport {
+        gemma_offline_apache2_verified,
+        manga_to_novel_isolated,
+        novel_to_manga_isolated,
+        human_finals_byte_immutable,
+        escape_attempts_blocked,
+        pending_human_brand_signoff,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1612,6 +1719,26 @@ mod tests {
         assert_eq!(report.webtoon_1600_slices_1280, 20);
         assert_eq!(report.wave1_apple_targets_ready, 3);
         assert_eq!(report.five_locale_violations, 0);
+
+        let _ = std::fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn t10_s4_wave1_rc1_gemma4_redline_gate_passes() {
+        let parent = std::env::temp_dir().join(format!("manga_t10_s4_unit_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&parent);
+        std::fs::create_dir_all(&parent).unwrap();
+        let opts = crate::project_init::ProjectInitOptions::dual_engine_default("T10GatePrj", "S4Tester");
+        crate::project_init::init_cpff_project(&parent, &opts).unwrap();
+
+        let report = run_t10_s4_release_candidate_gate(&parent.join("T10GatePrj"))
+            .expect("T1.0-S4 Wave 1 RC1 gate must pass");
+        assert!(report.gemma_offline_apache2_verified);
+        assert!(report.manga_to_novel_isolated);
+        assert!(report.novel_to_manga_isolated);
+        assert!(report.human_finals_byte_immutable);
+        assert!(report.escape_attempts_blocked);
+        assert!(report.pending_human_brand_signoff);
 
         let _ = std::fs::remove_dir_all(&parent);
     }
