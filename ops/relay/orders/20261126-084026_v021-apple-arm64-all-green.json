@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "order_id": "20261126-084026_v021-apple-arm64-all-green",
+  "created_at_utc": "2026-11-26T08:40:26Z",
+  "milestone": "v0.2.1",
+  "title": "Verify all 3 Wave 1 Apple targets (macOS + iPadOS + iPhoneDuo arm64) and full CI check",
+  "summary": "Follow-up to 20261126-083754_v021-apple-schemes-fix: arm64 iPadOS Swift+Rust link succeeded, while generic iOS Simulator attempted legacy x86_64 slice. Added ARCHS: arm64 and EXCLUDED_ARCHS[sdk=iphonesimulator*]: x86_64 in apps/apple/project.yml.",
+  "steps": [
+    {
+      "action": "env-info"
+    },
+    {
+      "action": "build-rust"
+    },
+    {
+      "action": "xcode-gen"
+    },
+    {
+      "action": "build-mac"
+    },
+    {
+      "action": "build-ipad"
+    },
+    {
+      "action": "build-duo"
+    },
+    {
+      "action": "check"
+    }
+  ],
+  "notify": true
+}
