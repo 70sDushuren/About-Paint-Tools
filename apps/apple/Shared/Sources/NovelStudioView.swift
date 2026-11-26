@@ -241,6 +241,36 @@ public struct NovelStudioView: View {
                 .buttonStyle(.plain)
             }
 
+            Divider()
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Story Bible (RO)")
+                        .font(.caption.bold())
+                        .foregroundStyle(theme.textColor.opacity(0.75))
+                    Spacer()
+                    Text("<300ms")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(SuiteColorTokens.novelAccent.opacity(0.15))
+                        .foregroundStyle(SuiteColorTokens.novelAccent)
+                        .clipShape(Capsule())
+                }
+                HStack(spacing: 6) {
+                    Circle().fill(SuiteColorTokens.hubAccent).frame(width: 8, height: 8)
+                    Text("林晓 · Lin Xiao (Protagonist)")
+                        .font(.caption2)
+                        .foregroundStyle(theme.textColor.opacity(0.85))
+                }
+                HStack(spacing: 6) {
+                    Circle().fill(SuiteColorTokens.mangaAccent).frame(width: 8, height: 8)
+                    Text("墨凛 · Mo Lin (Rival)")
+                        .font(.caption2)
+                        .foregroundStyle(theme.textColor.opacity(0.85))
+                }
+            }
+
             Spacer()
 
             Text("RAM Budget: \(novelRamBudgetMb) MB · GPU: Off")

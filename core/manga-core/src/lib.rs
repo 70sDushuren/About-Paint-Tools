@@ -8,6 +8,7 @@
 //! and a transactional `ActionBus` for local Gemma 4 Function Calling.
 
 pub mod action_bus;
+pub mod bible;
 pub mod brush;
 pub mod canvas;
 pub mod continuity;
@@ -30,6 +31,10 @@ pub mod vector;
 pub mod webtoon;
 
 pub use action_bus::{ActionBus, ActionCommand, ActionPlan, ActionPreview, ProjectDocument};
+pub use bible::{
+    story_bible_revision_hash, BibleCharacter, ProjectToc, StoryBible, TocChapterEntry,
+    PROJECT_TOC_REL_PATH, STORY_BIBLE_REL_PATH,
+};
 pub use brush::{
     sample_effective_radius, starter_brush_presets, zoom_adaptive_rope_radius, BrushPresetId,
     BrushStamp, BrushStampingEngine, BrushTipPreset, ResponseCurve,

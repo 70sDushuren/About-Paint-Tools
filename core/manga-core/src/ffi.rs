@@ -729,6 +729,109 @@ pub unsafe extern "C" fn manga_suite_run_s4_gate(
     u8::from(ok)
 }
 
+/// Atomically upserts a character into `bible/characters.xml` under `SuiteApp::Hub` (`S1 v0.3.1`).
+///
+/// # Safety
+/// All non-null string pointers must be valid NUL-terminated UTF-8 strings.
+#[no_mangle]
+pub unsafe extern "C" fn manga_bible_upsert_character(
+    project_dir_utf8: *const c_char,
+    id_utf8: *const c_char,
+    name_zh_utf8: *const c_char,
+    name_en_utf8: *const c_char,
+    role_utf8: *const c_char,
+    palette_hex_utf8: *const c_char,
+) -> u8 {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    let id = unsafe { cstr_to_string(id_utf8, "") };
+    if dir.is_empty() || id.is_empty() {
+        return 0;
+    }
+    let name_zh = unsafe { cstr_to_string(name_zh_utf8, "") };
+    let name_en = unsafe { cstr_to_string(name_en_utf8, "") };
+    let role = unsafe { cstr_to_string(role_utf8, "supporting") };
+    let palette_hex = unsafe { cstr_to_string(palette_hex_utf8, "#4F7CFF") };
+    let root = std::path::Path::new(&dir);
+    let mut bible = match crate::bible::StoryBible::load_from_project(root) {
+        Ok(b) => b,
+        Err(_) => return 0,
+    };
+    bible.upsert_character(crate::bible::BibleCharacter {
+        id,
+        name_zh,
+        name_en,
+        role,
+        palette_hex,
+        visual_anchors: Vec::new(),
+    });
+    u8::from(bible.save_atomic(root).is_ok())
+}
+
+/// Returns the character count currently stored in `bible/characters.xml` (`S1`/`S2`/`S3` RO).
+///
+/// # Safety
+/// `project_dir_utf8` must be null or a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn manga_bible_character_count(project_dir_utf8: *const c_char) -> usize {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    if dir.is_empty() {
+        return 0;
+    }
+    crate::bible::StoryBible::load_from_project(std::path::Path::new(&dir))
+        .map(|b| b.characters.len())
+        .unwrap_or(0)
+}
+
+/// Computes fast `< 1ms` revision hash of Story Bible + TOC for `S2`/`S3` hot-reload (`v0.3.1`).
+///
+/// # Safety
+/// `project_dir_utf8` must be null or a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn manga_bible_revision_hash(project_dir_utf8: *const c_char) -> u64 {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    if dir.is_empty() {
+        return 0;
+    }
+    crate::bible::story_bible_revision_hash(std::path::Path::new(&dir))
+}
+
+/// Updates layer flags (`R` reference, `✂` clipping, `🔒` alpha lock, `B` blue sketch tint,
+/// 13 cel blend modes, visibility, opacity) on a live `MangaProjectHandle` (`S2 v0.3.1`).
+///
+/// # Safety
+/// `handle` must be null or a valid mutable `MangaProjectHandle` pointer.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_set_layer_flags(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    visible: u8,
+    alpha_lock: u8,
+    clipping_mask: u8,
+    is_reference: u8,
+    blend_mode_code: u32,
+    opacity: f32,
+    blue_sketch_tint: u8,
+) -> u8 {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let Some(layer) = h.doc.layers.get_mut(LayerId(layer_id)) else {
+        return 0;
+    };
+    layer.visible = visible != 0;
+    layer.alpha_lock = alpha_lock != 0;
+    layer.clipping_mask = clipping_mask != 0;
+    layer.is_reference = is_reference != 0;
+    layer.blend_mode = blend_mode_from_u32(blend_mode_code);
+    layer.opacity = opacity.clamp(0.0, 1.0);
+    layer.tint_rgba = if blue_sketch_tint != 0 {
+        Some([77, 166, 255, 255])
+    } else {
+        None
+    };
+    1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

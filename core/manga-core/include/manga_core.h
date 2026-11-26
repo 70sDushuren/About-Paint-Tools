@@ -246,6 +246,32 @@ uint8_t manga_novel_save_prose_atomic(
 
 uint8_t manga_suite_run_s4_gate(const char *project_dir_utf8, uint32_t soak_rounds);
 
+/* --- v0.3.1 Story Bible Atomic Hot-Reload & Layer Drawer Flags API --- */
+
+uint8_t manga_bible_upsert_character(
+    const char *project_dir_utf8,
+    const char *id_utf8,
+    const char *name_zh_utf8,
+    const char *name_en_utf8,
+    const char *role_utf8,
+    const char *palette_hex_utf8
+);
+
+size_t manga_bible_character_count(const char *project_dir_utf8);
+uint64_t manga_bible_revision_hash(const char *project_dir_utf8);
+
+uint8_t manga_project_set_layer_flags(
+    MangaProjectHandle *handle,
+    uint64_t layer_id,
+    uint8_t visible,
+    uint8_t alpha_lock,
+    uint8_t clipping_mask,
+    uint8_t is_reference,
+    uint32_t blend_mode_code,
+    float opacity,
+    uint8_t blue_sketch_tint
+);
+
 #ifdef __cplusplus
 }
 #endif

@@ -41,6 +41,9 @@ public struct MangaCanvasStageView: View {
     @State private var viewportZoom: Double = 1.0
     @State private var simulatedPressure: Double = 0.78
     @State private var showBrushDrawer: Bool = true
+    @State private var showLayerDrawer: Bool = false
+    @State private var celLayers: [CelLayerRowItem] = []
+    @State private var selectedLayerId: UInt64 = 1
     @State private var strokes: [CanvasStrokeRecord] = []
     @State private var undoneStrokes: [CanvasStrokeRecord] = []
     @State private var activeStroke: CanvasStrokeRecord?
@@ -50,6 +53,7 @@ public struct MangaCanvasStageView: View {
 
     #if canImport(MangaCoreFFI)
     @State private var rustCanvas: MangaCanvasEngine?
+    @State private var rustProject: MangaProjectEngine?
     #endif
 
     private let starterPresets: [BrushPresetDescriptor] = [
@@ -85,9 +89,19 @@ public struct MangaCanvasStageView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            if showBrushDrawer && layout != .singlePaneCompact {
-                brushDynamicsDrawer
+            if layout != .singlePaneCompact {
+                if showLayerDrawer {
+                    CelLayerDrawerView(
+                        layers: $celLayers,
+                        selectedLayerId: $selectedLayerId,
+                        onAddLayer: addCelLayer,
+                        onUpdateLayer: syncLayerToRust
+                    )
                     .frame(width: 248)
+                } else if showBrushDrawer {
+                    brushDynamicsDrawer
+                        .frame(width: 248)
+                }
             }
         }
         .background(SuiteColorTokens.mangaCharcoal)
@@ -406,7 +420,8 @@ public struct MangaCanvasStageView: View {
         switch id {
         case "pen": return !activePreset.isEraser
         case "eraser": return activePreset.isEraser
-        case "stabilizer": return showBrushDrawer
+        case "stabilizer": return showBrushDrawer && !showLayerDrawer
+        case "layers": return showLayerDrawer
         default: return false
         }
     }
@@ -418,7 +433,10 @@ public struct MangaCanvasStageView: View {
         case "eraser":
             selectedPresetIndex = 7
         case "stabilizer":
+            showLayerDrawer = false
             showBrushDrawer.toggle()
+        case "layers":
+            showLayerDrawer.toggle()
         case "panels":
             selectedCanvasPreset = (selectedCanvasPreset == .b4PrintManga600Dpi) ? .webtoonStrip1600 : .b4PrintManga600Dpi
             initRustCanvas()
@@ -441,6 +459,61 @@ public struct MangaCanvasStageView: View {
             canvasDimensions = "\(engine.width) × \(engine.height) (\(label))"
             statusLine = "Initialized \(label) sparse canvas (0 allocated tiles)."
         }
+        if rustProject == nil, let proj = MangaProjectEngine(preset: selectedCanvasPreset) {
+            let sketchId = proj.addRasterLayer(name: "Sketch_Rough", blendMode: .normal, clippingMask: false, isReference: false)
+            let inkId = proj.addRasterLayer(name: "Ink_Lineart", blendMode: .normal, clippingMask: false, isReference: true)
+            let shadowId = proj.addRasterLayer(name: "Cel_Shadow", blendMode: .multiply, clippingMask: true, isReference: false)
+            _ = proj.setLayerFlags(layerId: sketchId, visible: true, alphaLock: false, clippingMask: false, isReference: false, blendMode: .normal, opacity: 0.35, blueSketchTint: true)
+            rustProject = proj
+            celLayers = [
+                CelLayerRowItem(id: sketchId, name: "Sketch_Rough", blueSketchTint: true, blendMode: .normal, opacity: 0.35),
+                CelLayerRowItem(id: inkId, name: "Ink_Lineart", isReference: true, blendMode: .normal, opacity: 1.0),
+                CelLayerRowItem(id: shadowId, name: "Cel_Shadow", clippingMask: true, blendMode: .multiply, opacity: 0.85),
+            ]
+            selectedLayerId = inkId
+        }
+        #else
+        if celLayers.isEmpty {
+            celLayers = [
+                CelLayerRowItem(id: 1, name: "Sketch_Rough", blueSketchTint: true, opacity: 0.35),
+                CelLayerRowItem(id: 2, name: "Ink_Lineart", isReference: true),
+                CelLayerRowItem(id: 3, name: "Cel_Shadow", clippingMask: true, blendMode: .multiply, opacity: 0.85),
+            ]
+            selectedLayerId = 2
+        }
+        #endif
+    }
+
+    private func addCelLayer() {
+        let nextNum = celLayers.count + 1
+        let name = "Cel_Layer_\(nextNum)"
+        #if canImport(MangaCoreFFI)
+        if let proj = rustProject {
+            let newId = proj.addRasterLayer(name: name, blendMode: .normal, clippingMask: false, isReference: false)
+            celLayers.append(CelLayerRowItem(id: newId, name: name))
+            selectedLayerId = newId
+            statusLine = "Added Rust Layer '\(name)' (total=\(proj.layerCount))."
+            return
+        }
+        #endif
+        let fallbackId = UInt64(nextNum)
+        celLayers.append(CelLayerRowItem(id: fallbackId, name: name))
+        selectedLayerId = fallbackId
+    }
+
+    private func syncLayerToRust(_ item: CelLayerRowItem) {
+        #if canImport(MangaCoreFFI)
+        _ = rustProject?.setLayerFlags(
+            layerId: item.id,
+            visible: item.visible,
+            alphaLock: item.alphaLock,
+            clippingMask: item.clippingMask,
+            isReference: item.isReference,
+            blendMode: item.blendMode,
+            opacity: Float(item.opacity),
+            blueSketchTint: item.blueSketchTint
+        )
+        statusLine = "Synced '\(item.name)' [\(item.blendMode.displayName), R=\(item.isReference), Clip=\(item.clippingMask), Lock=\(item.alphaLock), B=\(item.blueSketchTint)]."
         #endif
     }
 

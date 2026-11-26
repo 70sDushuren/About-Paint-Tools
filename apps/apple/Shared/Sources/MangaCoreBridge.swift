@@ -57,6 +57,24 @@ public enum LayerBlendMode: UInt32, CaseIterable, Sendable {
     case colorBurn = 10
     case colorDodge = 11
     case add = 12
+
+    public var displayName: String {
+        switch self {
+        case .normal: return "Normal"
+        case .multiply: return "Multiply"
+        case .screen: return "Screen"
+        case .overlay: return "Overlay"
+        case .glowDodge: return "Glow Dodge"
+        case .linearBurn: return "Linear Burn"
+        case .hardLight: return "Hard Light"
+        case .softLight: return "Soft Light"
+        case .darken: return "Darken"
+        case .lighten: return "Lighten"
+        case .colorBurn: return "Color Burn"
+        case .colorDodge: return "Color Dodge"
+        case .add: return "Add (Glow)"
+        }
+    }
 }
 
 /// Swift-side mirror of `MangaTargetPlatform` in `manga_core.h`.
@@ -421,6 +439,72 @@ public final class MangaProjectEngine {
     @discardableResult
     public func redoAction() -> Bool {
         manga_project_redo_action(handle) != 0
+    }
+
+    /// `S2 v0.3.1` — Updates `R` (reference), `✂` (clipping), `🔒` (alpha lock), `B` (blue sketch),
+    /// 13 cel blend modes, visibility, and opacity directly in Rust `LayerStack`.
+    @discardableResult
+    public func setLayerFlags(
+        layerId: UInt64,
+        visible: Bool,
+        alphaLock: Bool,
+        clippingMask: Bool,
+        isReference: Bool,
+        blendMode: LayerBlendMode,
+        opacity: Float,
+        blueSketchTint: Bool
+    ) -> Bool {
+        manga_project_set_layer_flags(
+            handle,
+            layerId,
+            visible ? 1 : 0,
+            alphaLock ? 1 : 0,
+            clippingMask ? 1 : 0,
+            isReference ? 1 : 0,
+            blendMode.rawValue,
+            opacity,
+            blueSketchTint ? 1 : 0
+        ) != 0
+    }
+}
+
+/// `S1/S2/S3 v0.3.1` — Story Bible (`bible/characters.xml`) atomic writer (`S1`) and
+/// `< 300ms` cross-app hot-reload revision fingerprint (`S2`/`S3` RO).
+public enum MangaStoryBible {
+    @discardableResult
+    public static func upsertCharacter(
+        projectDir: String,
+        id: String,
+        nameZh: String,
+        nameEn: String,
+        role: String = "supporting",
+        paletteHex: String = "#4F7CFF"
+    ) -> Bool {
+        projectDir.withCString { cDir in
+            id.withCString { cId in
+                nameZh.withCString { cZh in
+                    nameEn.withCString { cEn in
+                        role.withCString { cRole in
+                            paletteHex.withCString { cHex in
+                                manga_bible_upsert_character(cDir, cId, cZh, cEn, cRole, cHex) != 0
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public static func characterCount(projectDir: String) -> Int {
+        projectDir.withCString { cDir in
+            Int(manga_bible_character_count(cDir))
+        }
+    }
+
+    public static func revisionHash(projectDir: String) -> UInt64 {
+        projectDir.withCString { cDir in
+            manga_bible_revision_hash(cDir)
+        }
     }
 }
 #endif
