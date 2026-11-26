@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "order_id": "20261126-230835_v100-rc1-gemma4-bridge-s4",
+  "created_at_utc": "2026-11-26T23:08:35Z",
+  "milestone": "v1.0.0-rc1",
+  "title": "Verify v1.0.0-rc1 + T1.0-S4 (Gemma 4 Local AI Bridge + Hard Red-Line Immutability Audit, 36 XCTests)",
+  "summary": "",
+  "steps": [
+    {
+      "action": "env-info"
+    },
+    {
+      "action": "build-rust"
+    },
+    {
+      "action": "xcode-gen"
+    },
+    {
+      "action": "build-mac"
+    },
+    {
+      "action": "test-mac"
+    },
+    {
+      "action": "build-ipad"
+    },
+    {
+      "action": "build-duo"
+    },
+    {
+      "action": "check"
+    }
+  ],
+  "notify": true
+}
