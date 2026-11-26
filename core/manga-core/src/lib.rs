@@ -10,6 +10,7 @@
 pub mod action_bus;
 pub mod bible;
 pub mod brush;
+pub mod bubble;
 pub mod canvas;
 pub mod continuity;
 pub mod ffi;
@@ -41,6 +42,9 @@ pub use bible::{
 pub use brush::{
     sample_effective_radius, starter_brush_presets, zoom_adaptive_rope_radius, BrushPresetId,
     BrushStamp, BrushStampingEngine, BrushTipPreset, ResponseCurve,
+};
+pub use bubble::{
+    render_novel_chapter_epub_xhtml, write_publish_manifest_atomic, SpeechBubble, TextFlowDirection,
 };
 pub use canvas::{CanvasSession, ViewportTransform};
 pub use continuity::{
@@ -75,9 +79,9 @@ pub use stroke::{RopeStabilizer, StrokePoint};
 pub use suite::{
     can_write_relative_path, run_t02_s4_concurrency_soak, run_t03_s4_bible_layers_gate,
     run_t04_s4_ingest_fill_divergence_gate, run_t05_s4_vector_ruler_glossary_gate,
-    run_tri_app_compatibility_check, DeepLinkAction, SuiteApp, SuiteAppMetadata,
-    T02S4ConcurrencyReport, T03S4GateReport, T04S4GateReport, T05S4GateReport,
-    TriAppIntegrationReport,
+    run_t06_s4_panels_tones_webtoon_epub_gate, run_tri_app_compatibility_check, DeepLinkAction,
+    SuiteApp, SuiteAppMetadata, T02S4ConcurrencyReport, T03S4GateReport, T04S4GateReport,
+    T05S4GateReport, T06S4GateReport, TriAppIntegrationReport,
 };
 pub use tile::{TileCoord, TileData, TileLayer, TILE_SIZE};
 pub use undo::{TileDiff, TileUndoStack};

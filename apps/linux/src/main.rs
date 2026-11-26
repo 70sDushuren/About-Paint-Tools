@@ -4,7 +4,8 @@ use std::path::PathBuf;
 use manga_core::{
     init_cpff_project, run_t02_s4_concurrency_soak, run_t03_s4_bible_layers_gate,
     run_t04_s4_ingest_fill_divergence_gate, run_t05_s4_vector_ruler_glossary_gate,
-    run_tri_app_compatibility_check, CanvasPreset, ProjectInitOptions, SuiteApp, TargetPlatform,
+    run_t06_s4_panels_tones_webtoon_epub_gate, run_tri_app_compatibility_check, CanvasPreset,
+    ProjectInitOptions, SuiteApp, TargetPlatform,
 };
 use manga_linux_shell::{LinuxStudioShell, WaylandTabletToolEvent, WaylandTabletTouchAdapter};
 
@@ -84,12 +85,13 @@ fn main() {
             let t03 = run_t03_s4_bible_layers_gate(&soak_prj)?;
             let t04 = run_t04_s4_ingest_fill_divergence_gate(&soak_prj)?;
             let t05 = run_t05_s4_vector_ruler_glossary_gate(&soak_prj)?;
-            Ok((soak, t03, t04, t05))
+            let t06 = run_t06_s4_panels_tones_webtoon_epub_gate(&soak_prj)?;
+            Ok((soak, t03, t04, t05, t06))
         });
         let _ = std::fs::remove_dir_all(&soak_parent);
 
         match gate_result {
-            Ok((soak, t03, t04, t05)) => {
+            Ok((soak, t03, t04, t05, t06)) => {
                 println!(
                     "OK [T0.2-S4 Concurrency Soak]: {} rounds passed (S1_reads={}, S2_stamps={}, S3_atomic_saves={}, locked_rejections={}, leaked_tmp={})",
                     soak.rounds_completed,
@@ -128,6 +130,16 @@ fn main() {
                     t05.vector_4x_lossless_scaled,
                     t05.rulers_verified,
                     t05.novel_autocomplete_hits
+                );
+                println!(
+                    "OK [T0.6-S4 Panels/Tones/Webtoon/EPUB Gate]: b4_panels={}, screentones={}, webtoon_slices={}, zero_seam={}, bubbles_5loc={}, epub_bytes={}, publish_xml={}",
+                    t06.b4_manga_panels,
+                    t06.screentone_patterns_verified,
+                    t06.webtoon_slices_count,
+                    t06.webtoon_zero_seam_verified,
+                    t06.five_locale_bubbles_ok,
+                    t06.epub_xhtml_bytes,
+                    t06.publish_manifest_written
                 );
                 return;
             }

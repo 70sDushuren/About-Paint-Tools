@@ -948,6 +948,148 @@ pub fn run_t05_s4_vector_ruler_glossary_gate(project_dir: &Path) -> Result<T05S4
     })
 }
 
+/// Summary produced by the **`T0.6-S4` Dual-Track Panels/Screentones/Webtoon + 5-Locale Bubbles + EPUB3 Gate**.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct T06S4GateReport {
+    pub b4_manga_panels: usize,
+    pub screentone_patterns_verified: usize,
+    pub webtoon_slices_count: usize,
+    pub webtoon_zero_seam_verified: bool,
+    pub five_locale_bubbles_ok: bool,
+    pub epub_xhtml_bytes: usize,
+    pub publish_manifest_written: bool,
+}
+
+/// Executes the **`T0.6-S4` Dual-Track End-to-End Gate** over a CPFF v1.0 `.prj` workspace:
+/// - `S2` Track A (B&W Manga): Slices a B4 600DPI page into 4 panels (including diagonal cut) & evaluates
+///   all 4 procedural screentone patterns (CircleDot, LineScreen, CrossHatch, NoiseGrain).
+/// - `S2` Track B (Full-Color Webtoon): Slices a `1600×12800` strip into seamless slices and verifies 0-seam pixel boundary.
+/// - `S3` (Light Novel): Generates valid EPUB3 XHTML with custom illustration figure embedding.
+/// - `S1` (Hub): Audits 5-language speech bubble completeness (Vertical RTL CJK + Horizontal LTR EN/ES) and
+///   atomically writes `editions/publish_report.xml`.
+pub fn run_t06_s4_panels_tones_webtoon_epub_gate(project_dir: &Path) -> Result<T06S4GateReport, String> {
+    let _ = run_tri_app_compatibility_check(project_dir)?;
+
+    // 1. S2 Track A: B4 600DPI 4-panel page layout (diagonal + vertical splits)
+    let mut layout = crate::panel::PanelLayout::new_page_frame(6071.0, 8598.0, 320.0, 320.0);
+    let root_id = layout.panels()[0].id;
+    let (half_a, half_b) = layout
+        .slice_panel(root_id, (0.0, 4200.0), (6071.0, 4400.0), 40.0)
+        .ok_or_else(|| "T0.6-S4 failed diagonal panel cut 1".to_string())?;
+    let _ = layout
+        .slice_panel(half_a, (3000.0, 0.0), (2800.0, 8598.0), 36.0)
+        .ok_or_else(|| "T0.6-S4 failed panel cut 2".to_string())?;
+    let _ = layout
+        .slice_panel(half_b, (2900.0, 0.0), (3100.0, 8598.0), 36.0)
+        .ok_or_else(|| "T0.6-S4 failed panel cut 3".to_string())?;
+    let b4_manga_panels = layout.panels().len();
+    if b4_manga_panels != 4 {
+        return Err(format!("T0.6-S4 expected 4 manga panels, got {b4_manga_panels}"));
+    }
+
+    // 2. S2 Procedural Screentone 4 patterns accuracy check
+    let patterns = [
+        crate::screentone::TonePattern::CircleDot,
+        crate::screentone::TonePattern::LineScreen,
+        crate::screentone::TonePattern::CrossHatch,
+        crate::screentone::TonePattern::NoiseGrain,
+    ];
+    for pat in patterns {
+        let spec = crate::screentone::ScreentoneSpec {
+            lpi: 60.0,
+            dpi: 600.0,
+            angle_deg: 45.0,
+            density: 0.30,
+            pattern: pat,
+            ink_rgba: [0, 0, 0, 255],
+        };
+        let mut inked = 0usize;
+        for y in 0..40 {
+            for x in 0..40 {
+                if spec.sample_mask(x, y) {
+                    inked += 1;
+                }
+            }
+        }
+        if inked == 0 || inked == 1600 {
+            return Err(format!("T0.6-S4 screentone pattern {:?} degenerated", pat));
+        }
+    }
+
+    // 3. S2 Track B: Webtoon strip slicing + zero-seam boundary stitch check
+    let webtoon_slices = crate::webtoon::compute_webtoon_slices(12800, 1280);
+    if webtoon_slices.len() != 10 {
+        return Err(format!("T0.6-S4 expected 10 webtoon slices, got {}", webtoon_slices.len()));
+    }
+    let mut wstack = crate::layer::LayerStack::new(16, 40);
+    let base = wstack.add_raster_layer("WebtoonFlat");
+    for y in 0..40 {
+        wstack.get_mut(base).unwrap().write_pixel(4, y, [(y * 5) as u8, 100, 220, 255]);
+    }
+    let mini_slices = crate::webtoon::compute_webtoon_slices(40, 20);
+    let b0 = crate::webtoon::render_webtoon_slice_rgba(&wstack, mini_slices[0]);
+    let b1 = crate::webtoon::render_webtoon_slice_rgba(&wstack, mini_slices[1]);
+    let webtoon_zero_seam_verified =
+        &b0[(19 * 16 + 4) * 4..(19 * 16 + 4) * 4 + 4] == &[95, 100, 220, 255]
+            && &b1[4 * 4..4 * 4 + 4] == &[100, 100, 220, 255];
+    if !webtoon_zero_seam_verified {
+        return Err("T0.6-S4 Webtoon slice seam mismatch".into());
+    }
+
+    // 4. S1/S2 5-Language speech bubble completeness & vertical/horizontal lettering audit
+    let mut locs = std::collections::BTreeMap::new();
+    locs.insert("en".into(), "Draw the future!".into());
+    locs.insert("zh-Hans".into(), "绘出未来！".into());
+    locs.insert("zh-Hant".into(), "繪出未來！".into());
+    locs.insert("yue-Hant".into(), "畫出未來！".into());
+    locs.insert("es".into(), "¡Dibuja el futuro!".into());
+    let bubble = crate::bubble::SpeechBubble {
+        id: "b-001".into(),
+        panel_id: 1,
+        x: 100.0,
+        y: 120.0,
+        width: 160.0,
+        height: 240.0,
+        direction: crate::bubble::SpeechBubble::recommended_direction("zh-Hans", false),
+        locales: locs,
+    };
+    let (present, overflows) = bubble.audit_five_locales(40);
+    let five_locale_bubbles_ok = present == 5
+        && overflows == 0
+        && bubble.direction == crate::bubble::TextFlowDirection::VerticalRtl;
+    if !five_locale_bubbles_ok {
+        return Err("T0.6-S4 5-locale speech bubble audit failed".into());
+    }
+
+    // 5. S3 EPUB3 XHTML export + S1 atomic PublishReport manifest
+    let xhtml = crate::bubble::render_novel_chapter_epub_xhtml(
+        "Ch.001 Starlight Awakening",
+        "zh-Hans",
+        "# 第一话 星辉觉醒\n\n星光落满屋顶。",
+        &["../illustrations/ch001_cover.png"],
+    );
+    if !xhtml.contains("<html xmlns=\"http://www.w3.org/1999/xhtml\"") {
+        return Err("T0.6-S4 EPUB3 XHTML header missing".into());
+    }
+    let report_path = crate::bubble::write_publish_manifest_atomic(
+        project_dir,
+        b4_manga_panels,
+        webtoon_slices.len(),
+        1,
+        five_locale_bubbles_ok,
+    )?;
+
+    Ok(T06S4GateReport {
+        b4_manga_panels,
+        screentone_patterns_verified: patterns.len(),
+        webtoon_slices_count: webtoon_slices.len(),
+        webtoon_zero_seam_verified,
+        five_locale_bubbles_ok,
+        epub_xhtml_bytes: xhtml.len(),
+        publish_manifest_written: report_path.is_file(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1059,6 +1201,27 @@ mod tests {
         assert!(report.vector_4x_lossless_scaled);
         assert_eq!(report.rulers_verified, 3);
         assert_eq!(report.novel_autocomplete_hits, 3);
+
+        let _ = std::fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn t06_s4_panels_screentones_webtoon_and_epub_gate_passes() {
+        let parent = std::env::temp_dir().join(format!("manga_t06_s4_unit_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&parent);
+        std::fs::create_dir_all(&parent).unwrap();
+        let opts = crate::project_init::ProjectInitOptions::dual_engine_default("T06GatePrj", "S4Tester");
+        crate::project_init::init_cpff_project(&parent, &opts).unwrap();
+
+        let report = run_t06_s4_panels_tones_webtoon_epub_gate(&parent.join("T06GatePrj"))
+            .expect("T0.6-S4 gate must pass");
+        assert_eq!(report.b4_manga_panels, 4);
+        assert_eq!(report.screentone_patterns_verified, 4);
+        assert_eq!(report.webtoon_slices_count, 10);
+        assert!(report.webtoon_zero_seam_verified);
+        assert!(report.five_locale_bubbles_ok);
+        assert!(report.epub_xhtml_bytes > 100);
+        assert!(report.publish_manifest_written);
 
         let _ = std::fs::remove_dir_all(&parent);
     }

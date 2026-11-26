@@ -629,6 +629,46 @@ public enum MangaSuiteS4Gate {
             manga_suite_run_t05_s4_gate(cDir) != 0
         }
     }
+
+    public static func runT06S4(projectDir: String) -> Bool {
+        projectDir.withCString { cDir in
+            manga_suite_run_t06_s4_gate(cDir) != 0
+        }
+    }
+}
+
+/// `S1/S2/S3 v0.6` — Procedural Halftone Screentones, Webtoon Slicer & EPUB3 XHTML Renderer.
+public enum MangaPublishingTools {
+    public static func sampleScreentoneMask(
+        lpi: Float = 60,
+        dpi: Float = 600,
+        angleDeg: Float = 45,
+        density: Float = 0.30,
+        patternCode: UInt32 = 0,
+        x: UInt32,
+        y: UInt32
+    ) -> Bool {
+        manga_screentone_sample_mask(lpi, dpi, angleDeg, density, patternCode, x, y) != 0
+    }
+
+    public static func webtoonSliceCount(canvasHeight: UInt32, sliceHeight: UInt32 = 1280) -> Int {
+        Int(manga_webtoon_slice_count(canvasHeight, sliceHeight))
+    }
+
+    public static func renderEpubXhtml(title: String, locale: String, markdown: String) -> String {
+        var buffer = [CChar](repeating: 0, count: 32_768)
+        let written = title.withCString { cTitle in
+            locale.withCString { cLoc in
+                markdown.withCString { cMd in
+                    buffer.withUnsafeMutableBufferPointer { buf in
+                        manga_novel_render_epub_xhtml(cTitle, cLoc, cMd, buf.baseAddress, buf.count)
+                    }
+                }
+            }
+        }
+        guard written > 0 else { return "" }
+        return String(decoding: buffer.prefix(Int(written)).map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    }
 }
 
 /// Type-safe RAII wrapper over the Rust `MangaCanvasHandle` C-ABI (single-canvas low-latency path).

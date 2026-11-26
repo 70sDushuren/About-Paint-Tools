@@ -1209,6 +1209,72 @@ pub unsafe extern "C" fn manga_suite_run_t05_s4_gate(project_dir_utf8: *const c_
     u8::from(crate::suite::run_t05_s4_vector_ruler_glossary_gate(std::path::Path::new(&dir)).is_ok())
 }
 
+/// Evaluates procedural halftone screentone mask at `(x, y)` (`S2 v0.6`).
+#[no_mangle]
+pub extern "C" fn manga_screentone_sample_mask(
+    lpi: f32,
+    dpi: f32,
+    angle_deg: f32,
+    density: f32,
+    pattern_code: u32,
+    x: u32,
+    y: u32,
+) -> u8 {
+    let pattern = match pattern_code {
+        1 => crate::screentone::TonePattern::LineScreen,
+        2 => crate::screentone::TonePattern::CrossHatch,
+        3 => crate::screentone::TonePattern::NoiseGrain,
+        _ => crate::screentone::TonePattern::CircleDot,
+    };
+    let spec = crate::screentone::ScreentoneSpec {
+        lpi,
+        dpi,
+        angle_deg,
+        density,
+        pattern,
+        ink_rgba: [0, 0, 0, 255],
+    };
+    u8::from(spec.sample_mask(x, y))
+}
+
+/// Returns contiguous vertical slice count for a Webtoon strip (`S2 v0.6`).
+#[no_mangle]
+pub extern "C" fn manga_webtoon_slice_count(canvas_height: u32, slice_height: u32) -> usize {
+    crate::webtoon::compute_webtoon_slices(canvas_height, slice_height).len()
+}
+
+/// Renders a light-novel Markdown chapter into valid EPUB3 XHTML into caller-owned buffer (`S3 v0.6`).
+///
+/// # Safety
+/// String pointers must be valid UTF-8 C strings; `out_buf` must have capacity `out_cap`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_novel_render_epub_xhtml(
+    chapter_title_utf8: *const c_char,
+    locale_utf8: *const c_char,
+    markdown_utf8: *const c_char,
+    out_buf: *mut c_char,
+    out_cap: usize,
+) -> usize {
+    let title = unsafe { cstr_to_string(chapter_title_utf8, "Chapter") };
+    let locale = unsafe { cstr_to_string(locale_utf8, "zh-Hans") };
+    let md = unsafe { cstr_to_string(markdown_utf8, "") };
+    let xhtml = crate::bubble::render_novel_chapter_epub_xhtml(&title, &locale, &md, &[]);
+    unsafe { write_utf8_to_c_buf(&xhtml, out_buf, out_cap) }
+}
+
+/// Executes the **`T0.6-S4` Dual-Track Panels/Screentones/Webtoon + 5-Locale Bubbles + EPUB3 Gate**.
+///
+/// # Safety
+/// `project_dir_utf8` must be null or a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn manga_suite_run_t06_s4_gate(project_dir_utf8: *const c_char) -> u8 {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    if dir.is_empty() {
+        return 0;
+    }
+    u8::from(crate::suite::run_t06_s4_panels_tones_webtoon_epub_gate(std::path::Path::new(&dir)).is_ok())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

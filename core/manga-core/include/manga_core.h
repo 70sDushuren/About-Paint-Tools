@@ -371,6 +371,30 @@ size_t manga_glossary_suggest_terms(
 
 uint8_t manga_suite_run_t05_s4_gate(const char *project_dir_utf8);
 
+/* --- v0.6.0 & T0.6-S4 Screentones, Webtoon Slicer, EPUB3 & Publish Gate API --- */
+
+uint8_t manga_screentone_sample_mask(
+    float lpi,
+    float dpi,
+    float angle_deg,
+    float density,
+    uint32_t pattern_code,
+    uint32_t x,
+    uint32_t y
+);
+
+size_t manga_webtoon_slice_count(uint32_t canvas_height, uint32_t slice_height);
+
+size_t manga_novel_render_epub_xhtml(
+    const char *chapter_title_utf8,
+    const char *locale_utf8,
+    const char *markdown_utf8,
+    char *out_buf,
+    size_t out_cap
+);
+
+uint8_t manga_suite_run_t06_s4_gate(const char *project_dir_utf8);
+
 #ifdef __cplusplus
 }
 #endif

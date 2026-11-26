@@ -771,11 +771,41 @@ public struct HubWorkspaceView: View {
     }
 
     private func milestonePreviewCard(for section: HubSectionKind) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Scheduled Module: \(section.rawValue)")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("S1 v0.6 · Multi-Edition Publish Center (B4 Print × Webtoon × EPUB3)")
                 .font(.subheadline.bold())
-            Text("This S1 icon-rail workspace slot is wired and reserved for its upcoming SemVer v0.x patch milestone.")
+            Text("Coordinates 4-panel B4 600DPI print pages, procedural 60 LPI screentones, 1280px Webtoon vertical slices, 5-locale speech bubbles, and EPUB3 XHTML light novel builds.")
                 .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 10) {
+                Button {
+                    #if canImport(MangaCoreFFI)
+                    let slices = MangaPublishingTools.webtoonSliceCount(canvasHeight: 12800, sliceHeight: 1280)
+                    let xhtml = MangaPublishingTools.renderEpubXhtml(
+                        title: "Ch.001 Starlight Awakening",
+                        locale: "zh-Hans",
+                        markdown: "# 第一话 星辉觉醒\n\n星光落满屋顶。"
+                    )
+                    let ok = MangaSuiteS4Gate.runT06S4(projectDir: activeProjectDir)
+                    gateStatusLine = ok
+                        ? "OK [T0.6-S4 Publish Gate PASS]: B4 4-panel + 4 tones + \(slices) Webtoon slices (0 seam) + 5-locale bubbles + EPUB3 (\(xhtml.count)B) -> editions/publish_report.xml."
+                        : "FAIL [T0.6-S4 Publish Gate]: Check workspace state."
+                    #endif
+                } label: {
+                    Label("Run Multi-Edition Publish & T0.6-S4 Gate", systemImage: "paperplane.fill")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(SuiteColorTokens.hubAccent)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text(gateStatusLine)
+                .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
         }
         .padding(14)
