@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "order_id": "20261126-225751_v080-apple-trio-gestures-5i18n",
+  "created_at_utc": "2026-11-26T22:57:51Z",
+  "milestone": "v0.8.0",
+  "title": "Verify v0.8.0 + T0.8-S4 (Apple Trio Gestures + iPhone Duo Hinge + Live 5-Language Switcher, 30 XCTests)",
+  "summary": "",
+  "steps": [
+    {
+      "action": "env-info"
+    },
+    {
+      "action": "build-rust"
+    },
+    {
+      "action": "xcode-gen"
+    },
+    {
+      "action": "build-mac"
+    },
+    {
+      "action": "test-mac"
+    },
+    {
+      "action": "build-ipad"
+    },
+    {
+      "action": "build-duo"
+    },
+    {
+      "action": "check"
+    }
+  ],
+  "notify": true
+}
