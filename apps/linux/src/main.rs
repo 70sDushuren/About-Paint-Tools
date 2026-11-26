@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use manga_core::{
     init_cpff_project, run_t02_s4_concurrency_soak, run_t03_s4_bible_layers_gate,
     run_t04_s4_ingest_fill_divergence_gate, run_t05_s4_vector_ruler_glossary_gate,
-    run_t06_s4_panels_tones_webtoon_epub_gate, run_tri_app_compatibility_check, CanvasPreset,
-    ProjectInitOptions, SuiteApp, TargetPlatform,
+    run_t06_s4_panels_tones_webtoon_epub_gate, run_t07_s4_mnga_psd_actionbus_gate,
+    run_tri_app_compatibility_check, CanvasPreset, ProjectInitOptions, SuiteApp, TargetPlatform,
 };
 use manga_linux_shell::{LinuxStudioShell, WaylandTabletToolEvent, WaylandTabletTouchAdapter};
 
@@ -86,12 +86,13 @@ fn main() {
             let t04 = run_t04_s4_ingest_fill_divergence_gate(&soak_prj)?;
             let t05 = run_t05_s4_vector_ruler_glossary_gate(&soak_prj)?;
             let t06 = run_t06_s4_panels_tones_webtoon_epub_gate(&soak_prj)?;
-            Ok((soak, t03, t04, t05, t06))
+            let t07 = run_t07_s4_mnga_psd_actionbus_gate(&soak_prj)?;
+            Ok((soak, t03, t04, t05, t06, t07))
         });
         let _ = std::fs::remove_dir_all(&soak_parent);
 
         match gate_result {
-            Ok((soak, t03, t04, t05, t06)) => {
+            Ok((soak, t03, t04, t05, t06, t07)) => {
                 println!(
                     "OK [T0.2-S4 Concurrency Soak]: {} rounds passed (S1_reads={}, S2_stamps={}, S3_atomic_saves={}, locked_rejections={}, leaked_tmp={})",
                     soak.rounds_completed,
@@ -140,6 +141,15 @@ fn main() {
                     t06.five_locale_bubbles_ok,
                     t06.epub_xhtml_bytes,
                     t06.publish_manifest_written
+                );
+                println!(
+                    "OK [T0.7-S4 .mnga/PSD/ActionBus Gate]: mnga_bytes={}, tamper_rejected={}, psd_bytes={}, preview_steps={}, atomic_undo={}, novel_slots={}",
+                    t07.mnga_bytes_written,
+                    t07.mnga_tamper_rejected,
+                    t07.psd_8bps_bytes,
+                    t07.action_bus_preview_steps,
+                    t07.action_bus_single_undo_ok,
+                    t07.novel_illustration_slots_verified
                 );
                 return;
             }

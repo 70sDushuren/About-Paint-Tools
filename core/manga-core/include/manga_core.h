@@ -395,6 +395,25 @@ size_t manga_novel_render_epub_xhtml(
 
 uint8_t manga_suite_run_t06_s4_gate(const char *project_dir_utf8);
 
+/* --- v0.7.0 & T0.7-S4 .mnga Codec, PSD 8BPS, ActionBus & Novel Illustration Slots API --- */
+
+size_t manga_mnga_save_snapshot(
+    const MangaProjectHandle *handle,
+    const char *project_dir_utf8,
+    const char *rel_path_utf8,
+    uint16_t dpi,
+    uint32_t timelapse_events
+);
+
+size_t manga_psd_export_byte_len(const MangaProjectHandle *handle);
+
+uint8_t manga_novel_validate_illustration_slot(
+    uint32_t mode_code,
+    const char *rel_src_utf8
+);
+
+uint8_t manga_suite_run_t07_s4_gate(const char *project_dir_utf8);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1090,6 +1090,128 @@ pub fn run_t06_s4_panels_tones_webtoon_epub_gate(project_dir: &Path) -> Result<T
     })
 }
 
+/// Summary produced by the **`T0.7-S4` `.mnga` Persistence + PSD `8BPS` + `ActionBus` + S3 Illustration Slot Gate**.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct T07S4GateReport {
+    pub mnga_bytes_written: usize,
+    pub mnga_tamper_rejected: bool,
+    pub psd_8bps_bytes: usize,
+    pub action_bus_preview_steps: usize,
+    pub action_bus_single_undo_ok: bool,
+    pub novel_illustration_slots_verified: bool,
+}
+
+/// Executes the **`T0.7-S4` Integration & Compatibility Gate** over a CPFF v1.0 `.prj` workspace:
+/// - `S2`: Atomically persists `.mnga` manuscript under `chapters/ch001/manuscript/p001.mnga`,
+///   verifies FNV-1a checksum round-trip + tamper detection, and exports a standards-compliant
+///   Adobe PSD (`8BPS` v1 RGB8) buffer.
+/// - `S2` `ActionBus`: Dry-run previews, executes, and single-step rolls back / redoes a multi-step
+///   cel-layer macro plan atomically.
+/// - `S3`: Validates both `PickMangaPage` and `CustomCommissioned` novel illustration slot policies.
+pub fn run_t07_s4_mnga_psd_actionbus_gate(project_dir: &Path) -> Result<T07S4GateReport, String> {
+    let _ = run_tri_app_compatibility_check(project_dir)?;
+
+    // 1. S2 ActionBus preview -> atomic execute -> single-step undo -> redo
+    let mut doc = crate::action_bus::ProjectDocument::from_preset(crate::preset::CanvasPreset::Illustration4K);
+    doc.layers = crate::layer::LayerStack::new(64, 64);
+    let mut bus = crate::action_bus::ActionBus::new();
+    let plan = crate::action_bus::ActionPlan {
+        title: "Cel Setup Macro".into(),
+        commands: vec![
+            crate::action_bus::ActionCommand::CreateRasterLayer {
+                name: "Sketch_Rough".into(),
+                blend_mode: crate::layer::BlendMode::Normal,
+                clipping_mask: false,
+                is_reference: false,
+            },
+            crate::action_bus::ActionCommand::CreateRasterLayer {
+                name: "Ink_Lineart".into(),
+                blend_mode: crate::layer::BlendMode::Normal,
+                clipping_mask: false,
+                is_reference: true,
+            },
+            crate::action_bus::ActionCommand::CreateRasterLayer {
+                name: "Cel_Shadow".into(),
+                blend_mode: crate::layer::BlendMode::Multiply,
+                clipping_mask: true,
+                is_reference: false,
+            },
+            crate::action_bus::ActionCommand::BatchTintLayers {
+                name_prefix: "Sketch_".into(),
+                tint_rgba: [77, 166, 255, 255],
+                opacity: 0.30,
+                lock: true,
+            },
+        ],
+    };
+    let preview = bus.preview(&doc, &plan);
+    if preview.step_summaries.len() != 4 {
+        return Err("T0.7-S4 ActionBus preview step count mismatch".into());
+    }
+    let executed = bus.execute(&mut doc, &plan);
+    if executed != 4 || doc.layers.layers().len() != 3 {
+        return Err("T0.7-S4 ActionBus execute did not materialize 3 cel layers".into());
+    }
+    let undo_ok = bus.undo_last(&mut doc) && doc.layers.layers().is_empty();
+    let redo_ok = bus.redo_last(&mut doc) && doc.layers.layers().len() == 3;
+    if !undo_ok || !redo_ok {
+        return Err("T0.7-S4 ActionBus atomic single-step undo/redo failed".into());
+    }
+
+    // Paint a pixel so allocated_tiles > 0 in `.mnga` and PSD composite
+    let ink_id = doc.layers.find_by_name("Ink_Lineart").unwrap();
+    doc.layers.get_mut(ink_id).unwrap().write_pixel(12, 12, [20, 24, 32, 255]);
+
+    // 2. S2 `.mnga` atomic persistence + FNV-1a tamper detection + PSD 8BPS export
+    let snap = crate::mnga::MngaDocumentSnapshot::from_layer_stack(&doc.layers, 600, 128);
+    let mnga_path = snap.save_atomic(project_dir, "chapters/ch001/manuscript/p001.mnga")?;
+    let mut disk_bytes = std::fs::read(&mnga_path).map_err(|e| e.to_string())?;
+    let decoded = crate::mnga::MngaDocumentSnapshot::decode_bytes(&disk_bytes)?;
+    if decoded != snap {
+        return Err("T0.7-S4 .mnga round-trip snapshot mismatch".into());
+    }
+    disk_bytes[12] ^= 0x55;
+    let mnga_tamper_rejected = crate::mnga::MngaDocumentSnapshot::decode_bytes(&disk_bytes).is_err();
+    if !mnga_tamper_rejected {
+        return Err("T0.7-S4 .mnga FNV-1a checksum failed to reject tampered file".into());
+    }
+
+    let psd = crate::mnga::encode_minimal_psd_rgb8(&doc.layers);
+    if &psd[..4] != b"8BPS" || psd.len() != 26 + 12 + 2 + 64 * 64 * 3 {
+        return Err("T0.7-S4 PSD 8BPS export header or byte length invalid".into());
+    }
+
+    // 3. S3 Novel Illustration Slot policy check (MangaPick vs NovelCustom)
+    let slot_pick_ok = crate::mnga::validate_novel_illustration_slot(
+        crate::project::NovelIllustrationMode::MangaPick,
+        "chapters/ch001/manuscript/p001.mnga",
+    )
+    .is_ok();
+    let slot_custom_ok = crate::mnga::validate_novel_illustration_slot(
+        crate::project::NovelIllustrationMode::NovelCustom,
+        "chapters/ch001/novel/illustrations/ch001_plate01.png",
+    )
+    .is_ok();
+    let slot_escape_blocked = crate::mnga::validate_novel_illustration_slot(
+        crate::project::NovelIllustrationMode::NovelCustom,
+        "../outside.png",
+    )
+    .is_err();
+    let novel_illustration_slots_verified = slot_pick_ok && slot_custom_ok && slot_escape_blocked;
+    if !novel_illustration_slots_verified {
+        return Err("T0.7-S4 S3 Novel illustration slot policy check failed".into());
+    }
+
+    Ok(T07S4GateReport {
+        mnga_bytes_written: disk_bytes.len(),
+        mnga_tamper_rejected,
+        psd_8bps_bytes: psd.len(),
+        action_bus_preview_steps: preview.step_summaries.len(),
+        action_bus_single_undo_ok: undo_ok && redo_ok,
+        novel_illustration_slots_verified,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1222,6 +1344,26 @@ mod tests {
         assert!(report.five_locale_bubbles_ok);
         assert!(report.epub_xhtml_bytes > 100);
         assert!(report.publish_manifest_written);
+
+        let _ = std::fs::remove_dir_all(&parent);
+    }
+
+    #[test]
+    fn t07_s4_mnga_psd_actionbus_gate_passes() {
+        let parent = std::env::temp_dir().join(format!("manga_t07_s4_unit_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&parent);
+        std::fs::create_dir_all(&parent).unwrap();
+        let opts = crate::project_init::ProjectInitOptions::dual_engine_default("T07GatePrj", "S4Tester");
+        crate::project_init::init_cpff_project(&parent, &opts).unwrap();
+
+        let report = run_t07_s4_mnga_psd_actionbus_gate(&parent.join("T07GatePrj"))
+            .expect("T0.7-S4 gate must pass");
+        assert!(report.mnga_bytes_written > 40);
+        assert!(report.mnga_tamper_rejected);
+        assert!(report.psd_8bps_bytes > 40);
+        assert_eq!(report.action_bus_preview_steps, 4);
+        assert!(report.action_bus_single_undo_ok);
+        assert!(report.novel_illustration_slots_verified);
 
         let _ = std::fs::remove_dir_all(&parent);
     }

@@ -635,6 +635,21 @@ public enum MangaSuiteS4Gate {
             manga_suite_run_t06_s4_gate(cDir) != 0
         }
     }
+
+    public static func runT07S4(projectDir: String) -> Bool {
+        projectDir.withCString { cDir in
+            manga_suite_run_t07_s4_gate(cDir) != 0
+        }
+    }
+}
+
+/// `S2/S3 v0.7` — Open `.mnga` atomic persistence, Adobe PSD (`8BPS`) export & Novel Illustration Slots.
+public enum MangaPersistenceTools {
+    public static func validateNovelIllustrationSlot(modeCode: UInt32, relSrc: String) -> Bool {
+        relSrc.withCString { cRel in
+            manga_novel_validate_illustration_slot(modeCode, cRel) != 0
+        }
+    }
 }
 
 /// `S1/S2/S3 v0.6` — Procedural Halftone Screentones, Webtoon Slicer & EPUB3 XHTML Renderer.
@@ -900,7 +915,7 @@ public final class MangaProjectEngine {
         opacity: Float,
         blueSketchTint: Bool
     ) -> Bool {
-        manga_project_set_layer_flags(
+        return manga_project_set_layer_flags(
             handle,
             layerId,
             visible ? 1 : 0,
@@ -911,6 +926,26 @@ public final class MangaProjectEngine {
             opacity,
             blueSketchTint ? 1 : 0
         ) != 0
+    }
+
+    /// `S2 v0.7` — Atomically saves a `.mnga` manuscript snapshot (FNV-1a checksummed) under `SuiteApp::Manga` ownership.
+    @discardableResult
+    public func saveMngaSnapshot(
+        projectDir: String,
+        relPath: String,
+        dpi: UInt16 = 600,
+        timelapseEvents: UInt32 = 0
+    ) -> Int {
+        projectDir.withCString { cDir in
+            relPath.withCString { cRel in
+                Int(manga_mnga_save_snapshot(handle, cDir, cRel, dpi, timelapseEvents))
+            }
+        }
+    }
+
+    /// `S2 v0.7` — Exports a standards-compliant Adobe PSD (`8BPS` v1 RGB8) interchange payload and returns byte count.
+    public func psdExportByteLength() -> Int {
+        Int(manga_psd_export_byte_len(handle))
     }
 }
 

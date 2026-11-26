@@ -1275,6 +1275,84 @@ pub unsafe extern "C" fn manga_suite_run_t06_s4_gate(project_dir_utf8: *const c_
     u8::from(crate::suite::run_t06_s4_panels_tones_webtoon_epub_gate(std::path::Path::new(&dir)).is_ok())
 }
 
+/// Atomically persists a `.mnga` v1 manuscript snapshot with FNV-1a integrity checksum (`S2 v0.7`).
+/// Returns encoded byte size written on success, or `0` on failure / write-ownership violation.
+///
+/// # Safety
+/// `handle` must be a valid `MangaProjectHandle`; strings must be valid NUL-terminated UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn manga_mnga_save_snapshot(
+    handle: *const MangaProjectHandle,
+    project_dir_utf8: *const c_char,
+    rel_path_utf8: *const c_char,
+    dpi: u16,
+    timelapse_events: u32,
+) -> usize {
+    let Some(proj) = (unsafe { handle.as_ref() }) else {
+        return 0;
+    };
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    let rel = unsafe { cstr_to_string(rel_path_utf8, "") };
+    if dir.is_empty() || rel.is_empty() {
+        return 0;
+    }
+    let snap = crate::mnga::MngaDocumentSnapshot::from_layer_stack(
+        &proj.doc.layers,
+        dpi,
+        timelapse_events,
+    );
+    let bytes = snap.encode_bytes();
+    if snap.save_atomic(std::path::Path::new(&dir), &rel).is_ok() {
+        bytes.len()
+    } else {
+        0
+    }
+}
+
+/// Generates a minimal standards-compliant Adobe PSD (`8BPS` v1 RGB8) interchange payload and returns byte count (`S2 v0.7`).
+///
+/// # Safety
+/// `handle` must be a valid `MangaProjectHandle` pointer or null.
+#[no_mangle]
+pub unsafe extern "C" fn manga_psd_export_byte_len(handle: *const MangaProjectHandle) -> usize {
+    let Some(proj) = (unsafe { handle.as_ref() }) else {
+        return 0;
+    };
+    crate::mnga::encode_minimal_psd_rgb8(&proj.doc.layers).len()
+}
+
+/// Validates an `S3 v0.7` light-novel illustration slot (`0 = MangaPick`, `1 = NovelCustom`, `2 = Hybrid`, `3 = None`).
+///
+/// # Safety
+/// `rel_src_utf8` must be null or a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn manga_novel_validate_illustration_slot(
+    mode_code: u32,
+    rel_src_utf8: *const c_char,
+) -> u8 {
+    let rel = unsafe { cstr_to_string(rel_src_utf8, "") };
+    let mode = match mode_code {
+        0 => crate::project::NovelIllustrationMode::MangaPick,
+        1 => crate::project::NovelIllustrationMode::NovelCustom,
+        2 => crate::project::NovelIllustrationMode::Hybrid,
+        _ => crate::project::NovelIllustrationMode::None,
+    };
+    u8::from(crate::mnga::validate_novel_illustration_slot(mode, &rel).is_ok())
+}
+
+/// Executes the **`T0.7-S4` `.mnga` Persistence + PSD `8BPS` + `ActionBus` + S3 Illustration Slot Gate**.
+///
+/// # Safety
+/// `project_dir_utf8` must be null or a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn manga_suite_run_t07_s4_gate(project_dir_utf8: *const c_char) -> u8 {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    if dir.is_empty() {
+        return 0;
+    }
+    u8::from(crate::suite::run_t07_s4_mnga_psd_actionbus_gate(std::path::Path::new(&dir)).is_ok())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
