@@ -85,6 +85,8 @@
 | 7 | CPFF 初始化 | `project_init.rs` 初始生成 XML 的 `<Edition>` 节点缺失属性导致解析计数为 0 | 与规范模板 `SampleManga.prj` 必填属性未完全对齐 | 对齐 `SampleManga.prj` 全属性并用真实 `prj_validate.py` 做 E2E 验证 |
 | 8 | 双语 Keynote | 英文版幻灯片个别卡片残留中文标题、Banner 文字略拥挤 | 仅靠代码生成未做视觉验收 | 用 `libreoffice` → `pdftoppm` 导出整套 PNG 逐页肉眼复检并修正 |
 | 9 | Google Drive CLI | `gdrive mutate mkdir --json \| jq` 报解析错误 | `mutate mkdir` 输出为纯文本而非 JSON | 建完目录后改用 `gdrive readonly ls <parent> --json` 精确读取目录 ID |
+| 10 | LaunchAgent 到期自卸载 | 120 分钟到点后状态变为 `PAUSED`，但 `make relay-status` 仍显示 `LaunchAgent: INSTALLED` | 在 `launchd` 自身进程内调用 `launchctl bootout` 会立刻触发 `SIGTERM`，后续 `rm -f *.plist` 来不及执行 | 先 `rm -f *.plist *.budget` 再 `launchctl bootout`，并在 `status` 中用 `launchctl print` 查询真实加载态（`6fd21fb`） |
+| 11 | macOS 自动化 XCTest | 带 `ENABLE_HARDENED_RUNTIME` + `CODE_SIGNING_ALLOWED=NO` 的宿主 App 跑 `TEST_HOST` 单测易遇 `dyld` 签名校验拦截 | 宿主注入式测试依赖签名一致 | 采用独立逻辑 `bundle.unit-test`（直链 `MangaCore.xcframework`、排除 `@main`），免签名 0.008 秒实跑 9/9 真机 FFI 单测 |
 
 ---
 
@@ -99,7 +101,7 @@
 | **`gitops-gonext-circuit-breaker`** | 自主循环安全护栏 | 为任何长时间自主循环提供时长硬上限（`MAX_MIN`）、次数上限（`MAX_ORDERS`）、连续失败与重复错误指纹检测（`DUPLICATE_ERROR_LOOP`）、优雅收尾与双向急停 | 防止长跑自动化任务或 `/goal` 多轮修复陷入死循环或资源空耗 |
 
 > **后续待抽象 Skill 规划**（随项目推进逐步补全）：
-> - `metal-240hz-brush-profiler`（`v0.2`–`v0.3` 阶段沉淀：Metal 帧剖析与 Pencil Pro 延迟/内存回归验收）
+> - `metal-240hz-brush-profiler`（`v0.3` 阶段沉淀：Metal 帧剖析与 Pencil Pro 延迟/内存回归验收）
 > - `cpff-tri-app-s4-gate`（`v0.4`–`v0.9` 阶段沉淀：三工具联调、5 语溢出与双引擎一致性自动审计）
 
 ---
@@ -112,6 +114,6 @@
 | :--- | :--- | :--- | :--- |
 | **`v0.1.0` 架构基座** | `3c52338` (`v0.1.0-architecture-baseline`) | MIT 协议、CPFF v1.0、双线双引擎、6 大硬件规划、三独立工具模块与 `S4` 门禁、46×5 语言 i18n | 用 Rust `suite.rs` 提前锁死写权隔离与内存预算，后续 UI 怎么迭代都不会破坏多工具并发安全性 |
 | **`v0.2.0`–`v0.2.1` 设计定稿 + Apple 全端打通 + `GoNext` 闭环** | `9227d14` → `66e7ceb` → `8f53934` → `97434c8` | 7 张 UI 稿、3 个 HTML Demo、双语 Keynote 4 项决策定稿；S1/S2/S3 `v0.2.1` 核心内核（48 测全过）；M5 Pro 7 秒 7/7 全绿；`GoNext` Relay 与三层熔断体系及 3 项 Skills | 先通过可视化 Demo 与 Keynote 统一认知，再把云-端真机验证做成带熔断的自动化接力，排障周期从人工贴日志压缩到秒级闭环 |
-| **`v0.2-S4`** *(待补充)* | _TBD_ | `v0.2.2+` 三工具 UI 壳、Metal 笔刷管线与 `T0.2-S4` 联合集成 | _于 `v0.2-S4` 验收时补充_ |
-| **`v0.3-S4` – `v0.9-S4`** *(待补充)* | _TBD_ | 矢量/网点/条漫、轻小说引擎、本地 Gemma 4、Wave 1 Beta 与 TestFlight | _随各里程碑定期补充_ |
+| **`v0.2.2`–`v0.2.3` & `T0.2-S4` 收官** | `0ffb9fb` → `7fa92ad` → `v0.2.3/T0.2-S4` | 18 枚原创 MIT 图标 + 四要素 Hint 气泡 + 三工具原生 SwiftUI 壳；`RenamedFolderFallback`、变宽笔刷盖章、原子写锁与 **100 轮三工具并发压测门禁（`run_t02_s4_concurrency_soak`）**；9 项 M5 Pro 实机 Swift ↔ Rust FFI XCTest 全绿 | 独立逻辑 `bundle.unit-test` 让真机 FFI 回归测试摆脱签名束缚；`launchd` 自我卸载须先删 `.plist` 再 `bootout`，120 分钟真实到期熔断零误触 |
+| **`v0.3-S4` – `v0.9-S4`** *(待补充)* | _TBD_ | 设定圣经热刷新、图层树 13 种混合、选区/防白边填色、矢量/网点/条漫、轻小说引擎、本地 Gemma 4、Wave 1 Beta 与 TestFlight | _随各里程碑定期补充_ |
 | **`v1.0-S4` 终稿存档** | _TBD_ | Wave 1 正式发布、最终品牌定稿与全项目总复盘 | _项目完成后形成最终归档版_ |

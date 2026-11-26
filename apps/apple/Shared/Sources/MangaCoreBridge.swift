@@ -134,7 +134,14 @@ public enum MangaSuitePolicy {
     }
 }
 
-/// `S1 v0.2.1` — Bootstraps a CPFF v1.0 dual-engine `.prj` folder via Rust `manga-core`.
+/// `S1 v0.2.3` — CPFF `.prj` resolution result mirrored from `MangaPrjResolutionStatus`.
+public enum PrjResolutionKind: UInt32, Sendable {
+    case invalid = 0
+    case exactMatch = 1
+    case renamedFolderFallback = 2
+}
+
+/// `S1 v0.2.1–v0.2.3` — Bootstraps & inspects CPFF v1.0 dual-engine `.prj` folders via Rust `manga-core`.
 public enum MangaHubProjectBootstrap {
     @discardableResult
     public static func initProject(parentDir: String, folderName: String, author: String) -> Bool {
@@ -146,9 +153,16 @@ public enum MangaHubProjectBootstrap {
             }
         }
     }
+
+    public static func resolvePrjStatus(projectDir: String) -> PrjResolutionKind {
+        let code = projectDir.withCString { cDir in
+            manga_hub_resolve_prj_status(cDir)
+        }
+        return PrjResolutionKind(rawValue: code) ?? .invalid
+    }
 }
 
-/// `S2 v0.2.1` — Deterministic anime brush dynamics & zoom-adaptive Rope Stabilizer queries.
+/// `S2 v0.2.1–v0.2.3` — Deterministic anime brush dynamics, stamping engine & zoom-adaptive Rope Stabilizer.
 public enum MangaBrushDynamics {
     public static var presetCount: UInt32 { manga_brush_preset_count() }
 
@@ -159,13 +173,64 @@ public enum MangaBrushDynamics {
     public static func zoomAdaptiveRope(baseScreenPx: Float, viewportZoom: Float) -> Float {
         manga_brush_zoom_adaptive_rope(baseScreenPx, viewportZoom)
     }
+
+    public static func generateStampCount(presetCode: UInt32, samples: [NativeStrokeSample]) -> Int {
+        guard !samples.isEmpty else { return 0 }
+        let cPoints = samples.map { s in
+            CMangaStrokePoint(
+                x: s.x,
+                y: s.y,
+                pressure: s.pressure,
+                altitude: s.altitude,
+                azimuth: s.azimuth,
+                roll_angle: s.rollAngle,
+                timestamp_ms: s.timestampMs,
+                is_predicted: s.isPredicted ? 1 : 0
+            )
+        }
+        return cPoints.withUnsafeBufferPointer { buf in
+            Int(manga_brush_generate_stamp_count(presetCode, buf.baseAddress, buf.count))
+        }
+    }
 }
 
-/// `S3 v0.2.1` — Mixed CJK + Latin light novel publishing unit counter.
+/// `S3 v0.2.1–v0.2.3` — Mixed CJK + Latin publishing unit counter & atomic prose storage with `locked="true"` guard.
 public enum MangaNovelMetrics {
     public static func countUnits(in text: String) -> Int {
         text.withCString { cText in
             Int(manga_novel_count_units(cText))
+        }
+    }
+
+    @discardableResult
+    public static func saveProseAtomic(
+        projectDir: String,
+        relPath: String,
+        markdown: String,
+        isLocked: Bool,
+        explicitHumanEdit: Bool
+    ) -> Bool {
+        projectDir.withCString { cDir in
+            relPath.withCString { cRel in
+                markdown.withCString { cBody in
+                    manga_novel_save_prose_atomic(
+                        cDir,
+                        cRel,
+                        cBody,
+                        isLocked ? 1 : 0,
+                        explicitHumanEdit ? 1 : 0
+                    ) != 0
+                }
+            }
+        }
+    }
+}
+
+/// `T0.2-S4` — Tri-App Integration & 100-Round Concurrency Soak Gate over Rust C-ABI.
+public enum MangaSuiteS4Gate {
+    public static func run(projectDir: String, soakRounds: UInt32 = 100) -> Bool {
+        projectDir.withCString { cDir in
+            manga_suite_run_s4_gate(cDir, soakRounds) != 0
         }
     }
 }

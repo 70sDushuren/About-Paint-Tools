@@ -85,6 +85,8 @@ Before writing heavyweight native UI, every major design passes four low-cost al
 | 7 | CPFF Bootstrap | Initial `project_init.rs` `<Edition>` XML missed attributes required by `parse_prj_xml` | Schema drift from canonical `SampleManga.prj` | Align XML with `SampleManga.prj` and gate with real `prj_validate.py` E2E test |
 | 8 | Bilingual Keynote | English deck had stray Chinese titles on one slide and tight banner spacing | Programmatic `.pptx` build without visual inspection | Render every slide via `libreoffice` → `pdftoppm` and visually QA every PNG |
 | 9 | Google Drive CLI | `gdrive mutate mkdir --json \| jq` threw JSON parse error | `mutate mkdir` prints plain text rather than JSON | Query newly created folder IDs via `gdrive readonly ls <parent> --json` |
+| 10 | LaunchAgent Self-Unload | After 120m expiry `Local State` paused properly, yet `make relay-status` still showed `INSTALLED` | Calling `launchctl bootout` from inside the LaunchAgent kills the script with `SIGTERM` before `rm -f *.plist` runs | Delete `*.plist` & `*.budget` BEFORE calling `launchctl bootout`, and query live `launchctl print` in `status` (`6fd21fb`) |
+| 11 | macOS Headless XCTests | Hosted `TEST_HOST` tests on hardened-runtime apps with `CODE_SIGNING_ALLOWED=NO` risk `dyld` validation failures | Host injection requires matching code signatures | Use a standalone `bundle.unit-test` linking `MangaCore.xcframework` directly (excluding `@main`): 9/9 live Apple Silicon FFI tests in `< 0.02s` |
 
 ---
 
@@ -99,7 +101,7 @@ Key cross-project engineering patterns from this project have been distilled int
 | **`gitops-gonext-circuit-breaker`** | Autonomous Loop Safety | Enforces `MAX_MIN` time budgets, `MAX_ORDERS` caps, `MAX_FAILS` + `DUPLICATE_ERROR_LOOP` error fingerprinting, graceful completion, and two-way kill switches | Guarding any autonomous multi-round loop or `/goal` execution against runaway retries |
 
 > **Planned Future Skills** (to be distilled in upcoming milestones):
-> - `metal-240hz-brush-profiler` (`v0.2`–`v0.3`: Metal frame capture & Pencil Pro latency/memory verification)
+> - `metal-240hz-brush-profiler` (`v0.3`: Metal frame capture & Pencil Pro latency/memory verification)
 > - `cpff-tri-app-s4-gate` (`v0.4`–`v0.9`: automated Tri-App concurrency, 5-locale overflow & dual-engine parity audit)
 
 ---
@@ -112,6 +114,6 @@ Key cross-project engineering patterns from this project have been distilled int
 | :--- | :--- | :--- | :--- |
 | **`v0.1.0` Architecture Baseline** | `3c52338` (`v0.1.0-architecture-baseline`) | MIT license, CPFF v1.0, Dual-Track × Dual-Engine, 6 hardware targets, Tri-App modularization & `S4` gate, 46×5 i18n | Enforcing write-ownership & RAM budgets in Rust `suite.rs` upfront prevents architectural drift across all future UI work |
 | **`v0.2.0`–`v0.2.1` Design Sign-Off, Apple 3-Slice & `GoNext` Relay** | `9227d14` → `66e7ceb` → `8f53934` → `97434c8` | 7 UI mockups, 3 HTML demos, 4 bilingual Keynote decisions; `v0.2.1` S1/S2/S3 core engines (48 tests); M5 Pro 7/7 PASS in 7s; guarded `GoNext` Relay + 3 Skills | Visual prototypes + Keynote alignment eliminate rework; guarded GitOps relay collapses cloud↔Mac debugging from manual log pasting to a 7-second closed loop |
-| **`v0.2-S4`** *(Pending)* | _TBD_ | `v0.2.2+` Tri-App UI shells, Metal brush pipeline & `T0.2-S4` integration | _To be appended at `v0.2-S4` sign-off_ |
-| **`v0.3-S4` – `v0.9-S4`** *(Pending)* | _TBD_ | Vectors/screentones/webtoon, novel engine, local Gemma 4, Wave 1 Beta & TestFlight | _Appended per milestone_ |
+| **`v0.2.2`–`v0.2.3` & `T0.2-S4` Sign-Off** | `0ffb9fb` → `7fa92ad` → `v0.2.3/T0.2-S4` | 18 clean-room MIT icons + 4-element Hint Popovers + native SwiftUI Tri-App shells; `RenamedFolderFallback`, tapered brush stamping, atomic save + lock guard, **100-round Tri-App concurrency soak (`run_t02_s4_concurrency_soak`)**; 9 live M5 Pro Swift ↔ Rust XCTests | Standalone `bundle.unit-test` eliminates signing friction for headless Rust FFI XCTests; self-unloading `launchd` agents must delete `.plist` before `bootout` |
+| **`v0.3-S4` – `v0.9-S4`** *(Pending)* | _TBD_ | Story Bible live reload, 13-mode cel layers, close-gap fill, vectors/screentones/webtoon, novel engine, local Gemma 4, Wave 1 Beta & TestFlight | _Appended per milestone_ |
 | **`v1.0-S4` Final Archive** | _TBD_ | Wave 1 store release, final branding & full project retrospective | _Final archived edition upon completion_ |

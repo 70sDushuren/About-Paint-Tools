@@ -529,17 +529,18 @@ public struct MangaCanvasStageView: View {
 
     private func render(_ stroke: CanvasStrokeRecord, in context: inout GraphicsContext) {
         guard stroke.points.count >= 2 else { return }
-        var path = Path()
-        path.move(to: stroke.points[0])
-        for pt in stroke.points.dropFirst() {
-            path.addLine(to: pt)
+        let color: Color = stroke.isEraser ? .white : stroke.color
+        for idx in 1..<stroke.points.count {
+            var seg = Path()
+            seg.move(to: stroke.points[idx - 1])
+            seg.addLine(to: stroke.points[idx])
+            let w = idx < stroke.widths.count ? stroke.widths[idx] : (stroke.widths.last ?? 3.0)
+            context.stroke(
+                seg,
+                with: .color(color),
+                style: StrokeStyle(lineWidth: w, lineCap: .round, lineJoin: .round)
+            )
         }
-        let width = stroke.widths.last ?? 3.0
-        context.stroke(
-            path,
-            with: .color(stroke.isEraser ? .white : stroke.color),
-            style: StrokeStyle(lineWidth: width, lineCap: .round, lineJoin: .round)
-        )
     }
 }
 #endif

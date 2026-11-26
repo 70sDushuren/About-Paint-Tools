@@ -2,8 +2,8 @@ use std::env;
 use std::path::PathBuf;
 
 use manga_core::{
-    init_cpff_project, run_tri_app_compatibility_check, CanvasPreset, ProjectInitOptions, SuiteApp,
-    TargetPlatform,
+    init_cpff_project, run_t02_s4_concurrency_soak, run_tri_app_compatibility_check, CanvasPreset,
+    ProjectInitOptions, SuiteApp, TargetPlatform,
 };
 use manga_linux_shell::{LinuxStudioShell, WaylandTabletToolEvent, WaylandTabletTouchAdapter};
 
@@ -63,10 +63,40 @@ fn main() {
                     report.deep_link_handoff_verified,
                     report.combined_ram_budget_mb
                 );
-                return;
             }
             Err(err) => {
                 eprintln!("FAILED [S4 Integration Gate]: {err}");
+                std::process::exit(1);
+            }
+        }
+
+        let soak_parent = std::env::temp_dir().join(format!("manga_t02_s4_soak_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&soak_parent);
+        if let Err(err) = std::fs::create_dir_all(&soak_parent) {
+            eprintln!("FAILED [T0.2-S4 Soak]: {err}");
+            std::process::exit(1);
+        }
+        let opts = ProjectInitOptions::dual_engine_default("SoakVerify", "S4Gate");
+        let soak_result = init_cpff_project(&soak_parent, &opts).and_then(|_| {
+            run_t02_s4_concurrency_soak(&soak_parent.join("SoakVerify"), 100)
+        });
+        let _ = std::fs::remove_dir_all(&soak_parent);
+
+        match soak_result {
+            Ok(soak) => {
+                println!(
+                    "OK [T0.2-S4 Concurrency Soak]: {} rounds passed (S1_reads={}, S2_stamps={}, S3_atomic_saves={}, locked_rejections={}, leaked_tmp={})",
+                    soak.rounds_completed,
+                    soak.manifest_reads_verified,
+                    soak.brush_stamps_generated,
+                    soak.atomic_prose_saves_verified,
+                    soak.locked_overwrite_rejections,
+                    soak.temp_files_remaining
+                );
+                return;
+            }
+            Err(err) => {
+                eprintln!("FAILED [T0.2-S4 Concurrency Soak]: {err}");
                 std::process::exit(1);
             }
         }

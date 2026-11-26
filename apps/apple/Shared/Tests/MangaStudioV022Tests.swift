@@ -105,4 +105,69 @@ final class MangaStudioV022Tests: XCTestCase {
         XCTAssertEqual(PaperThemeKind.allCases.count, 3, "S3 specifies Warm Paper, Sepia, and Night Ink themes")
         XCTAssertEqual(StudioWorkspaceMode.allCases.count, 3)
     }
+
+    func testS1RenamedFolderFallbackDetectionOnDisk() throws {
+        #if canImport(MangaCoreFFI)
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MangaStudioFallback-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        XCTAssertTrue(MangaHubProjectBootstrap.initProject(parentDir: root.path, folderName: "OrigWork", author: "Tester"))
+        let origDir = root.appendingPathComponent("OrigWork")
+        XCTAssertEqual(MangaHubProjectBootstrap.resolvePrjStatus(projectDir: origDir.path), .exactMatch)
+
+        let renamedDir = root.appendingPathComponent("OrigWork-GitCloneCopy")
+        try FileManager.default.moveItem(at: origDir, to: renamedDir)
+        XCTAssertEqual(MangaHubProjectBootstrap.resolvePrjStatus(projectDir: renamedDir.path), .renamedFolderFallback)
+        #else
+        XCTFail("MangaCoreFFI required")
+        #endif
+    }
+
+    func testS2BrushStampingEngineGeneratesDeterministicStamps() {
+        #if canImport(MangaCoreFFI)
+        let samples = [
+            NativeStrokeSample(x: 0, y: 0, pressure: 0.3, altitude: 1.3, azimuth: 0, rollAngle: 0.1, timestampMs: 1, isPredicted: false),
+            NativeStrokeSample(x: 120, y: 40, pressure: 0.9, altitude: 1.2, azimuth: 0, rollAngle: 0.4, timestampMs: 9, isPredicted: false),
+        ]
+        let count1 = MangaBrushDynamics.generateStampCount(presetCode: 0, samples: samples)
+        let count2 = MangaBrushDynamics.generateStampCount(presetCode: 0, samples: samples)
+        XCTAssertGreaterThan(count1, 10)
+        XCTAssertEqual(count1, count2, "Brush stamping must be 100% deterministic for replay")
+        #else
+        XCTFail("MangaCoreFFI required")
+        #endif
+    }
+
+    func testS3AtomicProseSaveAndLockedHumanGuard() throws {
+        #if canImport(MangaCoreFFI)
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MangaStudioNovelAtomic-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let rel = "chapters/ch001/novel/prose/zh-Hans.md"
+        XCTAssertTrue(MangaNovelMetrics.saveProseAtomic(projectDir: root.path, relPath: rel, markdown: "# 终稿", isLocked: false, explicitHumanEdit: true))
+        XCTAssertFalse(MangaNovelMetrics.saveProseAtomic(projectDir: root.path, relPath: rel, markdown: "AI overwrite", isLocked: true, explicitHumanEdit: false))
+        XCTAssertTrue(MangaNovelMetrics.saveProseAtomic(projectDir: root.path, relPath: rel, markdown: "# 人工解锁修订", isLocked: true, explicitHumanEdit: true))
+        #else
+        XCTFail("MangaCoreFFI required")
+        #endif
+    }
+
+    func testT02S4TriApp100RoundConcurrencySoakGateOnMacOS() throws {
+        #if canImport(MangaCoreFFI)
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MangaStudioT02S4-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        XCTAssertTrue(MangaHubProjectBootstrap.initProject(parentDir: root.path, folderName: "T02S4Work", author: "M5Pro"))
+        let projectDir = root.appendingPathComponent("T02S4Work")
+        XCTAssertTrue(MangaSuiteS4Gate.run(projectDir: projectDir.path, soakRounds: 100))
+        #else
+        XCTFail("MangaCoreFFI required")
+        #endif
+    }
 }

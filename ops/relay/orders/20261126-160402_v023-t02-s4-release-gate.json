@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "order_id": "20261126-160402_v023-t02-s4-release-gate",
+  "created_at_utc": "2026-11-26T16:04:02Z",
+  "milestone": "v0.2.3",
+  "title": "Verify v0.2.3 + T0.2-S4 Tri-App 100-Round Concurrency Soak, rebuilt 3-slice XCFramework & 9 live macOS FFI XCTests",
+  "summary": "Added v0.2.3 Rust+C-ABI+Swift features (S1 RenamedFolderFallback, S2 tapered brush stamping, S3 atomic prose save + locked guard) and T0.2-S4 100-round Tri-App concurrency soak gate, wired into Linux CI & 9 live Apple XCTests, and updated all 3 editions of Doc 10.",
+  "steps": [
+    {
+      "action": "env-info"
+    },
+    {
+      "action": "build-rust"
+    },
+    {
+      "action": "xcode-gen"
+    },
+    {
+      "action": "build-mac"
+    },
+    {
+      "action": "test-mac"
+    },
+    {
+      "action": "build-ipad"
+    },
+    {
+      "action": "build-duo"
+    },
+    {
+      "action": "check"
+    }
+  ],
+  "notify": true
+}

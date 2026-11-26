@@ -263,6 +263,21 @@ public struct HubWorkspaceView: View {
                         .foregroundStyle(succeeded ? Color.green : Color.red)
                         .clipShape(Capsule())
                 }
+
+                if let createdPath = lastCreatedPath {
+                    Button {
+                        runT02S4Gate(on: createdPath)
+                    } label: {
+                        Label("Run T0.2-S4 (100x)", systemImage: "checkmark.shield")
+                            .font(.caption.bold())
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(SuiteColorTokens.novelAccent.opacity(0.16))
+                            .foregroundStyle(SuiteColorTokens.novelAccent)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
             Text(bootstrapStatus)
@@ -379,12 +394,27 @@ public struct HubWorkspaceView: View {
         if ok {
             let target = baseURL.appendingPathComponent(folder).path
             lastCreatedPath = target
-            bootstrapStatus = "OK: Rust core initialized CPFF v1.0 project '\(folder).prj' with Git LFS & 5-locale structure."
+            let status = MangaHubProjectBootstrap.resolvePrjStatus(projectDir: target)
+            let statusLabel = status == .exactMatch ? "ExactMatch" : (status == .renamedFolderFallback ? "RenamedFolderFallback" : "Invalid")
+            bootstrapStatus = "OK [\(statusLabel)]: Rust core initialized '\(folder).prj' with Git LFS & 5-locale structure."
         } else {
             bootstrapStatus = "FAIL: Rust core rejected project bootstrap (folder may already exist or path invalid)."
         }
         #else
         lastCreatedSucceeded = false
+        bootstrapStatus = "MangaCoreFFI not linked in preview mode."
+        #endif
+    }
+
+    private func runT02S4Gate(on projectPath: String) {
+        #if canImport(MangaCoreFFI)
+        let res = MangaHubProjectBootstrap.resolvePrjStatus(projectDir: projectPath)
+        let passed = MangaSuiteS4Gate.run(projectDir: projectPath, soakRounds: 100)
+        lastCreatedSucceeded = passed
+        bootstrapStatus = passed
+            ? "OK [T0.2-S4 100x Soak PASS]: resolve=\(res.rawValue), S1/S2/S3 write isolation, 100 atomic prose saves & CoW undo verified."
+            : "FAIL [T0.2-S4 Soak]: Gate failed on \(projectPath)."
+        #else
         bootstrapStatus = "MangaCoreFFI not linked in preview mode."
         #endif
     }

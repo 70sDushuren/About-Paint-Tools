@@ -623,6 +623,112 @@ pub unsafe extern "C" fn manga_novel_count_units(text_utf8: *const c_char) -> us
     crate::novel::count_novel_words(&text).total_units
 }
 
+/// Resolves a CPFF v1.0 `.prj` folder (`S1 v0.2.3`):
+/// returns `1` for exact match, `2` for `RenamedFolderFallback`, or `0` on invalid/missing.
+///
+/// # Safety
+/// `project_dir_utf8` must be null or a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn manga_hub_resolve_prj_status(project_dir_utf8: *const c_char) -> u32 {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    if dir.is_empty() {
+        return 0;
+    }
+    match crate::project::resolve_prj_file(std::path::Path::new(&dir)) {
+        Ok(crate::project::PrjResolution::ExactMatch(_)) => 1,
+        Ok(crate::project::PrjResolution::RenamedFolderFallback { .. }) => 2,
+        Err(_) => 0,
+    }
+}
+
+/// Evaluates deterministic brush stamping count over a stylus point sequence (`S2 v0.2.3`).
+///
+/// # Safety
+/// `points` must point to `count` valid `CMangaStrokePoint` elements (or be null when `count == 0`).
+#[no_mangle]
+pub unsafe extern "C" fn manga_brush_generate_stamp_count(
+    preset_code: u32,
+    points: *const CMangaStrokePoint,
+    count: usize,
+) -> usize {
+    if points.is_null() || count == 0 {
+        return 0;
+    }
+    let presets = crate::brush::starter_brush_presets();
+    let Some(id) = crate::brush::BrushPresetId::from_u32(preset_code) else {
+        return 0;
+    };
+    let raw = unsafe { slice::from_raw_parts(points, count) };
+    let pts: Vec<StrokePoint> = raw
+        .iter()
+        .map(|p| StrokePoint {
+            x: p.x,
+            y: p.y,
+            pressure: p.pressure,
+            altitude: p.altitude,
+            azimuth: p.azimuth,
+            roll_angle: p.roll_angle,
+            timestamp_ms: p.timestamp_ms,
+            is_predicted: p.is_predicted != 0,
+        })
+        .collect();
+    crate::brush::BrushStampingEngine::generate_stamps(&presets[id as usize], &pts).len()
+}
+
+/// Atomically writes light novel prose under `chapters/*/novel/prose/<lang>.md` (`S3 v0.2.3`).
+/// Enforces `SuiteApp::Novel` write ownership and `locked="true"` protection. Returns `1` on success, `0` on rejection.
+///
+/// # Safety
+/// All non-null string pointers must be valid NUL-terminated UTF-8 strings.
+#[no_mangle]
+pub unsafe extern "C" fn manga_novel_save_prose_atomic(
+    project_dir_utf8: *const c_char,
+    rel_path_utf8: *const c_char,
+    markdown_utf8: *const c_char,
+    is_locked: u8,
+    explicit_human_edit: u8,
+) -> u8 {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    let rel = unsafe { cstr_to_string(rel_path_utf8, "") };
+    let body = unsafe { cstr_to_string(markdown_utf8, "") };
+    if dir.is_empty() || rel.is_empty() {
+        return 0;
+    }
+    match crate::novel::write_novel_prose_atomic(
+        std::path::Path::new(&dir),
+        &rel,
+        &body,
+        is_locked != 0,
+        explicit_human_edit != 0,
+    ) {
+        Ok(_) => 1,
+        Err(_) => 0,
+    }
+}
+
+/// Runs the `S4` Tri-App Compatibility Gate plus optional `T0.2-S4` concurrency soak rounds (`soak_rounds`).
+/// Returns `1` if all checks pass, `0` otherwise.
+///
+/// # Safety
+/// `project_dir_utf8` must be null or a valid NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn manga_suite_run_s4_gate(
+    project_dir_utf8: *const c_char,
+    soak_rounds: u32,
+) -> u8 {
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    if dir.is_empty() {
+        return 0;
+    }
+    let path = std::path::Path::new(&dir);
+    let ok = if soak_rounds > 0 {
+        crate::suite::run_t02_s4_concurrency_soak(path, soak_rounds as usize).is_ok()
+    } else {
+        crate::suite::run_tri_app_compatibility_check(path).is_ok()
+    };
+    u8::from(ok)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -773,6 +879,48 @@ mod tests {
 
             let text = CString::new("星光之刃 Starlight Blade").unwrap();
             assert_eq!(manga_novel_count_units(text.as_ptr()), 6);
+        }
+    }
+
+    #[test]
+    fn c_abi_v023_and_t02_s4_soak_endpoints_pass() {
+        unsafe {
+            let parent = std::env::temp_dir().join(format!("manga_v023_ffi_{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&parent);
+            std::fs::create_dir_all(&parent).unwrap();
+
+            let c_parent = CString::new(parent.to_str().unwrap()).unwrap();
+            let c_folder = CString::new("NebulaTest").unwrap();
+            let c_author = CString::new("S4Runner").unwrap();
+            assert_eq!(manga_hub_init_project(c_parent.as_ptr(), c_folder.as_ptr(), c_author.as_ptr()), 1);
+
+            let orig_dir = parent.join("NebulaTest");
+            let c_orig = CString::new(orig_dir.to_str().unwrap()).unwrap();
+            assert_eq!(manga_hub_resolve_prj_status(c_orig.as_ptr()), 1);
+
+            // Rename folder -> must detect RenamedFolderFallback (2)
+            let renamed_dir = parent.join("NebulaTest-RenamedClone");
+            std::fs::rename(&orig_dir, &renamed_dir).unwrap();
+            let c_renamed = CString::new(renamed_dir.to_str().unwrap()).unwrap();
+            assert_eq!(manga_hub_resolve_prj_status(c_renamed.as_ptr()), 2);
+
+            // S2 brush stamping count
+            let pts = [
+                CMangaStrokePoint { x: 0.0, y: 0.0, pressure: 0.5, altitude: 1.3, azimuth: 0.0, roll_angle: 0.0, timestamp_ms: 1.0, is_predicted: 0 },
+                CMangaStrokePoint { x: 100.0, y: 0.0, pressure: 0.9, altitude: 1.3, azimuth: 0.0, roll_angle: 0.0, timestamp_ms: 8.0, is_predicted: 0 },
+            ];
+            assert!(manga_brush_generate_stamp_count(0, pts.as_ptr(), pts.len()) > 10);
+
+            // S3 atomic save + locked guard
+            let rel = CString::new("chapters/ch001/novel/prose/zh-Hans.md").unwrap();
+            let body = CString::new("# 原子保存测试").unwrap();
+            assert_eq!(manga_novel_save_prose_atomic(c_renamed.as_ptr(), rel.as_ptr(), body.as_ptr(), 0, 1), 1);
+            assert_eq!(manga_novel_save_prose_atomic(c_renamed.as_ptr(), rel.as_ptr(), body.as_ptr(), 1, 0), 0);
+
+            // T0.2-S4 100-round Tri-App concurrency soak gate!
+            assert_eq!(manga_suite_run_s4_gate(c_renamed.as_ptr(), 100), 1);
+
+            let _ = std::fs::remove_dir_all(&parent);
         }
     }
 }

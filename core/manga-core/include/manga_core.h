@@ -220,6 +220,32 @@ float manga_brush_sample_radius(uint32_t preset_code, float pressure, float alti
 float manga_brush_zoom_adaptive_rope(float base_screen_px, float viewport_zoom);
 size_t manga_novel_count_units(const char *text_utf8);
 
+/* --- v0.2.3 & T0.2-S4 Tri-App Extended & Concurrency Soak API --- */
+
+typedef enum MangaPrjResolutionStatus {
+    MANGA_PRJ_STATUS_INVALID                 = 0,
+    MANGA_PRJ_STATUS_EXACT_MATCH             = 1,
+    MANGA_PRJ_STATUS_RENAMED_FOLDER_FALLBACK = 2,
+} MangaPrjResolutionStatus;
+
+uint32_t manga_hub_resolve_prj_status(const char *project_dir_utf8);
+
+size_t manga_brush_generate_stamp_count(
+    uint32_t preset_code,
+    const CMangaStrokePoint *points,
+    size_t count
+);
+
+uint8_t manga_novel_save_prose_atomic(
+    const char *project_dir_utf8,
+    const char *rel_path_utf8,
+    const char *markdown_utf8,
+    uint8_t is_locked,
+    uint8_t explicit_human_edit
+);
+
+uint8_t manga_suite_run_s4_gate(const char *project_dir_utf8, uint32_t soak_rounds);
+
 #ifdef __cplusplus
 }
 #endif

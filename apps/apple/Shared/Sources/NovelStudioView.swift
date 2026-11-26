@@ -279,6 +279,19 @@ public struct NovelStudioView: View {
 
                 Spacer()
 
+                Button {
+                    performAtomicDraftSave()
+                } label: {
+                    Label("Atomic Save", systemImage: "checkmark.circle")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(SuiteColorTokens.novelAccent.opacity(0.16))
+                        .foregroundStyle(SuiteColorTokens.novelAccent)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
                 Text("Rust Units: \(rustUnitCount) · ~\(estimatedMinutes) min read")
                     .font(.caption.monospaced().bold())
                     .foregroundStyle(SuiteColorTokens.novelAccent)
@@ -295,6 +308,21 @@ public struct NovelStudioView: View {
                 .frame(maxWidth: 760, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func performAtomicDraftSave() {
+        #if canImport(MangaCoreFFI)
+        let sandbox = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AboutPaintNovelSandbox", isDirectory: true)
+        try? FileManager.default.createDirectory(at: sandbox, withIntermediateDirectories: true)
+        _ = MangaNovelMetrics.saveProseAtomic(
+            projectDir: sandbox.path,
+            relPath: "chapters/\(selectedChapterId)/novel/prose/zh-Hans.md",
+            markdown: proseText,
+            isLocked: false,
+            explicitHumanEdit: true
+        )
+        #endif
     }
 
     private var aiReferenceDrawer: some View {
