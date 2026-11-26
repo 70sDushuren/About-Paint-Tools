@@ -121,7 +121,9 @@ flowchart TD
 | 07. 创作工程文件框架 V1.0（`.prj` / Git） | [07-creative-project-framework-v1.md](./docs/zh-CN/07-creative-project-framework-v1.md) | [07-creative-project-framework-v1.md](./docs/en/07-creative-project-framework-v1.md) |
 | 08. 三独立工具原创 UI 设计与 `vX.Y.Z` 小步规划 | [08-tri-app-ui-design-and-patch-roadmap.md](./docs/zh-CN/08-tri-app-ui-design-and-patch-roadmap.md) | [08-tri-app-ui-design-and-patch-roadmap.md](./docs/en/08-tri-app-ui-design-and-patch-roadmap.md) |
 | 09. Apple MacBook Pro Xcode 与 Xcode Cloud 开发指南 | [09-apple-xcode-and-cloud-dev-guide.md](./docs/zh-CN/09-apple-xcode-and-cloud-dev-guide.md) | [09-apple-xcode-and-cloud-dev-guide.md](./docs/en/09-apple-xcode-and-cloud-dev-guide.md) |
+| 10. 项目开发思路、工程策略、可复用技能与阶段复盘手册 | [10-engineering-retrospective-and-playbook.md](./docs/zh-CN/10-engineering-retrospective-and-playbook.md) | [10-engineering-retrospective-and-playbook.md](./docs/en/10-engineering-retrospective-and-playbook.md) |
 
+- **中英对照综合学习版（含核心双语工程术语词表，每轮 `S4` 定期增补）**：[10-engineering-retrospective-and-playbook-bilingual.md](./docs/bilingual/10-engineering-retrospective-and-playbook-bilingual.md)
 - **可交互 HTML UI 设计稿 Demo**：[`S1 创想空间`](./docs/demos/s1_hub_ui_demo.html) · [`S2 雕龙`](./docs/demos/s2_manga_ui_demo.html) · [`S3 文心`](./docs/demos/s3_novel_ui_demo.html)
 - **Apple Keynote 兼容双语汇报文稿（14 页）**：[简体中文 `.pptx`](./docs/presentations/About-Paint-Tools_Overview_and_Plan_zh-CN.pptx)（[PDF](./docs/presentations/About-Paint-Tools_Overview_and_Plan_zh-CN.pdf)） · [English `.pptx`](./docs/presentations/About-Paint-Tools_Overview_and_Plan_en.pptx)（[PDF](./docs/presentations/About-Paint-Tools_Overview_and_Plan_en.pdf)）
 

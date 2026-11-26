@@ -121,7 +121,9 @@ All project documents are maintained in 1:1 mirrored **English** and **Simplifie
 | 07. Creative Project File Framework V1.0 (`.prj` / Git) | [07-creative-project-framework-v1.md](./docs/en/07-creative-project-framework-v1.md) | [07-creative-project-framework-v1.md](./docs/zh-CN/07-creative-project-framework-v1.md) |
 | 08. Tri-App Original UI Design & `vX.Y.Z` Patch Roadmap | [08-tri-app-ui-design-and-patch-roadmap.md](./docs/en/08-tri-app-ui-design-and-patch-roadmap.md) | [08-tri-app-ui-design-and-patch-roadmap.md](./docs/zh-CN/08-tri-app-ui-design-and-patch-roadmap.md) |
 | 09. Apple MacBook Pro Xcode & Xcode Cloud Guide | [09-apple-xcode-and-cloud-dev-guide.md](./docs/en/09-apple-xcode-and-cloud-dev-guide.md) | [09-apple-xcode-and-cloud-dev-guide.md](./docs/zh-CN/09-apple-xcode-and-cloud-dev-guide.md) |
+| 10. Engineering Philosophy, Strategy, Skills & Living Retrospective | [10-engineering-retrospective-and-playbook.md](./docs/en/10-engineering-retrospective-and-playbook.md) | [10-engineering-retrospective-and-playbook.md](./docs/zh-CN/10-engineering-retrospective-and-playbook.md) |
 
+- **Bilingual Side-by-Side Study Edition (中英对照综合学习版)**: [10-engineering-retrospective-and-playbook-bilingual.md](./docs/bilingual/10-engineering-retrospective-and-playbook-bilingual.md) *(with Core Bilingual Engineering Glossary; updated at every `S4` gate)*
 - **Interactive HTML UI Demos**: [`S1 NoemaDock`](./docs/demos/s1_hub_ui_demo.html) · [`S2 DracoNib`](./docs/demos/s2_manga_ui_demo.html) · [`S3 LitteraCore`](./docs/demos/s3_novel_ui_demo.html)
 - **Apple Keynote-Compatible Bilingual Decks (14 Slides)**: [English `.pptx`](./docs/presentations/About-Paint-Tools_Overview_and_Plan_en.pptx) ([PDF](./docs/presentations/About-Paint-Tools_Overview_and_Plan_en.pdf)) · [简体中文 `.pptx`](./docs/presentations/About-Paint-Tools_Overview_and_Plan_zh-CN.pptx) ([PDF](./docs/presentations/About-Paint-Tools_Overview_and_Plan_zh-CN.pdf))
 
