@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "order_id": "20261127-060959_v100-rc2-fix",
+  "created_at_utc": "2026-11-27T06:09:59Z",
+  "milestone": "v1.0.0-rc2",
+  "title": "Verify Phase 1 v1.0.0-rc2 (Menus + Zero-Overlap UI + MNGA0002 Cold-Restart Persistence + 39 XCTests)",
+  "summary": "Fix PaperThemeKind Picker binding in NovelStudioView.swift to $controller.s3PaperTheme",
+  "steps": [
+    {
+      "action": "env-info"
+    },
+    {
+      "action": "build-rust"
+    },
+    {
+      "action": "xcode-gen"
+    },
+    {
+      "action": "build-mac"
+    },
+    {
+      "action": "test-mac"
+    },
+    {
+      "action": "build-ipad"
+    },
+    {
+      "action": "build-duo"
+    },
+    {
+      "action": "check"
+    }
+  ],
+  "notify": true
+}
