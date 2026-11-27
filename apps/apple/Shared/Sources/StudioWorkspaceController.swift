@@ -2,6 +2,9 @@ import Foundation
 
 #if canImport(SwiftUI)
 import SwiftUI
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 #if canImport(AppKit)
 import AppKit
 #endif
@@ -99,6 +102,14 @@ public enum S2CanvasBackdropKind: String, CaseIterable, Codable, Sendable, Ident
         case .whitePaper: return "White Paper"
         case .transparentLight: return "Checker (Light)"
         case .transparentDark: return "Checker (Dark)"
+        }
+    }
+
+    public var rustBackdropCode: UInt32 {
+        switch self {
+        case .whitePaper: return 0
+        case .transparentLight: return 1
+        case .transparentDark: return 2
         }
     }
 }
@@ -339,7 +350,7 @@ public final class StudioWorkspaceController: ObservableObject {
     @Published public var s2PanOffset: CGSize = .zero { didSet { scheduleAutoSave() } }
     @Published public var s2RotationDeg: Double = 0.0 { didSet { scheduleAutoSave() } }
     @Published public var s2MirrorHorizontal: Bool = false { didSet { scheduleAutoSave() } }
-    @Published public var s2Backdrop: S2CanvasBackdropKind = .whitePaper { didSet { scheduleAutoSave() } }
+    @Published public var s2Backdrop: S2CanvasBackdropKind = .whitePaper { didSet { refreshCompositeImage(); scheduleAutoSave() } }
     @Published public var s2ActiveColor: PersistedRGBA = PersistedRGBA(r: 20, g: 22, b: 28, a: 255) { didSet { scheduleAutoSave() } }
     @Published public var s2RecentColors: [PersistedRGBA] = [
         PersistedRGBA(r: 20, g: 22, b: 28),
@@ -359,7 +370,18 @@ public final class StudioWorkspaceController: ObservableObject {
     @Published public var s2Strokes: [PersistedCanvasStroke] = []
     @Published public var s2UndoneStrokes: [PersistedCanvasStroke] = []
     @Published public var s2HasActiveSelection: Bool = false
+    @Published public var s2SelectionPixelCount: Int = 0
+    @Published public var s2SelectionRectNorm: CGRect? = nil
+    @Published public var s2SelectionLassoNorm: [CGPoint] = []
     @Published public var s2AllocatedTiles: Int = 0
+    @Published public var s2CanvasPixelWidth: Int = 800
+    @Published public var s2CanvasPixelHeight: Int = 1132
+    @Published public var s2CanUndoRaster: Bool = false
+    @Published public var s2CanRedoRaster: Bool = false
+    @Published public var s2EyedropperPreview: PersistedRGBA? = nil
+    #if canImport(CoreGraphics)
+    @Published public var s2CompositeImage: CGImage? = nil
+    #endif
     @Published public var s2PendingFilter: S2FilterActionKind? = nil
     @Published public var s2CanvasActionRevision: Int = 0
 
@@ -447,11 +469,11 @@ public final class StudioWorkspaceController: ObservableObject {
     }
 
     public var canUndoInCurrentContext: Bool {
-        isMangaContext && !s2Strokes.isEmpty
+        isMangaContext && (s2CanUndoRaster || !s2Strokes.isEmpty)
     }
 
     public var canRedoInCurrentContext: Bool {
-        isMangaContext && !s2UndoneStrokes.isEmpty
+        isMangaContext && (s2CanRedoRaster || !s2UndoneStrokes.isEmpty)
     }
 
     public var canAdjustBrushDynamics: Bool {
@@ -509,8 +531,8 @@ public final class StudioWorkspaceController: ObservableObject {
         }
         s2Tool = tool
         if tool == .eraser {
-            s2PresetIndex = 7
-        } else if tool == .brush && s2PresetIndex == 7 {
+            s2PresetIndex = 15
+        } else if tool == .brush && s2PresetIndex == 15 {
             s2PresetIndex = 0
         }
         lastStatusBanner = "Tool: \(tool.displayName)"
@@ -550,6 +572,7 @@ public final class StudioWorkspaceController: ObservableObject {
         guard let idx = selectedCelLayerIndex else { return }
         s2CelLayers[idx][keyPath: keyPath].toggle()
         syncLayerToRust(s2CelLayers[idx])
+        refreshCompositeImage()
         markDirtyAndScheduleSave()
     }
 
@@ -557,6 +580,7 @@ public final class StudioWorkspaceController: ObservableObject {
         guard let idx = selectedCelLayerIndex else { return }
         s2CelLayers[idx].blendMode = mode
         syncLayerToRust(s2CelLayers[idx])
+        refreshCompositeImage()
         markDirtyAndScheduleSave()
     }
 
@@ -565,9 +589,11 @@ public final class StudioWorkspaceController: ObservableObject {
         let name = "Cel_Layer_\(nextNum)"
         #if canImport(MangaCoreFFI)
         if let proj = rustProject {
+            proj.pushUndoSnapshot()
             let newId = proj.addRasterLayer(name: name, blendMode: .normal, clippingMask: false, isReference: false)
             s2CelLayers.append(CelLayerRowItem(id: newId, name: name))
             s2SelectedLayerId = newId
+            refreshCompositeImage()
             markDirtyAndScheduleSave()
             return
         }
@@ -584,12 +610,11 @@ public final class StudioWorkspaceController: ObservableObject {
         var copyId = nextNum
         #if canImport(MangaCoreFFI)
         if let proj = rustProject {
-            copyId = proj.addRasterLayer(
-                name: "\(src.name) Copy",
-                blendMode: src.blendMode,
-                clippingMask: src.clippingMask,
-                isReference: false
-            )
+            proj.pushUndoSnapshot()
+            let dup = proj.duplicateLayer(layerId: src.id)
+            if dup != 0 {
+                copyId = dup
+            }
         }
         #endif
         let cloned = CelLayerRowItem(
@@ -604,39 +629,45 @@ public final class StudioWorkspaceController: ObservableObject {
             opacity: src.opacity
         )
         s2CelLayers.insert(cloned, at: idx + 1)
-        let copiedStrokes = s2Strokes.filter { $0.layerId == src.id }.map { st in
-            PersistedCanvasStroke(
-                layerId: copyId,
-                points: st.points,
-                color: st.color,
-                opacity: st.opacity,
-                isEraser: st.isEraser,
-                tool: st.tool
-            )
-        }
-        s2Strokes.append(contentsOf: copiedStrokes)
         s2SelectedLayerId = copyId
         syncLayerToRust(cloned)
+        refreshCompositeImage()
         markDirtyAndScheduleSave()
     }
 
     public func deleteSelectedLayer() {
         guard canDeleteSelectedLayer, let idx = selectedCelLayerIndex else { return }
-        let removed = s2CelLayers.remove(at: idx)
+        let removed = s2CelLayers[idx]
+        #if canImport(MangaCoreFFI)
+        if let proj = rustProject {
+            proj.pushUndoSnapshot()
+            _ = proj.deleteLayer(layerId: removed.id)
+        }
+        #endif
+        s2CelLayers.remove(at: idx)
         s2Strokes.removeAll { $0.layerId == removed.id }
         let nextIdx = max(0, idx - 1)
         s2SelectedLayerId = s2CelLayers[nextIdx].id
+        refreshCompositeImage()
         markDirtyAndScheduleSave()
     }
 
     public func mergeSelectedLayerDown() {
         guard canMergeSelectedLayerDown, let idx = selectedCelLayerIndex else { return }
-        let upper = s2CelLayers.remove(at: idx)
+        let upper = s2CelLayers[idx]
         let targetId = s2CelLayers[idx - 1].id
+        #if canImport(MangaCoreFFI)
+        if let proj = rustProject {
+            proj.pushUndoSnapshot()
+            _ = proj.mergeLayerDown(layerId: upper.id)
+        }
+        #endif
+        s2CelLayers.remove(at: idx)
         for i in s2Strokes.indices where s2Strokes[i].layerId == upper.id {
             s2Strokes[i].layerId = targetId
         }
         s2SelectedLayerId = targetId
+        refreshCompositeImage()
         markDirtyAndScheduleSave()
     }
 
@@ -644,14 +675,338 @@ public final class StudioWorkspaceController: ObservableObject {
         guard let idx = s2CelLayers.firstIndex(where: { $0.id == id }) else { return }
         let target = up ? idx + 1 : idx - 1
         guard s2CelLayers.indices.contains(target) else { return }
+        #if canImport(MangaCoreFFI)
+        if let proj = rustProject {
+            proj.pushUndoSnapshot()
+            _ = proj.moveLayer(layerId: id, up: up)
+        }
+        #endif
         s2CelLayers.swapAt(idx, target)
+        refreshCompositeImage()
         markDirtyAndScheduleSave()
     }
 
     public func clearCurrentLayer() {
+        #if canImport(MangaCoreFFI)
+        if let proj = rustProject {
+            proj.pushUndoSnapshot()
+            _ = proj.clearLayer(layerId: s2SelectedLayerId)
+        }
+        #endif
         s2Strokes.removeAll { $0.layerId == s2SelectedLayerId }
+        refreshCompositeImage()
         markDirtyAndScheduleSave()
-        dispatchCanvasCommand(.clearCurrentLayer)
+    }
+
+    public func flipSelectedLayer(horizontal: Bool) {
+        #if canImport(MangaCoreFFI)
+        if let proj = rustProject {
+            proj.pushUndoSnapshot()
+            _ = proj.flipLayer(layerId: s2SelectedLayerId, horizontal: horizontal)
+        }
+        #endif
+        refreshCompositeImage()
+        markDirtyAndScheduleSave()
+        lastStatusBanner = horizontal ? "Flipped layer horizontally" : "Flipped layer vertically"
+    }
+
+    // MARK: - v1.0.0-rc3 Real Rust RGBA8 Raster Painting, Bucket, Eyedropper & Selection
+
+    public func refreshCompositeImage() {
+        #if canImport(MangaCoreFFI)
+        if let proj = rustProject {
+            s2CanvasPixelWidth = Int(proj.width)
+            s2CanvasPixelHeight = Int(proj.height)
+            s2AllocatedTiles = proj.allocatedTiles
+            s2CanUndoRaster = proj.canUndoSnapshot
+            s2CanRedoRaster = proj.canRedoSnapshot
+            #if canImport(CoreGraphics)
+            s2CompositeImage = proj.makeCGImage(backdropCode: s2Backdrop.rustBackdropCode)
+            #endif
+        }
+        #endif
+    }
+
+    public func beginRasterUndoCheckpoint() {
+        #if canImport(MangaCoreFFI)
+        rustProject?.pushUndoSnapshot()
+        s2CanUndoRaster = rustProject?.canUndoSnapshot ?? false
+        s2CanRedoRaster = rustProject?.canRedoSnapshot ?? false
+        #endif
+    }
+
+    @discardableResult
+    public func applyRasterSegment(
+        from p0: CGPoint,
+        to p1: CGPoint,
+        radiusPx: Float,
+        hardness: Float,
+        opacity: Float
+    ) -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        let touched: Int
+        switch s2Tool {
+        case .eraser:
+            touched = proj.eraseSegment(
+                layerId: s2SelectedLayerId,
+                x0: Float(p0.x),
+                y0: Float(p0.y),
+                x1: Float(p1.x),
+                y1: Float(p1.y),
+                radiusPx: radiusPx,
+                hardness: hardness,
+                opacity: opacity
+            )
+        case .smudge:
+            touched = proj.smudgeSegment(
+                layerId: s2SelectedLayerId,
+                x0: Float(p0.x),
+                y0: Float(p0.y),
+                x1: Float(p1.x),
+                y1: Float(p1.y),
+                radiusPx: radiusPx,
+                strength: max(0.25, opacity)
+            )
+        case .blur:
+            touched = proj.blurSegment(
+                layerId: s2SelectedLayerId,
+                x0: Float(p0.x),
+                y0: Float(p0.y),
+                x1: Float(p1.x),
+                y1: Float(p1.y),
+                radiusPx: radiusPx,
+                strength: max(0.35, opacity)
+            )
+        default:
+            touched = proj.paintSegment(
+                layerId: s2SelectedLayerId,
+                x0: Float(p0.x),
+                y0: Float(p0.y),
+                x1: Float(p1.x),
+                y1: Float(p1.y),
+                radiusPx: radiusPx,
+                hardness: hardness,
+                opacity: opacity,
+                rgba: (s2ActiveColor.r, s2ActiveColor.g, s2ActiveColor.b, s2ActiveColor.a)
+            )
+        }
+        return touched
+        #else
+        return 0
+        #endif
+    }
+
+    @discardableResult
+    public func applyBucketFill(canvasX: Int, canvasY: Int) -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        let cx = UInt32(max(0, min(Int(proj.width) - 1, canvasX)))
+        let cy = UInt32(max(0, min(Int(proj.height) - 1, canvasY)))
+        proj.pushUndoSnapshot()
+        let filled = proj.closeGapFill(
+            layerId: s2SelectedLayerId,
+            seedX: cx,
+            seedY: cy,
+            rgba: (s2ActiveColor.r, s2ActiveColor.g, s2ActiveColor.b, UInt8(max(1, min(255, Int(round(s2BrushOpacity * 255.0)))))),
+            closeGapPx: UInt8(max(0, min(15, s2BucketCloseGapPx))),
+            expandPx: UInt8(max(0, min(8, s2BucketExpandPx)))
+        )
+        refreshCompositeImage()
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "Bucket filled \(filled) px (gap=\(s2BucketCloseGapPx)px, expand=+\(s2BucketExpandPx)px)"
+        return filled
+        #else
+        return 0
+        #endif
+    }
+
+    @discardableResult
+    public func sampleEyedropper(canvasX: Int, canvasY: Int) -> PersistedRGBA? {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return nil }
+        let cx = UInt32(max(0, min(Int(proj.width) - 1, canvasX)))
+        let cy = UInt32(max(0, min(Int(proj.height) - 1, canvasY)))
+        guard let sampled = proj.sampleEyedropper(x: cx, y: cy) else { return nil }
+        let color: PersistedRGBA
+        if sampled.3 == 0 {
+            color = s2Backdrop == .transparentDark
+                ? PersistedRGBA(r: 44, g: 46, b: 52, a: 255)
+                : PersistedRGBA(r: 255, g: 255, b: 255, a: 255)
+        } else {
+            color = PersistedRGBA(r: sampled.0, g: sampled.1, b: sampled.2, a: 255)
+        }
+        s2EyedropperPreview = color
+        setActiveColor(color)
+        lastStatusBanner = "Eyedropper picked \(color.hexString) at (\(cx), \(cy))"
+        return color
+        #else
+        return nil
+        #endif
+    }
+
+    @discardableResult
+    public func setMarqueeSelection(canvasRect: CGRect, normRect: CGRect) -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        let x0 = UInt32(max(0, min(Int(proj.width), Int(canvasRect.minX.rounded()))))
+        let y0 = UInt32(max(0, min(Int(proj.height), Int(canvasRect.minY.rounded()))))
+        let x1 = UInt32(max(0, min(Int(proj.width), Int(canvasRect.maxX.rounded()))))
+        let y1 = UInt32(max(0, min(Int(proj.height), Int(canvasRect.maxY.rounded()))))
+        let count = proj.setSelectionRect(x0: x0, y0: y0, x1: x1, y1: y1)
+        s2SelectionPixelCount = count
+        s2HasActiveSelection = count > 0
+        s2SelectionRectNorm = count > 0 ? normRect : nil
+        s2SelectionLassoNorm = []
+        lastStatusBanner = count > 0 ? "Marquee selected \(count) px" : "Selection cleared"
+        return count
+        #else
+        s2HasActiveSelection = true
+        s2SelectionRectNorm = normRect
+        return 1
+        #endif
+    }
+
+    @discardableResult
+    public func setLassoSelection(canvasPoints: [CGPoint], normPoints: [CGPoint]) -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject, canvasPoints.count >= 3 else { return 0 }
+        let xs = canvasPoints.map { Float($0.x) }
+        let ys = canvasPoints.map { Float($0.y) }
+        let count = proj.setSelectionLasso(xs: xs, ys: ys)
+        s2SelectionPixelCount = count
+        s2HasActiveSelection = count > 0
+        s2SelectionRectNorm = nil
+        s2SelectionLassoNorm = count > 0 ? normPoints : []
+        lastStatusBanner = count > 0 ? "Lasso selected \(count) px" : "Selection cleared"
+        return count
+        #else
+        s2HasActiveSelection = true
+        s2SelectionLassoNorm = normPoints
+        return 1
+        #endif
+    }
+
+    @discardableResult
+    public func applyMagicWandSelection(canvasX: Int, canvasY: Int) -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        let cx = UInt32(max(0, min(Int(proj.width) - 1, canvasX)))
+        let cy = UInt32(max(0, min(Int(proj.height) - 1, canvasY)))
+        let count = proj.setSelectionMagicWand(
+            seedX: cx,
+            seedY: cy,
+            tolerance: UInt8(max(0, min(255, s2BucketTolerance))),
+            useReference: false
+        )
+        s2SelectionPixelCount = count
+        s2HasActiveSelection = count > 0
+        s2SelectionRectNorm = count > 0 ? CGRect(x: 0.02, y: 0.02, width: 0.96, height: 0.96) : nil
+        s2SelectionLassoNorm = []
+        lastStatusBanner = count > 0 ? "Magic Wand selected \(count) px" : "Magic Wand empty"
+        return count
+        #else
+        return 0
+        #endif
+    }
+
+    public func selectAllCanvas() {
+        #if canImport(MangaCoreFFI)
+        if let proj = rustProject {
+            s2SelectionPixelCount = proj.selectAll()
+        }
+        #endif
+        s2HasActiveSelection = true
+        s2SelectionRectNorm = CGRect(x: 0, y: 0, width: 1, height: 1)
+        s2SelectionLassoNorm = []
+        lastStatusBanner = "Selected entire canvas"
+    }
+
+    public func clearCanvasSelection() {
+        #if canImport(MangaCoreFFI)
+        rustProject?.clearSelection()
+        #endif
+        s2HasActiveSelection = false
+        s2SelectionPixelCount = 0
+        s2SelectionRectNorm = nil
+        s2SelectionLassoNorm = []
+        lastStatusBanner = "Deselected"
+    }
+
+    public func invertCanvasSelection() {
+        #if canImport(MangaCoreFFI)
+        if let proj = rustProject {
+            s2SelectionPixelCount = proj.invertSelection()
+            s2HasActiveSelection = s2SelectionPixelCount > 0
+            lastStatusBanner = "Inverted selection (\(s2SelectionPixelCount) px)"
+        }
+        #endif
+    }
+
+    @discardableResult
+    public func exportCanvasPng(to explicitUrl: URL? = nil, transparentBackground: Bool = false) -> Bool {
+        #if canImport(MangaCoreFFI) && canImport(CoreGraphics) && canImport(ImageIO) && canImport(UniformTypeIdentifiers)
+        guard let proj = rustProject, let data = proj.exportPngData(transparentBackground: transparentBackground) else {
+            return false
+        }
+        if let targetUrl = explicitUrl {
+            do {
+                try data.write(to: targetUrl, options: .atomic)
+                lastStatusBanner = "Exported PNG (\(data.count) B) → \(targetUrl.lastPathComponent)"
+                return true
+            } catch {
+                return false
+            }
+        }
+        #if os(macOS) && canImport(AppKit)
+        let panel = NSSavePanel()
+        panel.title = "Export Canvas PNG"
+        panel.nameFieldStringValue = "\(s3SelectedChapterId)_p001.png"
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                try data.write(to: url, options: .atomic)
+                lastStatusBanner = "Exported PNG → \(url.lastPathComponent)"
+                return true
+            } catch {
+                return false
+            }
+        }
+        #endif
+        #endif
+        return false
+    }
+
+    @discardableResult
+    public func exportCanvasPsd(to explicitUrl: URL? = nil) -> Bool {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return false }
+        let data = proj.exportPsdData()
+        guard !data.isEmpty else { return false }
+        if let targetUrl = explicitUrl {
+            do {
+                try data.write(to: targetUrl, options: .atomic)
+                lastStatusBanner = "Exported PSD (\(data.count) B) → \(targetUrl.lastPathComponent)"
+                return true
+            } catch {
+                return false
+            }
+        }
+        #if os(macOS) && canImport(AppKit)
+        let panel = NSSavePanel()
+        panel.title = "Export Adobe PSD (8BPS)"
+        panel.nameFieldStringValue = "\(s3SelectedChapterId)_p001.psd"
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                try data.write(to: url, options: .atomic)
+                lastStatusBanner = "Exported PSD → \(url.lastPathComponent)"
+                return true
+            } catch {
+                return false
+            }
+        }
+        #endif
+        #endif
+        return false
     }
 
     public func dispatchCanvasCommand(_ cmd: CanvasMenuCommand) {
@@ -662,6 +1017,8 @@ public final class StudioWorkspaceController: ObservableObject {
             performUndoStroke()
         case .redo:
             performRedoStroke()
+        case .clearCurrentLayer:
+            clearCurrentLayer()
         case .addLayer:
             addLayer()
         case .duplicateLayer:
@@ -670,37 +1027,65 @@ public final class StudioWorkspaceController: ObservableObject {
             deleteSelectedLayer()
         case .mergeLayerDown:
             mergeSelectedLayerDown()
+        case .flipLayerHorizontal:
+            flipSelectedLayer(horizontal: true)
+        case .flipLayerVertical:
+            flipSelectedLayer(horizontal: false)
         case .deselect:
-            s2HasActiveSelection = false
+            clearCanvasSelection()
         case .selectAll:
-            s2HasActiveSelection = true
+            selectAllCanvas()
+        case .invertSelection:
+            invertCanvasSelection()
+        case .exportPng(let url):
+            _ = exportCanvasPng(to: url, transparentBackground: s2Backdrop != .whitePaper)
+        case .exportPsd(let url):
+            _ = exportCanvasPsd(to: url)
+        case .applyFilter(let fx):
+            s2PendingFilter = fx
         default:
             break
         }
     }
 
     public func performUndoStroke() {
-        guard let last = s2Strokes.popLast() else { return }
-        s2UndoneStrokes.append(last)
+        var didUndo = false
         #if canImport(MangaCoreFFI)
+        if let proj = rustProject, proj.undoSnapshot() {
+            didUndo = true
+        }
         if let engine = rustCanvas {
             _ = engine.undo()
-            s2AllocatedTiles = engine.allocatedTiles
         }
         #endif
-        markDirtyAndScheduleSave()
+        if let last = s2Strokes.popLast() {
+            s2UndoneStrokes.append(last)
+            didUndo = true
+        }
+        if didUndo {
+            refreshCompositeImage()
+            markDirtyAndScheduleSave()
+        }
     }
 
     public func performRedoStroke() {
-        guard let restored = s2UndoneStrokes.popLast() else { return }
-        s2Strokes.append(restored)
+        var didRedo = false
         #if canImport(MangaCoreFFI)
+        if let proj = rustProject, proj.redoSnapshot() {
+            didRedo = true
+        }
         if let engine = rustCanvas {
             _ = engine.redo()
-            s2AllocatedTiles = engine.allocatedTiles
         }
         #endif
-        markDirtyAndScheduleSave()
+        if let restored = s2UndoneStrokes.popLast() {
+            s2Strokes.append(restored)
+            didRedo = true
+        }
+        if didRedo {
+            refreshCompositeImage()
+            markDirtyAndScheduleSave()
+        }
     }
 
     public func syncLayerToRust(_ item: CelLayerRowItem) {
@@ -1023,9 +1408,8 @@ public final class StudioWorkspaceController: ObservableObject {
         #if canImport(MangaCoreFFI)
         if rustCanvas == nil {
             rustCanvas = MangaCanvasEngine(preset: s2CanvasPreset)
-            s2AllocatedTiles = rustCanvas?.allocatedTiles ?? 0
         }
-        if rustProject == nil, let proj = MangaProjectEngine(preset: s2CanvasPreset) {
+        if rustProject == nil, let proj = MangaProjectEngine(width: UInt32(s2CanvasPixelWidth), height: UInt32(s2CanvasPixelHeight)) {
             let loadedMnga = proj.loadMngaV2(
                 projectDir: activeProjectDir,
                 relPath: "chapters/\(s3SelectedChapterId)/manuscript/p001.mnga"
@@ -1063,6 +1447,7 @@ public final class StudioWorkspaceController: ObservableObject {
             }
             rustProject = proj
         }
+        refreshCompositeImage()
         #else
         if s2CelLayers.isEmpty {
             s2CelLayers = [

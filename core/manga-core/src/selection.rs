@@ -18,6 +18,14 @@ impl SelectionMask {
         }
     }
 
+    pub fn all(width: u32, height: u32) -> Self {
+        Self {
+            width,
+            height,
+            mask: vec![true; (width as usize).saturating_mul(height as usize)],
+        }
+    }
+
     pub fn from_rect(width: u32, height: u32, x0: u32, y0: u32, x1: u32, y1: u32) -> Self {
         let mut sel = Self::empty(width, height);
         let min_x = x0.min(x1).min(width);
@@ -32,6 +40,112 @@ impl SelectionMask {
             }
         }
         sel
+    }
+
+    /// Contiguous 4-connected Magic Wand selection from `(seed_x, seed_y)` over composite pixels
+    /// (or reference lineart layers when `use_reference == true`) within `tolerance` per channel.
+    pub fn from_magic_wand(
+        stack: &crate::layer::LayerStack,
+        seed_x: u32,
+        seed_y: u32,
+        tolerance: u8,
+        use_reference: bool,
+    ) -> Self {
+        let w = stack.width;
+        let h = stack.height;
+        let mut sel = Self::empty(w, h);
+        if seed_x >= w || seed_y >= h || w == 0 || h == 0 {
+            return sel;
+        }
+        let ref_ids = if use_reference {
+            stack.reference_layer_ids()
+        } else {
+            Vec::new()
+        };
+        let sample_px = |x: u32, y: u32| -> [u8; 4] {
+            if use_reference && !ref_ids.is_empty() {
+                let mut acc = [0u8, 0, 0, 0];
+                for &rid in &ref_ids {
+                    if let Some(l) = stack.get(rid) {
+                        let p = l.sample_display_pixel(x, y);
+                        if p[3] > 0 {
+                            acc = crate::layer::blend_rgba(acc, p, crate::layer::BlendMode::Normal);
+                        }
+                    }
+                }
+                acc
+            } else {
+                stack.composite_pixel(x, y)
+            }
+        };
+
+        let target = sample_px(seed_x, seed_y);
+        let tol = i32::from(tolerance);
+        let matches = |p: [u8; 4]| -> bool {
+            (i32::from(p[0]) - i32::from(target[0])).abs() <= tol
+                && (i32::from(p[1]) - i32::from(target[1])).abs() <= tol
+                && (i32::from(p[2]) - i32::from(target[2])).abs() <= tol
+                && (i32::from(p[3]) - i32::from(target[3])).abs() <= tol
+        };
+
+        let uw = w as usize;
+        let mut visited = vec![false; uw * (h as usize)];
+        let mut queue = std::collections::VecDeque::with_capacity(1024);
+        let start_idx = seed_y as usize * uw + seed_x as usize;
+        visited[start_idx] = true;
+        sel.mask[start_idx] = true;
+        queue.push_back((seed_x, seed_y));
+
+        while let Some((cx, cy)) = queue.pop_front() {
+            let neighbors = [
+                (cx.wrapping_sub(1), cy, cx > 0),
+                (cx + 1, cy, cx + 1 < w),
+                (cx, cy.wrapping_sub(1), cy > 0),
+                (cx, cy + 1, cy + 1 < h),
+            ];
+            for (nx, ny, ok) in neighbors {
+                if !ok {
+                    continue;
+                }
+                let idx = ny as usize * uw + nx as usize;
+                if visited[idx] {
+                    continue;
+                }
+                visited[idx] = true;
+                if matches(sample_px(nx, ny)) {
+                    sel.mask[idx] = true;
+                    queue.push_back((nx, ny));
+                }
+            }
+        }
+        sel
+    }
+
+    /// Returns axis-aligned bounding box `(min_x, min_y, max_x, max_y)` of selected pixels, if non-empty.
+    pub fn bounds(&self) -> Option<(u32, u32, u32, u32)> {
+        let mut min_x = u32::MAX;
+        let mut min_y = u32::MAX;
+        let mut max_x = 0u32;
+        let mut max_y = 0u32;
+        let mut found = false;
+        let w = self.width as usize;
+        for y in 0..self.height {
+            let row = y as usize * w;
+            for x in 0..self.width {
+                if self.mask[row + x as usize] {
+                    found = true;
+                    min_x = min_x.min(x);
+                    min_y = min_y.min(y);
+                    max_x = max_x.max(x + 1);
+                    max_y = max_y.max(y + 1);
+                }
+            }
+        }
+        if found {
+            Some((min_x, min_y, max_x, max_y))
+        } else {
+            None
+        }
     }
 
     /// Rasterizes a closed freehand lasso polygon using deterministic even-odd ray-casting.

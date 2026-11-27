@@ -1,4 +1,13 @@
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
+#if canImport(ImageIO)
+import ImageIO
+#endif
+#if canImport(UniformTypeIdentifiers)
+import UniformTypeIdentifiers
+#endif
 
 /// Hardware-native stylus/touch sample mirrored 1:1 with `manga_core::StrokePoint`
 /// and shared across iPadOS (UIKit), macOS Touch (AppKit), and iPhone Duo.
@@ -42,7 +51,7 @@ public enum CanvasPresetKind: UInt32, CaseIterable, Sendable {
     case illustration4K = 4
 }
 
-/// Swift-side mirror of `MangaBlendMode` in `core/manga-core/include/manga_core.h`.
+/// Swift-side mirror of all 22 ibisPaint-compatible `BlendMode` values in Rust `layer.rs`.
 public enum LayerBlendMode: UInt32, CaseIterable, Sendable {
     case normal = 0
     case multiply = 1
@@ -57,6 +66,15 @@ public enum LayerBlendMode: UInt32, CaseIterable, Sendable {
     case colorBurn = 10
     case colorDodge = 11
     case add = 12
+    case difference = 13
+    case exclusion = 14
+    case vividLight = 15
+    case darkerColor = 16
+    case lighterColor = 17
+    case hue = 18
+    case saturation = 19
+    case color = 20
+    case luminosity = 21
 
     public var displayName: String {
         switch self {
@@ -73,6 +91,15 @@ public enum LayerBlendMode: UInt32, CaseIterable, Sendable {
         case .colorBurn: return "Color Burn"
         case .colorDodge: return "Color Dodge"
         case .add: return "Add (Glow)"
+        case .difference: return "Difference"
+        case .exclusion: return "Exclusion"
+        case .vividLight: return "Vivid Light"
+        case .darkerColor: return "Darker Color"
+        case .lighterColor: return "Lighter Color"
+        case .hue: return "Hue"
+        case .saturation: return "Saturation"
+        case .color: return "Color"
+        case .luminosity: return "Luminosity"
         }
     }
 }
@@ -287,9 +314,9 @@ public enum SuiteSharedWorkspace {
     }
 
     public static func bootstrapDefaultWorkspaceIfNeeded() -> String {
-        let parent = FileManager.default.temporaryDirectory
-            .appendingPathComponent("AboutPaintLiveWorkspace", isDirectory: true)
-        let projectDir = parent.appendingPathComponent("StarlightLive", isDirectory: true).path
+        let projectUrl = URL(fileURLWithPath: defaultProjectDir, isDirectory: true)
+        let parent = projectUrl.deletingLastPathComponent()
+        let projectDir = projectUrl.path
         try? FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
         #if canImport(MangaCoreFFI)
         if MangaHubProjectBootstrap.resolvePrjStatus(projectDir: projectDir) == .invalid {
@@ -978,13 +1005,25 @@ public final class MangaProjectEngine {
         self.handle = ptr
     }
 
+    public init?(width: UInt32, height: UInt32) {
+        guard let ptr = manga_project_create_custom(width, height) else {
+            return nil
+        }
+        self.handle = ptr
+    }
+
     deinit {
         manga_project_destroy(handle)
     }
 
+    public var width: UInt32 { manga_project_width(handle) }
+    public var height: UInt32 { manga_project_height(handle) }
+    public var allocatedTiles: Int { Int(manga_project_allocated_tiles(handle)) }
     public var layerCount: Int { Int(manga_project_layer_count(handle)) }
     public var vectorStrokeCount: Int { Int(manga_project_vector_stroke_count(handle)) }
     public var panelCount: Int { Int(manga_project_panel_count(handle)) }
+    public var canUndoSnapshot: Bool { manga_project_can_undo_snapshot(handle) != 0 }
+    public var canRedoSnapshot: Bool { manga_project_can_redo_snapshot(handle) != 0 }
 
     @discardableResult
     public func addRasterLayer(
@@ -1174,6 +1213,254 @@ public final class MangaProjectEngine {
                 manga_project_load_mnga_v2(handle, cDir, cRel) != 0
             }
         }
+    }
+
+    // MARK: - v1.0.0-rc3 Phase 2: Real Rust RGBA8 Raster Painting, Compositing, CRUD & Export
+
+    public func pushUndoSnapshot() {
+        manga_project_push_undo_snapshot(handle)
+    }
+
+    @discardableResult
+    public func undoSnapshot() -> Bool {
+        manga_project_undo_snapshot(handle) != 0
+    }
+
+    @discardableResult
+    public func redoSnapshot() -> Bool {
+        manga_project_redo_snapshot(handle) != 0
+    }
+
+    @discardableResult
+    public func paintSegment(
+        layerId: UInt64,
+        x0: Float,
+        y0: Float,
+        x1: Float,
+        y1: Float,
+        radiusPx: Float,
+        hardness: Float,
+        opacity: Float,
+        rgba: (UInt8, UInt8, UInt8, UInt8)
+    ) -> Int {
+        Int(
+            manga_project_paint_segment(
+                handle,
+                layerId,
+                x0,
+                y0,
+                x1,
+                y1,
+                radiusPx,
+                hardness,
+                opacity,
+                rgba.0,
+                rgba.1,
+                rgba.2,
+                rgba.3
+            )
+        )
+    }
+
+    @discardableResult
+    public func eraseSegment(
+        layerId: UInt64,
+        x0: Float,
+        y0: Float,
+        x1: Float,
+        y1: Float,
+        radiusPx: Float,
+        hardness: Float,
+        opacity: Float
+    ) -> Int {
+        Int(
+            manga_project_erase_segment(
+                handle,
+                layerId,
+                x0,
+                y0,
+                x1,
+                y1,
+                radiusPx,
+                hardness,
+                opacity
+            )
+        )
+    }
+
+    @discardableResult
+    public func smudgeSegment(
+        layerId: UInt64,
+        x0: Float,
+        y0: Float,
+        x1: Float,
+        y1: Float,
+        radiusPx: Float,
+        strength: Float
+    ) -> Int {
+        Int(manga_project_smudge_segment(handle, layerId, x0, y0, x1, y1, radiusPx, strength))
+    }
+
+    @discardableResult
+    public func blurSegment(
+        layerId: UInt64,
+        x0: Float,
+        y0: Float,
+        x1: Float,
+        y1: Float,
+        radiusPx: Float,
+        strength: Float
+    ) -> Int {
+        Int(manga_project_blur_segment(handle, layerId, x0, y0, x1, y1, radiusPx, strength))
+    }
+
+    public func sampleEyedropper(x: UInt32, y: UInt32) -> (UInt8, UInt8, UInt8, UInt8)? {
+        var r: UInt8 = 0
+        var g: UInt8 = 0
+        var b: UInt8 = 0
+        var a: UInt8 = 0
+        guard manga_project_eyedropper_rgba(handle, x, y, &r, &g, &b, &a) != 0 else {
+            return nil
+        }
+        return (r, g, b, a)
+    }
+
+    public func compositeRGBA(backdropCode: UInt32) -> Data {
+        let w = Int(width)
+        let h = Int(height)
+        guard w > 0, h > 0 else { return Data() }
+        let byteCount = w * h * 4
+        var data = Data(count: byteCount)
+        let written = data.withUnsafeMutableBytes { rawBuf -> Int in
+            guard let ptr = rawBuf.bindMemory(to: UInt8.self).baseAddress else { return 0 }
+            return Int(manga_project_composite_rgba(handle, backdropCode, ptr, byteCount))
+        }
+        return written == byteCount ? data : Data()
+    }
+
+    #if canImport(CoreGraphics)
+    public func makeCGImage(backdropCode: UInt32) -> CGImage? {
+        let w = Int(width)
+        let h = Int(height)
+        guard w > 0, h > 0 else { return nil }
+        let rgba = compositeRGBA(backdropCode: backdropCode)
+        guard rgba.count == w * h * 4,
+              let provider = CGDataProvider(data: rgba as CFData),
+              let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)
+        else {
+            return nil
+        }
+        let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue)
+        return CGImage(
+            width: w,
+            height: h,
+            bitsPerComponent: 8,
+            bitsPerPixel: 32,
+            bytesPerRow: w * 4,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo,
+            provider: provider,
+            decode: nil,
+            shouldInterpolate: true,
+            intent: .defaultIntent
+        )
+    }
+    #endif
+
+    #if canImport(CoreGraphics) && canImport(ImageIO) && canImport(UniformTypeIdentifiers)
+    public func exportPngData(transparentBackground: Bool = false) -> Data? {
+        guard let cgImage = makeCGImage(backdropCode: transparentBackground ? 3 : 0) else {
+            return nil
+        }
+        let outData = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(
+            outData as CFMutableData,
+            UTType.png.identifier as CFString,
+            1,
+            nil
+        ) else {
+            return nil
+        }
+        CGImageDestinationAddImage(dest, cgImage, nil)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return outData as Data
+    }
+    #endif
+
+    public func exportPsdData() -> Data {
+        let needed = Int(manga_project_export_psd_bytes(handle, nil, 0))
+        guard needed > 0 else { return Data() }
+        var data = Data(count: needed)
+        let written = data.withUnsafeMutableBytes { rawBuf -> Int in
+            guard let ptr = rawBuf.bindMemory(to: UInt8.self).baseAddress else { return 0 }
+            return Int(manga_project_export_psd_bytes(handle, ptr, needed))
+        }
+        return written == needed ? data : Data()
+    }
+
+    @discardableResult
+    public func duplicateLayer(layerId: UInt64) -> UInt64 {
+        manga_project_duplicate_layer(handle, layerId)
+    }
+
+    @discardableResult
+    public func deleteLayer(layerId: UInt64) -> Bool {
+        manga_project_delete_layer(handle, layerId) != 0
+    }
+
+    @discardableResult
+    public func mergeLayerDown(layerId: UInt64) -> UInt64 {
+        manga_project_merge_layer_down(handle, layerId)
+    }
+
+    @discardableResult
+    public func moveLayer(layerId: UInt64, up: Bool) -> Bool {
+        manga_project_move_layer(handle, layerId, up ? 1 : 0) != 0
+    }
+
+    @discardableResult
+    public func clearLayer(layerId: UInt64) -> Bool {
+        manga_project_clear_layer(handle, layerId) != 0
+    }
+
+    @discardableResult
+    public func flipLayer(layerId: UInt64, horizontal: Bool) -> Bool {
+        manga_project_flip_layer(handle, layerId, horizontal ? 1 : 0) != 0
+    }
+
+    @discardableResult
+    public func setSelectionRect(x0: UInt32, y0: UInt32, x1: UInt32, y1: UInt32) -> Int {
+        Int(manga_project_selection_set_rect(handle, x0, y0, x1, y1))
+    }
+
+    @discardableResult
+    public func setSelectionLasso(xs: [Float], ys: [Float]) -> Int {
+        let count = min(xs.count, ys.count)
+        guard count >= 3 else { return 0 }
+        return xs.withUnsafeBufferPointer { xBuf in
+            ys.withUnsafeBufferPointer { yBuf in
+                Int(manga_project_selection_set_lasso(handle, xBuf.baseAddress, yBuf.baseAddress, count))
+            }
+        }
+    }
+
+    @discardableResult
+    public func setSelectionMagicWand(seedX: UInt32, seedY: UInt32, tolerance: UInt8 = 24, useReference: Bool = false) -> Int {
+        Int(manga_project_selection_magic_wand(handle, seedX, seedY, tolerance, useReference ? 1 : 0))
+    }
+
+    @discardableResult
+    public func selectAll() -> Int {
+        Int(manga_project_selection_select_all(handle))
+    }
+
+    public func clearSelection() {
+        manga_project_selection_clear(handle)
+    }
+
+    @discardableResult
+    public func invertSelection() -> Int {
+        Int(manga_project_selection_invert(handle))
     }
 }
 

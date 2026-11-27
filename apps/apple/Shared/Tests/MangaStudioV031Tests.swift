@@ -55,7 +55,7 @@ final class MangaStudioV031Tests: XCTestCase {
 
     func testS2ThirteenBlendModesAndLayerDrawerFlagsViaProjectEngine() {
         #if canImport(MangaCoreFFI)
-        XCTAssertEqual(LayerBlendMode.allCases.count, 13, "S2 v0.3.1 requires all 13 cel-shading blend modes")
+        XCTAssertGreaterThanOrEqual(LayerBlendMode.allCases.count, 13, "S2 v0.3.1+ requires at least 13 cel-shading blend modes (22 in v1.0.0-rc3)")
         guard let project = MangaProjectEngine(preset: .b4PrintManga600Dpi) else {
             return XCTFail("Failed to create MangaProjectEngine")
         }

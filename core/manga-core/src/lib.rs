@@ -27,6 +27,7 @@ pub mod platform;
 pub mod preset;
 pub mod project;
 pub mod project_init;
+pub mod raster_ops;
 pub mod ruler;
 pub mod screentone;
 pub mod selection;
@@ -88,6 +89,10 @@ pub use project::{
     CPFF_SCHEMA_VERSION, CPFF_XML_NAMESPACE,
 };
 pub use project_init::{init_cpff_project, ProjectInitOptions};
+pub use raster_ops::{
+    blur_stroke_segment_rgba, close_gap_fill_with_selection, composite_stack_rgba,
+    erase_stroke_segment_rgba, paint_stroke_segment_rgba, smudge_stroke_segment_rgba,
+};
 pub use ruler::RulerKind;
 pub use screentone::{ScreentoneSpec, TonePattern};
 pub use selection::SelectionMask;

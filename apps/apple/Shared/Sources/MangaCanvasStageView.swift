@@ -14,6 +14,7 @@ public struct BrushPresetDescriptor: Identifiable, Sendable {
     public let trackBadge: String
     public let defaultSize: Double
     public let baseOpacity: Double
+    public let hardness: Float
     public let isEraser: Bool
 
     public init(
@@ -22,6 +23,7 @@ public struct BrushPresetDescriptor: Identifiable, Sendable {
         trackBadge: String,
         defaultSize: Double = 6.0,
         baseOpacity: Double = 1.0,
+        hardness: Float = 0.92,
         isEraser: Bool = false
     ) {
         self.id = id
@@ -29,12 +31,13 @@ public struct BrushPresetDescriptor: Identifiable, Sendable {
         self.trackBadge = trackBadge
         self.defaultSize = defaultSize
         self.baseOpacity = baseOpacity
+        self.hardness = hardness
         self.isEraser = isEraser
     }
 }
 
 extension LayerBlendMode {
-    /// Maps all 13 Rust `BlendMode` values to SwiftUI `GraphicsContext.BlendMode`.
+    /// Maps all 22 Rust `BlendMode` values to SwiftUI `GraphicsContext.BlendMode`.
     public var swiftUIBlendMode: GraphicsContext.BlendMode {
         switch self {
         case .normal: return .normal
@@ -50,32 +53,56 @@ extension LayerBlendMode {
         case .colorBurn: return .colorBurn
         case .colorDodge: return .colorDodge
         case .add: return .plusLighter
+        case .difference: return .difference
+        case .exclusion: return .exclusion
+        case .vividLight: return .hardLight
+        case .darkerColor: return .darken
+        case .lighterColor: return .lighten
+        case .hue: return .hue
+        case .saturation: return .saturation
+        case .color: return .color
+        case .luminosity: return .luminosity
         }
     }
 }
 
-/// `S2 v1.0.0-rc2` — `雕龙 / DracoNib` ibisPaint-aligned Studio Stage:
-/// - Bound 100% to `StudioWorkspaceController` (zero state loss on tool switch or app restart).
-/// - Zero-overlap responsive contextual top property bar synced 1:1 with macOS Menu Bar.
-/// - Clean left ibisPaint-style Tool Rail + Size/Opacity/Color side caliper (no overlapping canvas text!).
+/// `S2 v1.0.0-rc3` — `雕龙 / DracoNib` ibisPaint-aligned Real RGBA8 Raster Studio Stage:
+/// - Real Rust `LayerStack` RGBA8 pixel compositing (`CGImage`) with 22 blend modes & clipping masks.
+/// - 16 ibisPaint brushes + Force Fade + Rope Stabilizer + real transparent Eraser / Smudge / Blur.
+/// - Live interactive Close-Gap Bucket Fill, Eyedropper loupe, Marquee / Lasso / Magic Wand selections.
 public struct MangaCanvasStageView: View {
     @ObservedObject public var controller: StudioWorkspaceController
     public let layout: WorkspaceLayoutHintKind
 
-    @State private var activeStroke: PersistedCanvasStroke?
-    @State private var canvasDimensions: String = "6071 × 8598 (B4 600DPI)"
+    @State private var lastDragCanvasPoint: CGPoint?
+    @State private var stabilizedPoint: CGPoint?
+    @State private var strokePointCount: Int = 0
+    @State private var dragStartNorm: CGPoint?
+    @State private var dragCurrentNorm: CGPoint?
+    @State private var activeLassoNorm: [CGPoint] = []
+    @State private var activeLassoCanvas: [CGPoint] = []
+    @State private var eyedropperLoupePos: CGPoint?
+    @State private var pinchBaseZoom: Double?
+    @State private var canvasDimensions: String = "800 × 1132 (B4 Live RGBA8)"
     @State private var statusLine: String = "Ready"
-    @State private var showColorPopover: Bool = false
 
     private let starterPresets: [BrushPresetDescriptor] = [
-        BrushPresetDescriptor(id: 0, name: "G-Pen (Hard)", trackBadge: "Ink", defaultSize: 6.0),
-        BrushPresetDescriptor(id: 1, name: "Maru-Pen (Fine)", trackBadge: "Fine", defaultSize: 3.5),
-        BrushPresetDescriptor(id: 2, name: "Dip Pen (Soft)", trackBadge: "Ink", defaultSize: 7.5),
-        BrushPresetDescriptor(id: 3, name: "Blue Pencil 2B", trackBadge: "Sketch", defaultSize: 5.0, baseOpacity: 0.72),
-        BrushPresetDescriptor(id: 4, name: "Flat Cel Marker", trackBadge: "Cel", defaultSize: 18.0),
-        BrushPresetDescriptor(id: 5, name: "Soft Airbrush", trackBadge: "Air", defaultSize: 28.0, baseOpacity: 0.35),
-        BrushPresetDescriptor(id: 6, name: "Watercolor Blend", trackBadge: "Wet", defaultSize: 20.0, baseOpacity: 0.58),
-        BrushPresetDescriptor(id: 7, name: "Vector / Pixel Eraser", trackBadge: "Clean", defaultSize: 16.0, isEraser: true),
+        BrushPresetDescriptor(id: 0, name: "G-Pen (Hard)", trackBadge: "Ink", defaultSize: 6.0, baseOpacity: 1.0, hardness: 0.96),
+        BrushPresetDescriptor(id: 1, name: "Maru-Pen (Fine)", trackBadge: "Fine", defaultSize: 3.5, baseOpacity: 1.0, hardness: 0.98),
+        BrushPresetDescriptor(id: 2, name: "Dip Pen (Soft)", trackBadge: "Ink", defaultSize: 7.5, baseOpacity: 0.95, hardness: 0.80),
+        BrushPresetDescriptor(id: 3, name: "Felt Tip (Hard)", trackBadge: "Pen", defaultSize: 10.0, baseOpacity: 1.0, hardness: 0.95),
+        BrushPresetDescriptor(id: 4, name: "Felt Tip (Soft)", trackBadge: "Pen", defaultSize: 12.0, baseOpacity: 0.90, hardness: 0.65),
+        BrushPresetDescriptor(id: 5, name: "Pencil 2B", trackBadge: "Sketch", defaultSize: 5.0, baseOpacity: 0.68, hardness: 0.55),
+        BrushPresetDescriptor(id: 6, name: "Pencil 6B", trackBadge: "Sketch", defaultSize: 8.0, baseOpacity: 0.82, hardness: 0.45),
+        BrushPresetDescriptor(id: 7, name: "Charcoal Grain", trackBadge: "Dry", defaultSize: 14.0, baseOpacity: 0.72, hardness: 0.35),
+        BrushPresetDescriptor(id: 8, name: "Flat Cel Marker", trackBadge: "Cel", defaultSize: 20.0, baseOpacity: 1.0, hardness: 0.98),
+        BrushPresetDescriptor(id: 9, name: "Round Brush", trackBadge: "Paint", defaultSize: 18.0, baseOpacity: 0.88, hardness: 0.75),
+        BrushPresetDescriptor(id: 10, name: "Airbrush (Soft)", trackBadge: "Air", defaultSize: 36.0, baseOpacity: 0.25, hardness: 0.08),
+        BrushPresetDescriptor(id: 11, name: "Airbrush (Triangle)", trackBadge: "Air", defaultSize: 28.0, baseOpacity: 0.35, hardness: 0.20),
+        BrushPresetDescriptor(id: 12, name: "Watercolor Bleed", trackBadge: "Wet", defaultSize: 22.0, baseOpacity: 0.52, hardness: 0.30),
+        BrushPresetDescriptor(id: 13, name: "Oil Paint (Rough)", trackBadge: "Paint", defaultSize: 24.0, baseOpacity: 0.92, hardness: 0.68),
+        BrushPresetDescriptor(id: 14, name: "Pixel Art 1px", trackBadge: "Dot", defaultSize: 2.0, baseOpacity: 1.0, hardness: 1.0),
+        BrushPresetDescriptor(id: 15, name: "Soft / Hard Eraser", trackBadge: "Clean", defaultSize: 18.0, baseOpacity: 1.0, hardness: 0.88, isEraser: true),
     ]
 
     public init(
@@ -114,6 +141,7 @@ public struct MangaCanvasStageView: View {
                         onClearLayer: { controller.clearCurrentLayer() },
                         onUpdateLayer: { item in
                             controller.syncLayerToRust(item)
+                            controller.refreshCompositeImage()
                             controller.markDirtyAndScheduleSave()
                         }
                     )
@@ -401,36 +429,91 @@ public struct MangaCanvasStageView: View {
         .background(SuiteColorTokens.mangaPanel)
     }
 
-    // MARK: - Clean Drawable Canvas Viewport (Zero Overlapping Debug Overlays)
+    // MARK: - Real Rust RGBA8 Composited Canvas Viewport (Zero Overlapping Debug Overlays)
+
+    private var canvasAspectRatio: CGFloat {
+        let w = CGFloat(max(1, controller.s2CanvasPixelWidth))
+        let h = CGFloat(max(1, controller.s2CanvasPixelHeight))
+        return w / h
+    }
 
     private var canvasViewport: some View {
-        ZStack {
-            SuiteColorTokens.mangaCharcoal
-
+        GeometryReader { outerGeo in
             ZStack {
-                canvasBackdropView
+                SuiteColorTokens.mangaCharcoal
 
-                Canvas { context, size in
-                    renderAllCelLayers(in: &context)
-                    renderActiveRulerGuide(in: &context, size: size)
+                ZStack {
+                    canvasBackdropView
+
+                    #if canImport(CoreGraphics)
+                    if let cgImage = controller.s2CompositeImage {
+                        Image(decorative: cgImage, scale: 1.0)
+                            .resizable()
+                            .interpolation(.medium)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    #endif
+
+                    // Vector overlay strictly for active ruler guides, marching-ants selection & eyedropper loupe
+                    Canvas { context, size in
+                        renderActiveRulerGuide(in: &context, size: size)
+                        renderSelectionOverlay(in: &context, size: size)
+                    }
+                    .allowsHitTesting(false)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                    if let loupePos = eyedropperLoupePos, let preview = controller.s2EyedropperPreview {
+                        Circle()
+                            .fill(preview.swiftUIColor)
+                            .frame(width: 44, height: 44)
+                            .overlay(Circle().strokeBorder(Color.white, lineWidth: 3))
+                            .shadow(color: .black.opacity(0.5), radius: 6)
+                            .position(x: loupePos.x, y: max(28, loupePos.y - 36))
+                            .allowsHitTesting(false)
+                    }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { value in
-                            handleCanvasDragChanged(at: value.location)
-                        }
-                        .onEnded { _ in
-                            handleCanvasDragEnded()
-                        }
+                .aspectRatio(canvasAspectRatio, contentMode: .fit)
+                .overlay {
+                    GeometryReader { canvasGeo in
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        handleCanvasDragChanged(
+                                            at: value.location,
+                                            canvasViewSize: canvasGeo.size
+                                        )
+                                    }
+                                    .onEnded { value in
+                                        handleCanvasDragEnded(
+                                            at: value.location,
+                                            canvasViewSize: canvasGeo.size
+                                        )
+                                    }
+                            )
+                    }
+                }
+                .scaleEffect(
+                    x: controller.s2ViewportZoom * (controller.s2MirrorHorizontal ? -1.0 : 1.0),
+                    y: controller.s2ViewportZoom
                 )
+                .rotationEffect(.degrees(controller.s2RotationDeg))
+                .offset(controller.s2PanOffset)
+                .padding(18)
+                .frame(maxWidth: outerGeo.size.width, maxHeight: outerGeo.size.height)
             }
-            .scaleEffect(
-                x: controller.s2ViewportZoom * (controller.s2MirrorHorizontal ? -1.0 : 1.0),
-                y: controller.s2ViewportZoom
+            .simultaneousGesture(
+                MagnificationGesture()
+                    .onChanged { scale in
+                        let base = pinchBaseZoom ?? controller.s2ViewportZoom
+                        if pinchBaseZoom == nil { pinchBaseZoom = base }
+                        controller.s2ViewportZoom = min(max(base * Double(scale), 0.2), 8.0)
+                    }
+                    .onEnded { _ in
+                        pinchBaseZoom = nil
+                    }
             )
-            .offset(controller.s2PanOffset)
-            .padding(16)
         }
         .clipped()
     }
@@ -439,15 +522,15 @@ public struct MangaCanvasStageView: View {
     private var canvasBackdropView: some View {
         switch controller.s2Backdrop {
         case .whitePaper:
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 6)
                 .fill(Color.white)
                 .shadow(color: .black.opacity(0.45), radius: 14, y: 4)
         case .transparentLight:
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 6)
                 .fill(Color(white: 0.92))
                 .shadow(color: .black.opacity(0.45), radius: 14, y: 4)
         case .transparentDark:
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 6)
                 .fill(Color(white: 0.18))
                 .shadow(color: .black.opacity(0.45), radius: 14, y: 4)
         }
@@ -459,7 +542,7 @@ public struct MangaCanvasStageView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Brushes & Color")
+                    Text("Brushes (\(starterPresets.count))")
                         .font(.caption.bold())
                         .foregroundStyle(.white)
                         .lineLimit(1)
@@ -495,7 +578,7 @@ public struct MangaCanvasStageView: View {
                                 .fixedSize(horizontal: true, vertical: false)
                         }
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
+                        .padding(.vertical, 6)
                         .background(active ? SuiteColorTokens.mangaAccent.opacity(0.20) : Color.white.opacity(0.04))
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
@@ -547,6 +630,37 @@ public struct MangaCanvasStageView: View {
                         .pickerStyle(.menu)
                         .tint(SuiteColorTokens.mangaAccent)
                     }
+
+                    HStack(spacing: 6) {
+                        Text("Rotate \(Int(controller.s2RotationDeg))°")
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(Color.white.opacity(0.72))
+                        Spacer()
+                        Button("-15°") { controller.s2RotationDeg -= 15 }
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.white.opacity(0.10))
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 5))
+                            .buttonStyle(.plain)
+                        Button("0°") { controller.s2RotationDeg = 0 }
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.white.opacity(0.10))
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 5))
+                            .buttonStyle(.plain)
+                        Button("+15°") { controller.s2RotationDeg += 15 }
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Color.white.opacity(0.10))
+                            .foregroundStyle(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 5))
+                            .buttonStyle(.plain)
+                    }
                 }
 
                 Divider().background(SuiteColorTokens.mangaBorder)
@@ -564,7 +678,21 @@ public struct MangaCanvasStageView: View {
         }
     }
 
-    // MARK: - Drawing, Rulers & Persistent Stroke Handling
+    // MARK: - Coordinate Mapping & Live Rust Raster Tool Dispatch
+
+    private var activePresetHardness: Float {
+        starterPresets.first(where: { $0.id == controller.s2PresetIndex })?.hardness ?? 0.90
+    }
+
+    private func mapViewPointToCanvas(_ viewPt: CGPoint, viewSize: CGSize) -> (canvas: CGPoint, norm: CGPoint) {
+        let safeW = max(1.0, viewSize.width)
+        let safeH = max(1.0, viewSize.height)
+        let nx = min(max(viewPt.x / safeW, 0.0), 1.0)
+        let ny = min(max(viewPt.y / safeH, 0.0), 1.0)
+        let cx = nx * CGFloat(controller.s2CanvasPixelWidth)
+        let cy = ny * CGFloat(controller.s2CanvasPixelHeight)
+        return (CGPoint(x: cx, y: cy), CGPoint(x: nx, y: ny))
+    }
 
     private var activeColorBinding: Binding<Color> {
         Binding(
@@ -594,149 +722,212 @@ public struct MangaCanvasStageView: View {
     }
 
     private func refreshCanvasDimsLabel() {
-        #if canImport(MangaCoreFFI)
-        if let engine = controller.rustCanvas {
-            let label = controller.s2CanvasPreset == .b4PrintManga600Dpi ? "B4 600DPI" : "Webtoon 1600px"
-            canvasDimensions = "\(engine.width) × \(engine.height) (\(label))"
-        }
-        #endif
+        canvasDimensions = "\(controller.s2CanvasPixelWidth) × \(controller.s2CanvasPixelHeight) RGBA8"
     }
 
-    private func handleCanvasDragChanged(at point: CGPoint) {
-        if let activeLayer = controller.selectedCelLayer {
-            if !activeLayer.visible {
-                statusLine = "Layer '\(activeLayer.name)' is hidden."
-                return
+    private func handleCanvasDragChanged(at viewPoint: CGPoint, canvasViewSize: CGSize) {
+        let mapped = mapViewPointToCanvas(viewPoint, viewSize: canvasViewSize)
+        let canvasPt = mapped.canvas
+        let normPt = mapped.norm
+
+        switch controller.s2Tool {
+        case .eyedropper:
+            eyedropperLoupePos = viewPoint
+            if let picked = controller.sampleEyedropper(canvasX: Int(canvasPt.x), canvasY: Int(canvasPt.y)) {
+                statusLine = "Eyedropper: \(picked.hexString)"
             }
-            if activeLayer.alphaLock && !controller.s2Strokes.contains(where: { $0.layerId == activeLayer.id }) {
-                statusLine = "Alpha Lock (🔒) protects empty pixels on '\(activeLayer.name)'."
-                return
+            return
+
+        case .bucket:
+            // Trigger on drag ended so single click fills once cleanly
+            return
+
+        case .magicWand:
+            return
+
+        case .rectSelect:
+            if dragStartNorm == nil {
+                dragStartNorm = normPt
             }
+            dragCurrentNorm = normPt
+            return
+
+        case .lasso:
+            activeLassoNorm.append(normPt)
+            activeLassoCanvas.append(canvasPt)
+            return
+
+        case .brush, .eraser, .smudge, .blur:
+            break
+
+        default:
+            break
         }
 
-        let isEraser = controller.s2Tool == .eraser
-        let width = max(1.0, controller.s2BrushSize)
+        if let activeLayer = controller.selectedCelLayer, !activeLayer.visible {
+            statusLine = "Layer '\(activeLayer.name)' is hidden."
+            return
+        }
 
-        if activeStroke == nil {
-            activeStroke = PersistedCanvasStroke(
-                layerId: controller.s2SelectedLayerId,
-                points: [PersistedStrokePoint(x: Double(point.x), y: Double(point.y), width: width)],
-                color: controller.s2ActiveColor,
-                opacity: controller.s2BrushOpacity,
-                isEraser: isEraser,
-                tool: controller.s2Tool
-            )
-            #if canImport(MangaCoreFFI)
-            let c = controller.s2ActiveColor
-            controller.rustCanvas?.beginStroke(
-                radius: Float(width * 0.5),
-                rgba: isEraser ? (255, 255, 255, 255) : (c.r, c.g, c.b, c.a),
-                isEraser: isEraser,
-                stabilizerRadius: Float(controller.s2StabilizerPx)
-            )
-            #endif
+        // Rope Stabilizer smoothing in canvas coordinates
+        let rope = CGFloat(controller.s2StabilizerPx)
+        let targetPt: CGPoint
+        if let prevStab = stabilizedPoint, rope > 0.5 {
+            let dx = canvasPt.x - prevStab.x
+            let dy = canvasPt.y - prevStab.y
+            let dist = hypot(dx, dy)
+            if dist > rope {
+                let pull = (dist - rope) / dist
+                targetPt = CGPoint(x: prevStab.x + dx * pull, y: prevStab.y + dy * pull)
+            } else {
+                targetPt = prevStab
+            }
         } else {
-            activeStroke?.points.append(PersistedStrokePoint(x: Double(point.x), y: Double(point.y), width: width))
+            targetPt = canvasPt
+        }
+        stabilizedPoint = targetPt
+
+        if lastDragCanvasPoint == nil {
+            controller.beginRasterUndoCheckpoint()
+            strokePointCount = 0
+        }
+        let fromPt = lastDragCanvasPoint ?? targetPt
+        strokePointCount += 1
+
+        // Force Fade taper on entry stroke
+        var effectiveRadius = Float(max(0.75, controller.s2BrushSize * 0.5))
+        if controller.s2ForceFade && strokePointCount <= 4 {
+            let t = Float(strokePointCount) / 5.0
+            effectiveRadius = max(0.75, effectiveRadius * (0.35 + 0.65 * t))
         }
 
-        #if canImport(MangaCoreFFI)
-        let sample = NativeStrokeSample(
-            x: Float(point.x),
-            y: Float(point.y),
-            pressure: 0.85,
-            altitude: 1.25,
-            azimuth: 0.0,
-            rollAngle: 0.0,
-            timestampMs: Date().timeIntervalSince1970 * 1000.0,
-            isPredicted: false
+        _ = controller.applyRasterSegment(
+            from: fromPt,
+            to: targetPt,
+            radiusPx: effectiveRadius,
+            hardness: activePresetHardness,
+            opacity: Float(controller.s2BrushOpacity)
         )
-        controller.rustCanvas?.pushPoints([sample])
-        if let engine = controller.rustCanvas {
-            controller.s2AllocatedTiles = engine.allocatedTiles
-        }
-        #endif
+        lastDragCanvasPoint = targetPt
+        controller.refreshCompositeImage()
     }
 
-    private func handleCanvasDragEnded() {
-        if var finished = activeStroke {
-            if controller.s2ForceFade && finished.points.count >= 6 {
-                let count = finished.points.count
-                let fadeLen = min(6, count / 3)
-                for i in 0..<fadeLen {
-                    let t = Double(i + 1) / Double(fadeLen + 1)
-                    finished.points[i].width *= t
-                    finished.points[count - 1 - i].width *= t
-                }
+    private func handleCanvasDragEnded(at viewPoint: CGPoint, canvasViewSize: CGSize) {
+        let mapped = mapViewPointToCanvas(viewPoint, viewSize: canvasViewSize)
+        let canvasPt = mapped.canvas
+
+        switch controller.s2Tool {
+        case .eyedropper:
+            eyedropperLoupePos = nil
+            return
+
+        case .bucket:
+            let filled = controller.applyBucketFill(canvasX: Int(canvasPt.x), canvasY: Int(canvasPt.y))
+            statusLine = "Close-Gap Bucket filled \(filled) px."
+            return
+
+        case .magicWand:
+            let count = controller.applyMagicWandSelection(canvasX: Int(canvasPt.x), canvasY: Int(canvasPt.y))
+            statusLine = "Magic Wand selected \(count) px."
+            return
+
+        case .rectSelect:
+            if let s = dragStartNorm, let e = dragCurrentNorm {
+                let normRect = CGRect(
+                    x: min(s.x, e.x),
+                    y: min(s.y, e.y),
+                    width: abs(e.x - s.x),
+                    height: abs(e.y - s.y)
+                )
+                let canvasRect = CGRect(
+                    x: normRect.minX * CGFloat(controller.s2CanvasPixelWidth),
+                    y: normRect.minY * CGFloat(controller.s2CanvasPixelHeight),
+                    width: normRect.width * CGFloat(controller.s2CanvasPixelWidth),
+                    height: normRect.height * CGFloat(controller.s2CanvasPixelHeight)
+                )
+                let count = controller.setMarqueeSelection(canvasRect: canvasRect, normRect: normRect)
+                statusLine = "Marquee selected \(count) px."
             }
-            controller.s2Strokes.append(finished)
-            controller.s2UndoneStrokes.removeAll()
-            activeStroke = nil
+            dragStartNorm = nil
+            dragCurrentNorm = nil
+            return
+
+        case .lasso:
+            if activeLassoCanvas.count >= 3 {
+                let count = controller.setLassoSelection(
+                    canvasPoints: activeLassoCanvas,
+                    normPoints: activeLassoNorm
+                )
+                statusLine = "Lasso selected \(count) px."
+            }
+            activeLassoCanvas.removeAll()
+            activeLassoNorm.removeAll()
+            return
+
+        default:
+            break
+        }
+
+        if lastDragCanvasPoint != nil {
+            lastDragCanvasPoint = nil
+            stabilizedPoint = nil
+            strokePointCount = 0
+            controller.refreshCompositeImage()
             controller.markDirtyAndScheduleSave()
-        }
-        #if canImport(MangaCoreFFI)
-        if let engine = controller.rustCanvas {
-            let dirty = engine.endStroke()
-            controller.s2AllocatedTiles = engine.allocatedTiles
-            statusLine = "Committed \(controller.s2Tool.displayName) (\(dirty) dirty tiles, auto-saved)."
-        }
-        #endif
-    }
-
-    private func renderAllCelLayers(in context: inout GraphicsContext) {
-        let activeLayers = controller.s2CelLayers.isEmpty
-            ? [CelLayerRowItem(id: controller.s2SelectedLayerId, name: "Default")]
-            : controller.s2CelLayers
-
-        var lastBaseHasContent = false
-        for layer in activeLayers {
-            let layerStrokes = controller.s2Strokes.filter { $0.layerId == layer.id }
-            let liveStroke = (activeStroke?.layerId == layer.id) ? activeStroke : nil
-            let hasContent = !layerStrokes.isEmpty || liveStroke != nil
-
-            if !layer.visible || layer.opacity <= 0.001 {
-                if !layer.clippingMask { lastBaseHasContent = false }
-                continue
-            }
-            if !layer.clippingMask {
-                lastBaseHasContent = hasContent
-            } else if !lastBaseHasContent {
-                continue
-            }
-
-            context.drawLayer { layerCtx in
-                layerCtx.opacity = layer.opacity
-                layerCtx.blendMode = layer.blendMode.swiftUIBlendMode
-                for stroke in layerStrokes {
-                    render(stroke, blueSketchTint: layer.blueSketchTint, in: &layerCtx)
-                }
-                if let liveStroke {
-                    render(liveStroke, blueSketchTint: layer.blueSketchTint, in: &layerCtx)
-                }
-            }
+            statusLine = "Committed \(controller.s2Tool.displayName) (\(controller.s2AllocatedTiles) tiles)."
         }
     }
 
-    private func render(_ stroke: PersistedCanvasStroke, blueSketchTint: Bool, in context: inout GraphicsContext) {
-        guard stroke.points.count >= 2 else { return }
-        let color: Color
-        if stroke.isEraser {
-            color = .white
-        } else if blueSketchTint {
-            color = Color(red: 0.30, green: 0.65, blue: 1.0).opacity(stroke.opacity)
-        } else {
-            color = stroke.color.swiftUIColor.opacity(stroke.opacity)
-        }
-        for idx in 1..<stroke.points.count {
-            var seg = Path()
-            let p0 = stroke.points[idx - 1]
-            let p1 = stroke.points[idx]
-            seg.move(to: CGPoint(x: p0.x, y: p0.y))
-            seg.addLine(to: CGPoint(x: p1.x, y: p1.y))
-            context.stroke(
-                seg,
-                with: .color(color),
-                style: StrokeStyle(lineWidth: max(0.8, p1.width), lineCap: .round, lineJoin: .round)
+    private func renderSelectionOverlay(in context: inout GraphicsContext, size: CGSize) {
+        let dashStyle = StrokeStyle(lineWidth: 1.5, dash: [5, 4])
+
+        // Live marquee drag preview
+        if let s = dragStartNorm, let e = dragCurrentNorm {
+            let rect = CGRect(
+                x: min(s.x, e.x) * size.width,
+                y: min(s.y, e.y) * size.height,
+                width: abs(e.x - s.x) * size.width,
+                height: abs(e.y - s.y) * size.height
             )
+            let p = Path(rect)
+            context.stroke(p, with: .color(.black), lineWidth: 2.0)
+            context.stroke(p, with: .color(.white), style: dashStyle)
+            return
+        }
+
+        // Live lasso drag preview
+        if activeLassoNorm.count >= 2 {
+            var p = Path()
+            p.move(to: CGPoint(x: activeLassoNorm[0].x * size.width, y: activeLassoNorm[0].y * size.height))
+            for pt in activeLassoNorm.dropFirst() {
+                p.addLine(to: CGPoint(x: pt.x * size.width, y: pt.y * size.height))
+            }
+            context.stroke(p, with: .color(.black), lineWidth: 2.0)
+            context.stroke(p, with: .color(.white), style: dashStyle)
+            return
+        }
+
+        // Committed marching-ants selection
+        if let rectNorm = controller.s2SelectionRectNorm {
+            let rect = CGRect(
+                x: rectNorm.minX * size.width,
+                y: rectNorm.minY * size.height,
+                width: rectNorm.width * size.width,
+                height: rectNorm.height * size.height
+            )
+            let p = Path(rect)
+            context.stroke(p, with: .color(.black.opacity(0.85)), lineWidth: 2.0)
+            context.stroke(p, with: .color(.white), style: dashStyle)
+        } else if controller.s2SelectionLassoNorm.count >= 3 {
+            var p = Path()
+            let pts = controller.s2SelectionLassoNorm
+            p.move(to: CGPoint(x: pts[0].x * size.width, y: pts[0].y * size.height))
+            for pt in pts.dropFirst() {
+                p.addLine(to: CGPoint(x: pt.x * size.width, y: pt.y * size.height))
+            }
+            p.closeSubpath()
+            context.stroke(p, with: .color(.black.opacity(0.85)), lineWidth: 2.0)
+            context.stroke(p, with: .color(.white), style: dashStyle)
         }
     }
 

@@ -8,7 +8,7 @@ use std::slice;
 
 use crate::action_bus::{ActionBus, ActionCommand, ActionPlan, ProjectDocument};
 use crate::canvas::CanvasSession;
-use crate::fill::{close_gap_expand_fill, FillOptions};
+use crate::fill::FillOptions;
 use crate::layer::{BlendMode, LayerId};
 use crate::panel::{PanelId, PanelLayout};
 use crate::platform::{recommend_workspace_layout, FoldPosture, TargetPlatform};
@@ -47,21 +47,7 @@ impl From<CMangaStrokePoint> for StrokePoint {
 }
 
 fn blend_mode_from_u32(code: u32) -> BlendMode {
-    match code {
-        1 => BlendMode::Multiply,
-        2 => BlendMode::Screen,
-        3 => BlendMode::Overlay,
-        4 => BlendMode::GlowDodge,
-        5 => BlendMode::LinearBurn,
-        6 => BlendMode::HardLight,
-        7 => BlendMode::SoftLight,
-        8 => BlendMode::Darken,
-        9 => BlendMode::Lighten,
-        10 => BlendMode::ColorBurn,
-        11 => BlendMode::ColorDodge,
-        12 => BlendMode::Add,
-        _ => BlendMode::Normal,
-    }
+    BlendMode::from_u32(code)
 }
 
 unsafe fn cstr_to_string(ptr: *const c_char, fallback: &str) -> String {
@@ -240,11 +226,15 @@ pub unsafe extern "C" fn manga_canvas_get_pixel_rgba(
 // Full Project Handle (`MangaProjectHandle`: Layers, Fill, Vector, Panels, ActionBus)
 // ============================================================================
 
-/// Opaque handle owning a full dual-track `ProjectDocument`, `PanelLayout`, and `ActionBus`.
+/// Opaque handle owning a full dual-track `ProjectDocument`, `PanelLayout`, `ActionBus`,
+/// active `SelectionMask`, and CoW `LayerStack` undo/redo history.
 pub struct MangaProjectHandle {
     doc: ProjectDocument,
     panels: PanelLayout,
     bus: ActionBus,
+    active_selection: Option<crate::selection::SelectionMask>,
+    undo_snapshots: Vec<crate::layer::LayerStack>,
+    redo_snapshots: Vec<crate::layer::LayerStack>,
 }
 
 #[no_mangle]
@@ -265,6 +255,31 @@ pub extern "C" fn manga_project_create_preset(preset_code: u32) -> *mut MangaPro
         doc,
         panels,
         bus: ActionBus::new(),
+        active_selection: None,
+        undo_snapshots: Vec::new(),
+        redo_snapshots: Vec::new(),
+    }))
+}
+
+/// Allocates a custom-resolution `MangaProjectHandle` (e.g. `800×1132` interactive working buffer).
+#[no_mangle]
+pub extern "C" fn manga_project_create_custom(width: u32, height: u32) -> *mut MangaProjectHandle {
+    let w = width.clamp(64, 8192);
+    let h = height.clamp(64, 16384);
+    let mut doc = ProjectDocument::from_preset(CanvasPreset::Illustration4K);
+    doc.spec.width = w;
+    doc.spec.height = h;
+    doc.layers = crate::layer::LayerStack::new(w, h);
+    let margin_x = (w as f32 * 0.05).max(16.0);
+    let margin_y = (h as f32 * 0.05).max(16.0);
+    let panels = PanelLayout::new_page_frame(w as f32, h as f32, margin_x, margin_y);
+    Box::into_raw(Box::new(MangaProjectHandle {
+        doc,
+        panels,
+        bus: ActionBus::new(),
+        active_selection: None,
+        undo_snapshots: Vec::new(),
+        redo_snapshots: Vec::new(),
     }))
 }
 
@@ -372,7 +387,7 @@ pub unsafe extern "C" fn manga_project_close_gap_fill(
     let Some(h) = (unsafe { handle.as_mut() }) else {
         return 0;
     };
-    let res = close_gap_expand_fill(
+    let res = crate::raster_ops::close_gap_fill_with_selection(
         &mut h.doc.layers,
         LayerId(layer_id),
         seed_x,
@@ -383,6 +398,7 @@ pub unsafe extern "C" fn manga_project_close_gap_fill(
             expand_px,
             ..Default::default()
         },
+        h.active_selection.as_ref(),
     );
     res.filled_pixels
 }
@@ -1619,8 +1635,564 @@ pub unsafe extern "C" fn manga_project_load_mnga_v2(
     let Ok((stack, _, _)) = crate::mnga::load_layer_stack_v2(std::path::Path::new(&dir), &rel) else {
         return 0;
     };
+    proj.doc.spec.width = stack.width;
+    proj.doc.spec.height = stack.height;
     proj.doc.layers = stack;
+    proj.undo_snapshots.clear();
+    proj.redo_snapshots.clear();
     1
+}
+
+// ============================================================================
+// v1.0.0-rc3 Phase 2: Real Rust RGBA8 Raster Canvas, Layer CRUD, Selection & PSD Export API
+// ============================================================================
+
+/// Returns pixel width of the project's `LayerStack`.
+///
+/// # Safety
+/// `handle` must be null or a valid `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_width(handle: *const MangaProjectHandle) -> u32 {
+    unsafe { handle.as_ref() }.map(|h| h.doc.layers.width).unwrap_or(0)
+}
+
+/// Returns pixel height of the project's `LayerStack`.
+///
+/// # Safety
+/// `handle` must be null or a valid `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_height(handle: *const MangaProjectHandle) -> u32 {
+    unsafe { handle.as_ref() }.map(|h| h.doc.layers.height).unwrap_or(0)
+}
+
+/// Returns total allocated sparse `256×256` tiles across all layers in `handle`.
+///
+/// # Safety
+/// `handle` must be null or a valid `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_allocated_tiles(handle: *const MangaProjectHandle) -> usize {
+    let Some(h) = (unsafe { handle.as_ref() }) else {
+        return 0;
+    };
+    h.doc
+        .layers
+        .layers()
+        .iter()
+        .filter_map(|l| l.raster.as_ref())
+        .map(|r| r.allocated_tile_count())
+        .sum()
+}
+
+/// Captures a CoW `LayerStack` undo checkpoint (bounded to 40 steps) before a user stroke/fill/filter.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_push_undo_snapshot(handle: *mut MangaProjectHandle) {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return;
+    };
+    if h.undo_snapshots.len() >= 40 {
+        h.undo_snapshots.remove(0);
+    }
+    h.undo_snapshots.push(h.doc.layers.clone());
+    h.redo_snapshots.clear();
+}
+
+/// Restores the previous `LayerStack` undo snapshot. Returns `1` if undone, `0` otherwise.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_undo_snapshot(handle: *mut MangaProjectHandle) -> u8 {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let Some(prev) = h.undo_snapshots.pop() else {
+        return 0;
+    };
+    h.redo_snapshots.push(h.doc.layers.clone());
+    h.doc.layers = prev;
+    1
+}
+
+/// Reapplies an undone `LayerStack` snapshot. Returns `1` if redone, `0` otherwise.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_redo_snapshot(handle: *mut MangaProjectHandle) -> u8 {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let Some(next) = h.redo_snapshots.pop() else {
+        return 0;
+    };
+    h.undo_snapshots.push(h.doc.layers.clone());
+    h.doc.layers = next;
+    1
+}
+
+/// Returns `1` if at least one raster undo snapshot is available.
+///
+/// # Safety
+/// `handle` must be null or a valid `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_can_undo_snapshot(handle: *const MangaProjectHandle) -> u8 {
+    u8::from(unsafe { handle.as_ref() }.is_some_and(|h| !h.undo_snapshots.is_empty()))
+}
+
+/// Returns `1` if at least one raster redo snapshot is available.
+///
+/// # Safety
+/// `handle` must be null or a valid `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_can_redo_snapshot(handle: *const MangaProjectHandle) -> u8 {
+    u8::from(unsafe { handle.as_ref() }.is_some_and(|h| !h.redo_snapshots.is_empty()))
+}
+
+/// Paints an anti-aliased RGBA8 brush segment onto `layer_id`, honoring alpha lock and active selection.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn manga_project_paint_segment(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32,
+    radius_px: f32,
+    hardness: f32,
+    opacity: f32,
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let sel = h.active_selection.as_ref();
+    let Some(layer) = h.doc.layers.get_mut(LayerId(layer_id)) else {
+        return 0;
+    };
+    crate::raster_ops::paint_stroke_segment_rgba(
+        layer,
+        x0,
+        y0,
+        x1,
+        y1,
+        radius_px,
+        hardness,
+        opacity,
+        [r, g, b, a],
+        sel,
+    )
+}
+
+/// Erases a transparent-channel (`Destination-Out`) segment on `layer_id`.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn manga_project_erase_segment(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32,
+    radius_px: f32,
+    hardness: f32,
+    opacity: f32,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let sel = h.active_selection.as_ref();
+    let Some(layer) = h.doc.layers.get_mut(LayerId(layer_id)) else {
+        return 0;
+    };
+    crate::raster_ops::erase_stroke_segment_rgba(
+        layer,
+        x0,
+        y0,
+        x1,
+        y1,
+        radius_px,
+        hardness,
+        opacity,
+        sel,
+    )
+}
+
+/// Applies real pixel Smudge along `(x0, y0) -> (x1, y1)` on `layer_id`.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn manga_project_smudge_segment(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32,
+    radius_px: f32,
+    strength: f32,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let sel = h.active_selection.as_ref();
+    let Some(layer) = h.doc.layers.get_mut(LayerId(layer_id)) else {
+        return 0;
+    };
+    crate::raster_ops::smudge_stroke_segment_rgba(layer, x0, y0, x1, y1, radius_px, strength, sel)
+}
+
+/// Applies real local Gaussian/box Blur brush along `(x0, y0) -> (x1, y1)` on `layer_id`.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn manga_project_blur_segment(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32,
+    radius_px: f32,
+    strength: f32,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let sel = h.active_selection.as_ref();
+    let Some(layer) = h.doc.layers.get_mut(LayerId(layer_id)) else {
+        return 0;
+    };
+    crate::raster_ops::blur_stroke_segment_rgba(layer, x0, y0, x1, y1, radius_px, strength, sel)
+}
+
+/// Samples the true composite RGBA8 pixel at `(x, y)` for the Eyedropper tool (`I`).
+///
+/// # Safety
+/// `handle` must be valid; `out_r`, `out_g`, `out_b`, `out_a` must be non-null writable pointers.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_eyedropper_rgba(
+    handle: *const MangaProjectHandle,
+    x: u32,
+    y: u32,
+    out_r: *mut u8,
+    out_g: *mut u8,
+    out_b: *mut u8,
+    out_a: *mut u8,
+) -> u8 {
+    let Some(h) = (unsafe { handle.as_ref() }) else {
+        return 0;
+    };
+    if out_r.is_null() || out_g.is_null() || out_b.is_null() || out_a.is_null() {
+        return 0;
+    }
+    if x >= h.doc.layers.width || y >= h.doc.layers.height {
+        return 0;
+    }
+    let px = h.doc.layers.composite_pixel(x, y);
+    unsafe {
+        *out_r = px[0];
+        *out_g = px[1];
+        *out_b = px[2];
+        *out_a = px[3];
+    }
+    1
+}
+
+/// Renders the entire `LayerStack` into caller-owned flat RGBA8 pixel buffer (`width * height * 4` bytes).
+/// `backdrop_code`: `0 = white paper`, `1 = light checker`, `2 = dark checker`, `3 = transparent RGBA`.
+///
+/// # Safety
+/// `handle` must be valid; `out_rgba` must point to at least `out_cap` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_composite_rgba(
+    handle: *const MangaProjectHandle,
+    backdrop_code: u32,
+    out_rgba: *mut u8,
+    out_cap: usize,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_ref() }) else {
+        return 0;
+    };
+    if out_rgba.is_null() || out_cap == 0 {
+        return 0;
+    }
+    let buf = unsafe { slice::from_raw_parts_mut(out_rgba, out_cap) };
+    crate::raster_ops::composite_stack_rgba(&h.doc.layers, backdrop_code, buf)
+}
+
+/// Duplicates `layer_id` (tiles + flags) directly above it. Returns new layer ID or `0`.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_duplicate_layer(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+) -> u64 {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    h.doc
+        .layers
+        .duplicate_layer(LayerId(layer_id))
+        .map(|id| id.0)
+        .unwrap_or(0)
+}
+
+/// Deletes `layer_id` from the stack (refuses to delete last remaining layer). Returns `1` on success.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_delete_layer(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+) -> u8 {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    if h.doc.layers.layers().len() <= 1 {
+        return 0;
+    }
+    u8::from(h.doc.layers.remove_layer(LayerId(layer_id)).is_some())
+}
+
+/// Merges `layer_id` down into the layer beneath it. Returns surviving lower layer ID or `0`.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_merge_layer_down(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+) -> u64 {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    h.doc
+        .layers
+        .merge_layer_down(LayerId(layer_id))
+        .map(|id| id.0)
+        .unwrap_or(0)
+}
+
+/// Moves `layer_id` up (`up != 0`) or down (`up == 0`) by one stack slot.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_move_layer(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    up: u8,
+) -> u8 {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    u8::from(h.doc.layers.move_layer(LayerId(layer_id), up != 0))
+}
+
+/// Clears all raster pixels in `layer_id`.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_clear_layer(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+) -> u8 {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    u8::from(h.doc.layers.clear_layer(LayerId(layer_id)))
+}
+
+/// Flips all raster pixels in `layer_id` horizontally (`horizontal != 0`) or vertically (`horizontal == 0`).
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_flip_layer(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    horizontal: u8,
+) -> u8 {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    u8::from(h.doc.layers.flip_layer(LayerId(layer_id), horizontal != 0))
+}
+
+/// Sets a rectangular marquee `SelectionMask` on `handle`. Returns selected pixel count.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_selection_set_rect(
+    handle: *mut MangaProjectHandle,
+    x0: u32,
+    y0: u32,
+    x1: u32,
+    y1: u32,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let sel = crate::selection::SelectionMask::from_rect(
+        h.doc.layers.width,
+        h.doc.layers.height,
+        x0,
+        y0,
+        x1,
+        y1,
+    );
+    let count = sel.selected_pixel_count();
+    h.active_selection = if count > 0 { Some(sel) } else { None };
+    count
+}
+
+/// Sets a freehand lasso polygon `SelectionMask` on `handle`. Returns selected pixel count.
+///
+/// # Safety
+/// `handle` must be valid; `xs` and `ys` must point to `point_count` floats.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_selection_set_lasso(
+    handle: *mut MangaProjectHandle,
+    xs: *const f32,
+    ys: *const f32,
+    point_count: usize,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    if xs.is_null() || ys.is_null() || point_count < 3 {
+        return 0;
+    }
+    let x_slice = unsafe { slice::from_raw_parts(xs, point_count) };
+    let y_slice = unsafe { slice::from_raw_parts(ys, point_count) };
+    let poly: Vec<(f32, f32)> = x_slice.iter().copied().zip(y_slice.iter().copied()).collect();
+    let sel = crate::selection::SelectionMask::from_lasso_polygon(
+        h.doc.layers.width,
+        h.doc.layers.height,
+        &poly,
+    );
+    let count = sel.selected_pixel_count();
+    h.active_selection = if count > 0 { Some(sel) } else { None };
+    count
+}
+
+/// Runs contiguous Magic Wand selection from `(seed_x, seed_y)`. Returns selected pixel count.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_selection_magic_wand(
+    handle: *mut MangaProjectHandle,
+    seed_x: u32,
+    seed_y: u32,
+    tolerance: u8,
+    use_reference: u8,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let sel = crate::selection::SelectionMask::from_magic_wand(
+        &h.doc.layers,
+        seed_x,
+        seed_y,
+        tolerance,
+        use_reference != 0,
+    );
+    let count = sel.selected_pixel_count();
+    h.active_selection = if count > 0 { Some(sel) } else { None };
+    count
+}
+
+/// Selects the entire canvas (`⌘A`).
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_selection_select_all(
+    handle: *mut MangaProjectHandle,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let sel = crate::selection::SelectionMask::all(h.doc.layers.width, h.doc.layers.height);
+    let count = sel.selected_pixel_count();
+    h.active_selection = Some(sel);
+    count
+}
+
+/// Clears active selection (`⌘D`).
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_selection_clear(handle: *mut MangaProjectHandle) {
+    if let Some(h) = unsafe { handle.as_mut() } {
+        h.active_selection = None;
+    }
+}
+
+/// Inverts active selection (`⇧⌘I`). Returns new selected pixel count.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_selection_invert(
+    handle: *mut MangaProjectHandle,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    if let Some(sel) = h.active_selection.as_mut() {
+        sel.invert();
+        sel.selected_pixel_count()
+    } else {
+        0
+    }
+}
+
+/// Writes full Adobe PSD (`8BPS` v1 RGB8) bytes into caller-owned buffer.
+/// Pass `out_buf = null` to query exact required byte length.
+///
+/// # Safety
+/// `handle` must be valid; if `out_buf` is non-null, it must hold at least `out_cap` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_export_psd_bytes(
+    handle: *const MangaProjectHandle,
+    out_buf: *mut u8,
+    out_cap: usize,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_ref() }) else {
+        return 0;
+    };
+    let bytes = crate::mnga::encode_minimal_psd_rgb8(&h.doc.layers);
+    if out_buf.is_null() || out_cap < bytes.len() {
+        return bytes.len();
+    }
+    let dst = unsafe { slice::from_raw_parts_mut(out_buf, bytes.len()) };
+    dst.copy_from_slice(&bytes);
+    bytes.len()
 }
 
 #[cfg(test)]

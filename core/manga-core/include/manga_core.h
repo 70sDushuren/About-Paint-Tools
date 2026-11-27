@@ -489,6 +489,126 @@ uint8_t manga_project_load_mnga_v2(
     const char *rel_path_utf8
 );
 
+/* --- v1.0.0-rc3 Phase 2: Real Rust RGBA8 Raster Canvas, Layer CRUD, Selection & PSD Export API --- */
+
+MangaProjectHandle *manga_project_create_custom(uint32_t width, uint32_t height);
+uint32_t manga_project_width(const MangaProjectHandle *handle);
+uint32_t manga_project_height(const MangaProjectHandle *handle);
+size_t manga_project_allocated_tiles(const MangaProjectHandle *handle);
+
+void manga_project_push_undo_snapshot(MangaProjectHandle *handle);
+uint8_t manga_project_undo_snapshot(MangaProjectHandle *handle);
+uint8_t manga_project_redo_snapshot(MangaProjectHandle *handle);
+uint8_t manga_project_can_undo_snapshot(const MangaProjectHandle *handle);
+uint8_t manga_project_can_redo_snapshot(const MangaProjectHandle *handle);
+
+size_t manga_project_paint_segment(
+    MangaProjectHandle *handle,
+    uint64_t layer_id,
+    float x0,
+    float y0,
+    float x1,
+    float y1,
+    float radius_px,
+    float hardness,
+    float opacity,
+    uint8_t r,
+    uint8_t g,
+    uint8_t b,
+    uint8_t a
+);
+
+size_t manga_project_erase_segment(
+    MangaProjectHandle *handle,
+    uint64_t layer_id,
+    float x0,
+    float y0,
+    float x1,
+    float y1,
+    float radius_px,
+    float hardness,
+    float opacity
+);
+
+size_t manga_project_smudge_segment(
+    MangaProjectHandle *handle,
+    uint64_t layer_id,
+    float x0,
+    float y0,
+    float x1,
+    float y1,
+    float radius_px,
+    float strength
+);
+
+size_t manga_project_blur_segment(
+    MangaProjectHandle *handle,
+    uint64_t layer_id,
+    float x0,
+    float y0,
+    float x1,
+    float y1,
+    float radius_px,
+    float strength
+);
+
+uint8_t manga_project_eyedropper_rgba(
+    const MangaProjectHandle *handle,
+    uint32_t x,
+    uint32_t y,
+    uint8_t *out_r,
+    uint8_t *out_g,
+    uint8_t *out_b,
+    uint8_t *out_a
+);
+
+size_t manga_project_composite_rgba(
+    const MangaProjectHandle *handle,
+    uint32_t backdrop_code,
+    uint8_t *out_rgba,
+    size_t out_cap
+);
+
+uint64_t manga_project_duplicate_layer(MangaProjectHandle *handle, uint64_t layer_id);
+uint8_t manga_project_delete_layer(MangaProjectHandle *handle, uint64_t layer_id);
+uint64_t manga_project_merge_layer_down(MangaProjectHandle *handle, uint64_t layer_id);
+uint8_t manga_project_move_layer(MangaProjectHandle *handle, uint64_t layer_id, uint8_t up);
+uint8_t manga_project_clear_layer(MangaProjectHandle *handle, uint64_t layer_id);
+uint8_t manga_project_flip_layer(MangaProjectHandle *handle, uint64_t layer_id, uint8_t horizontal);
+
+size_t manga_project_selection_set_rect(
+    MangaProjectHandle *handle,
+    uint32_t x0,
+    uint32_t y0,
+    uint32_t x1,
+    uint32_t y1
+);
+
+size_t manga_project_selection_set_lasso(
+    MangaProjectHandle *handle,
+    const float *xs,
+    const float *ys,
+    size_t point_count
+);
+
+size_t manga_project_selection_magic_wand(
+    MangaProjectHandle *handle,
+    uint32_t seed_x,
+    uint32_t seed_y,
+    uint8_t tolerance,
+    uint8_t use_reference
+);
+
+size_t manga_project_selection_select_all(MangaProjectHandle *handle);
+void manga_project_selection_clear(MangaProjectHandle *handle);
+size_t manga_project_selection_invert(MangaProjectHandle *handle);
+
+size_t manga_project_export_psd_bytes(
+    const MangaProjectHandle *handle,
+    uint8_t *out_buf,
+    size_t out_cap
+);
+
 #ifdef __cplusplus
 }
 #endif
