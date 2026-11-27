@@ -75,16 +75,37 @@ public struct MangaCanvasStageView: View {
     public let layout: WorkspaceLayoutHintKind
 
     @State private var lastDragCanvasPoint: CGPoint?
+    @State private var strokeAnchorCanvasPoint: CGPoint?
     @State private var stabilizedPoint: CGPoint?
     @State private var strokePointCount: Int = 0
     @State private var dragStartNorm: CGPoint?
     @State private var dragCurrentNorm: CGPoint?
+    @State private var shapeStartCanvas: CGPoint?
+    @State private var shapeEndCanvas: CGPoint?
     @State private var activeLassoNorm: [CGPoint] = []
     @State private var activeLassoCanvas: [CGPoint] = []
     @State private var eyedropperLoupePos: CGPoint?
     @State private var pinchBaseZoom: Double?
     @State private var canvasDimensions: String = "800 × 1132 (B4 Live RGBA8)"
     @State private var statusLine: String = "Ready"
+
+    // Phase 3: Interactive Transform, Reference Window & FX Filter Modal State
+    @State private var transformDx: Double = 0
+    @State private var transformDy: Double = 0
+    @State private var transformScale: Double = 1.0
+    @State private var transformRotDeg: Double = 0
+    @State private var refWindowOffset: CGSize = CGSize(width: -16, height: 16)
+    @State private var fxBlurRadius: Double = 4.0
+    @State private var fxHueDeg: Double = 0.0
+    @State private var fxSatDelta: Double = 0.0
+    @State private var fxBrightDelta: Double = 0.0
+    @State private var fxContrast: Double = 0.15
+    @State private var fxExtractBlack: Double = 0.25
+    @State private var fxExtractWhite: Double = 0.80
+    @State private var fxStrokeWidth: Double = 4.0
+    @State private var fxShadowDx: Double = 8.0
+    @State private var fxShadowDy: Double = 8.0
+    @State private var fxShadowBlur: Double = 4.0
 
     private let starterPresets: [BrushPresetDescriptor] = [
         BrushPresetDescriptor(id: 0, name: "G-Pen (Hard)", trackBadge: "Ink", defaultSize: 6.0, baseOpacity: 1.0, hardness: 0.96),
@@ -123,6 +144,10 @@ public struct MangaCanvasStageView: View {
 
             VStack(spacing: 0) {
                 contextualToolPropertyBar
+                if controller.s2Tool == .transform {
+                    Divider().background(SuiteColorTokens.mangaBorder)
+                    transformInteractiveBar
+                }
                 Divider().background(SuiteColorTokens.mangaBorder)
                 canvasViewport
             }
@@ -153,6 +178,9 @@ public struct MangaCanvasStageView: View {
             }
         }
         .background(SuiteColorTokens.mangaCharcoal)
+        .sheet(item: $controller.s2PendingFilter) { fx in
+            fxFilterSheetView(fx: fx)
+        }
         .onAppear {
             controller.ensureRustCanvasAndLayersInitialized()
             refreshCanvasDimsLabel()
@@ -356,6 +384,44 @@ public struct MangaCanvasStageView: View {
                     .font(.caption2.bold())
                     .fixedSize(horizontal: true, vertical: false)
 
+                    Menu("FX") {
+                        ForEach(S2FilterActionKind.allCases) { fx in
+                            Button(fx.displayName) {
+                                controller.s2PendingFilter = fx
+                            }
+                        }
+                    }
+                    .font(.caption2.bold())
+                    .disabled(!controller.canRunFilterOnSelectedLayer)
+                    .fixedSize(horizontal: true, vertical: false)
+
+                    Button("Tone") {
+                        _ = controller.applyScreentoneFill()
+                        statusLine = controller.lastStatusBanner
+                    }
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Color.white.opacity(0.10))
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+                    .buttonStyle(.plain)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .help("Apply 60 LPI Procedural Screentone")
+
+                    Button("Ref") {
+                        controller.s2ShowReferenceWindow.toggle()
+                    }
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(controller.s2ShowReferenceWindow ? SuiteColorTokens.hubAccent : Color.white.opacity(0.10))
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+                    .buttonStyle(.plain)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .help("Toggle Floating Reference Window")
+
                     if let activeLayer = controller.selectedCelLayer {
                         Text("Layer: \(activeLayer.name) [\(activeLayer.blendMode.displayName)]")
                             .font(.caption2.monospaced())
@@ -429,6 +495,90 @@ public struct MangaCanvasStageView: View {
         .background(SuiteColorTokens.mangaPanel)
     }
 
+    // MARK: - Phase 3: Interactive Transform Bar (`T`)
+
+    private var transformInteractiveBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                Text("Transform Layer")
+                    .font(.caption2.bold())
+                    .foregroundStyle(SuiteColorTokens.mangaAccent)
+                    .fixedSize(horizontal: true, vertical: false)
+
+                HStack(spacing: 4) {
+                    Text("dX \(Int(transformDx))")
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.white)
+                        .fixedSize(horizontal: true, vertical: false)
+                    Slider(value: $transformDx, in: -300...300).frame(width: 72)
+                }
+                HStack(spacing: 4) {
+                    Text("dY \(Int(transformDy))")
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.white)
+                        .fixedSize(horizontal: true, vertical: false)
+                    Slider(value: $transformDy, in: -300...300).frame(width: 72)
+                }
+                HStack(spacing: 4) {
+                    Text(String(format: "%.2fx", transformScale))
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.white)
+                        .fixedSize(horizontal: true, vertical: false)
+                    Slider(value: $transformScale, in: 0.25...2.5).frame(width: 72)
+                }
+                HStack(spacing: 4) {
+                    Text("\(Int(transformRotDeg))°")
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.white)
+                        .fixedSize(horizontal: true, vertical: false)
+                    Slider(value: $transformRotDeg, in: -180...180).frame(width: 72)
+                }
+
+                Button("Flip H") { controller.flipSelectedLayer(horizontal: true) }
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 7).padding(.vertical, 3)
+                    .background(Color.white.opacity(0.10)).foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 5)).buttonStyle(.plain)
+                    .fixedSize(horizontal: true, vertical: false)
+
+                Button("Flip V") { controller.flipSelectedLayer(horizontal: false) }
+                    .font(.caption2.bold())
+                    .padding(.horizontal, 7).padding(.vertical, 3)
+                    .background(Color.white.opacity(0.10)).foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 5)).buttonStyle(.plain)
+                    .fixedSize(horizontal: true, vertical: false)
+
+                Button("Apply") {
+                    _ = controller.applyAffineTransform(
+                        dx: Float(transformDx),
+                        dy: Float(transformDy),
+                        scaleX: Float(transformScale),
+                        scaleY: Float(transformScale),
+                        rotDeg: Float(transformRotDeg)
+                    )
+                    transformDx = 0; transformDy = 0; transformScale = 1.0; transformRotDeg = 0
+                    statusLine = controller.lastStatusBanner
+                }
+                .font(.caption2.bold())
+                .padding(.horizontal, 9).padding(.vertical, 4)
+                .background(SuiteColorTokens.mangaAccent).foregroundStyle(.white)
+                .clipShape(Capsule()).buttonStyle(.plain)
+                .fixedSize(horizontal: true, vertical: false)
+
+                Button("Reset") {
+                    transformDx = 0; transformDy = 0; transformScale = 1.0; transformRotDeg = 0
+                }
+                .font(.caption2)
+                .foregroundStyle(Color.white.opacity(0.7))
+                .buttonStyle(.plain)
+                .fixedSize(horizontal: true, vertical: false)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        }
+        .background(SuiteColorTokens.mangaPanel.opacity(0.95))
+    }
+
     // MARK: - Real Rust RGBA8 Composited Canvas Viewport (Zero Overlapping Debug Overlays)
 
     private var canvasAspectRatio: CGFloat {
@@ -439,69 +589,85 @@ public struct MangaCanvasStageView: View {
 
     private var canvasViewport: some View {
         GeometryReader { outerGeo in
-            ZStack {
-                SuiteColorTokens.mangaCharcoal
-
+            ZStack(alignment: .topTrailing) {
                 ZStack {
-                    canvasBackdropView
+                    SuiteColorTokens.mangaCharcoal
 
-                    #if canImport(CoreGraphics)
-                    if let cgImage = controller.s2CompositeImage {
-                        Image(decorative: cgImage, scale: 1.0)
-                            .resizable()
-                            .interpolation(.medium)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
-                    }
-                    #endif
+                    ZStack {
+                        canvasBackdropView
 
-                    // Vector overlay strictly for active ruler guides, marching-ants selection & eyedropper loupe
-                    Canvas { context, size in
-                        renderActiveRulerGuide(in: &context, size: size)
-                        renderSelectionOverlay(in: &context, size: size)
-                    }
-                    .allowsHitTesting(false)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                        #if canImport(CoreGraphics)
+                        if let cgImage = controller.s2CompositeImage {
+                            Image(decorative: cgImage, scale: 1.0)
+                                .resizable()
+                                .interpolation(.medium)
+                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                        #endif
 
-                    if let loupePos = eyedropperLoupePos, let preview = controller.s2EyedropperPreview {
-                        Circle()
-                            .fill(preview.swiftUIColor)
-                            .frame(width: 44, height: 44)
-                            .overlay(Circle().strokeBorder(Color.white, lineWidth: 3))
-                            .shadow(color: .black.opacity(0.5), radius: 6)
-                            .position(x: loupePos.x, y: max(28, loupePos.y - 36))
-                            .allowsHitTesting(false)
+                        // Vector overlay strictly for active ruler guides, marching-ants selection & shape/knife preview
+                        Canvas { context, size in
+                            renderActiveRulerGuide(in: &context, size: size)
+                            renderSelectionOverlay(in: &context, size: size)
+                            renderLiveShapeOrKnifePreview(in: &context, size: size)
+                        }
+                        .allowsHitTesting(false)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                        // Editable manga speech bubbles overlay
+                        GeometryReader { bubbleGeo in
+                            ForEach($controller.s2SpeechBubbles) { $bubble in
+                                speechBubbleView(bubble: $bubble, canvasSize: bubbleGeo.size)
+                            }
+                        }
+
+                        if let loupePos = eyedropperLoupePos, let preview = controller.s2EyedropperPreview {
+                            Circle()
+                                .fill(preview.swiftUIColor)
+                                .frame(width: 44, height: 44)
+                                .overlay(Circle().strokeBorder(Color.white, lineWidth: 3))
+                                .shadow(color: .black.opacity(0.5), radius: 6)
+                                .position(x: loupePos.x, y: max(28, loupePos.y - 36))
+                                .allowsHitTesting(false)
+                        }
                     }
+                    .aspectRatio(canvasAspectRatio, contentMode: .fit)
+                    .overlay {
+                        GeometryReader { canvasGeo in
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    DragGesture(minimumDistance: 0)
+                                        .onChanged { value in
+                                            handleCanvasDragChanged(
+                                                at: value.location,
+                                                canvasViewSize: canvasGeo.size
+                                            )
+                                        }
+                                        .onEnded { value in
+                                            handleCanvasDragEnded(
+                                                at: value.location,
+                                                canvasViewSize: canvasGeo.size
+                                            )
+                                        }
+                                )
+                        }
+                        .allowsHitTesting(controller.s2Tool != .textBubble || controller.s2SpeechBubbles.isEmpty)
+                    }
+                    .scaleEffect(
+                        x: controller.s2ViewportZoom * (controller.s2MirrorHorizontal ? -1.0 : 1.0),
+                        y: controller.s2ViewportZoom
+                    )
+                    .rotationEffect(.degrees(controller.s2RotationDeg))
+                    .offset(controller.s2PanOffset)
+                    .padding(18)
+                    .frame(maxWidth: outerGeo.size.width, maxHeight: outerGeo.size.height)
                 }
-                .aspectRatio(canvasAspectRatio, contentMode: .fit)
-                .overlay {
-                    GeometryReader { canvasGeo in
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .gesture(
-                                DragGesture(minimumDistance: 0)
-                                    .onChanged { value in
-                                        handleCanvasDragChanged(
-                                            at: value.location,
-                                            canvasViewSize: canvasGeo.size
-                                        )
-                                    }
-                                    .onEnded { value in
-                                        handleCanvasDragEnded(
-                                            at: value.location,
-                                            canvasViewSize: canvasGeo.size
-                                        )
-                                    }
-                            )
-                    }
+
+                if controller.s2ShowReferenceWindow {
+                    floatingReferenceWindow
+                        .offset(refWindowOffset)
                 }
-                .scaleEffect(
-                    x: controller.s2ViewportZoom * (controller.s2MirrorHorizontal ? -1.0 : 1.0),
-                    y: controller.s2ViewportZoom
-                )
-                .rotationEffect(.degrees(controller.s2RotationDeg))
-                .offset(controller.s2PanOffset)
-                .padding(18)
-                .frame(maxWidth: outerGeo.size.width, maxHeight: outerGeo.size.height)
             }
             .simultaneousGesture(
                 MagnificationGesture()
@@ -738,11 +904,16 @@ public struct MangaCanvasStageView: View {
             }
             return
 
-        case .bucket:
-            // Trigger on drag ended so single click fills once cleanly
+        case .bucket, .magicWand, .textBubble, .transform:
             return
 
-        case .magicWand:
+        case .panelKnife:
+            if dragStartNorm == nil {
+                dragStartNorm = normPt
+                shapeStartCanvas = canvasPt
+            }
+            dragCurrentNorm = normPt
+            shapeEndCanvas = canvasPt
             return
 
         case .rectSelect:
@@ -758,6 +929,15 @@ public struct MangaCanvasStageView: View {
             return
 
         case .brush, .eraser, .smudge, .blur:
+            if controller.s2Tool == .brush && controller.s2ShapeAssist != .freehand {
+                if dragStartNorm == nil {
+                    dragStartNorm = normPt
+                    shapeStartCanvas = canvasPt
+                }
+                dragCurrentNorm = normPt
+                shapeEndCanvas = canvasPt
+                return
+            }
             break
 
         default:
@@ -789,9 +969,11 @@ public struct MangaCanvasStageView: View {
 
         if lastDragCanvasPoint == nil {
             controller.beginRasterUndoCheckpoint()
+            strokeAnchorCanvasPoint = targetPt
             strokePointCount = 0
         }
         let fromPt = lastDragCanvasPoint ?? targetPt
+        let anchorPt = strokeAnchorCanvasPoint ?? targetPt
         strokePointCount += 1
 
         // Force Fade taper on entry stroke
@@ -801,9 +983,10 @@ public struct MangaCanvasStageView: View {
             effectiveRadius = max(0.75, effectiveRadius * (0.35 + 0.65 * t))
         }
 
-        _ = controller.applyRasterSegment(
+        _ = controller.applyRulerAwareRasterSegment(
             from: fromPt,
             to: targetPt,
+            anchor: anchorPt,
             radiusPx: effectiveRadius,
             hardness: activePresetHardness,
             opacity: Float(controller.s2BrushOpacity)
@@ -815,6 +998,7 @@ public struct MangaCanvasStageView: View {
     private func handleCanvasDragEnded(at viewPoint: CGPoint, canvasViewSize: CGSize) {
         let mapped = mapViewPointToCanvas(viewPoint, viewSize: canvasViewSize)
         let canvasPt = mapped.canvas
+        let normPt = mapped.norm
 
         switch controller.s2Tool {
         case .eyedropper:
@@ -829,6 +1013,22 @@ public struct MangaCanvasStageView: View {
         case .magicWand:
             let count = controller.applyMagicWandSelection(canvasX: Int(canvasPt.x), canvasY: Int(canvasPt.y))
             statusLine = "Magic Wand selected \(count) px."
+            return
+
+        case .textBubble:
+            controller.addSpeechBubble(normX: Double(normPt.x), normY: Double(normPt.y))
+            statusLine = controller.lastStatusBanner
+            return
+
+        case .panelKnife:
+            if let s = shapeStartCanvas, let e = shapeEndCanvas {
+                let count = controller.slicePanelFrame(from: s, to: e, gutterPx: 14.0)
+                statusLine = "Panel Knife sliced frame (\(count) panels)."
+            }
+            dragStartNorm = nil
+            dragCurrentNorm = nil
+            shapeStartCanvas = nil
+            shapeEndCanvas = nil
             return
 
         case .rectSelect:
@@ -864,12 +1064,31 @@ public struct MangaCanvasStageView: View {
             activeLassoNorm.removeAll()
             return
 
+        case .brush:
+            if controller.s2ShapeAssist != .freehand, let s = shapeStartCanvas, let e = shapeEndCanvas {
+                _ = controller.drawRasterShape(
+                    kind: controller.s2ShapeAssist,
+                    from: s,
+                    to: e,
+                    radiusPx: Float(max(1.0, controller.s2BrushSize * 0.5)),
+                    hardness: activePresetHardness,
+                    opacity: Float(controller.s2BrushOpacity)
+                )
+                statusLine = controller.lastStatusBanner
+                dragStartNorm = nil
+                dragCurrentNorm = nil
+                shapeStartCanvas = nil
+                shapeEndCanvas = nil
+                return
+            }
+
         default:
             break
         }
 
         if lastDragCanvasPoint != nil {
             lastDragCanvasPoint = nil
+            strokeAnchorCanvasPoint = nil
             stabilizedPoint = nil
             strokePointCount = 0
             controller.refreshCompositeImage()
@@ -878,11 +1097,42 @@ public struct MangaCanvasStageView: View {
         }
     }
 
+    private func renderLiveShapeOrKnifePreview(in context: inout GraphicsContext, size: CGSize) {
+        guard let s = dragStartNorm, let e = dragCurrentNorm else { return }
+        let p0 = CGPoint(x: s.x * size.width, y: s.y * size.height)
+        let p1 = CGPoint(x: e.x * size.width, y: e.y * size.height)
+
+        if controller.s2Tool == .panelKnife {
+            var line = Path()
+            line.move(to: p0)
+            line.addLine(to: p1)
+            context.stroke(line, with: .color(SuiteColorTokens.mangaAccent), style: StrokeStyle(lineWidth: 2.5, dash: [6, 4]))
+            return
+        }
+
+        if controller.s2Tool == .brush && controller.s2ShapeAssist != .freehand {
+            let rect = CGRect(x: min(p0.x, p1.x), y: min(p0.y, p1.y), width: abs(p1.x - p0.x), height: abs(p1.y - p0.y))
+            var path = Path()
+            switch controller.s2ShapeAssist {
+            case .line:
+                path.move(to: p0)
+                path.addLine(to: p1)
+            case .rectangle:
+                path.addRect(rect)
+            case .ellipse:
+                path.addEllipse(in: rect)
+            case .freehand:
+                break
+            }
+            context.stroke(path, with: .color(controller.s2ActiveColor.swiftUIColor), lineWidth: max(1.5, CGFloat(controller.s2BrushSize * 0.5)))
+        }
+    }
+
     private func renderSelectionOverlay(in context: inout GraphicsContext, size: CGSize) {
         let dashStyle = StrokeStyle(lineWidth: 1.5, dash: [5, 4])
 
         // Live marquee drag preview
-        if let s = dragStartNorm, let e = dragCurrentNorm {
+        if controller.s2Tool == .rectSelect, let s = dragStartNorm, let e = dragCurrentNorm {
             let rect = CGRect(
                 x: min(s.x, e.x) * size.width,
                 y: min(s.y, e.y) * size.height,
@@ -970,6 +1220,257 @@ public struct MangaCanvasStageView: View {
             with: .color(SuiteColorTokens.hubAccent.opacity(0.45)),
             style: StrokeStyle(lineWidth: 1, dash: [6, 4])
         )
+    }
+
+    // MARK: - Phase 3: Speech Bubble Overlay, Floating Reference Window & FX Filter Sheet
+
+    private func speechBubbleView(bubble: Binding<PersistedSpeechBubble>, canvasSize: CGSize) -> some View {
+        VStack(spacing: 4) {
+            if controller.s2Tool == .textBubble {
+                HStack(spacing: 4) {
+                    Button(bubble.wrappedValue.isVertical ? "縦" : "H") {
+                        bubble.wrappedValue.isVertical.toggle()
+                        controller.markDirtyAndScheduleSave()
+                    }
+                    .font(.system(size: 9, weight: .bold))
+                    .padding(.horizontal, 4).padding(.vertical, 2)
+                    .background(SuiteColorTokens.mangaAccent)
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+                    .buttonStyle(.plain)
+
+                    Button {
+                        controller.removeSpeechBubble(id: bubble.wrappedValue.id)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Group {
+                if controller.s2Tool == .textBubble {
+                    TextField("Dialogue...", text: bubble.text)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.black)
+                        .multilineTextAlignment(.center)
+                        .frame(minWidth: 70, maxWidth: 140)
+                } else {
+                    Text(bubble.wrappedValue.text)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.black)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Color.white)
+            .overlay(
+                Capsule()
+                    .strokeBorder(Color.black, lineWidth: 2)
+            )
+            .clipShape(Capsule())
+            .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+        }
+        .position(
+            x: CGFloat(bubble.wrappedValue.normX) * canvasSize.width,
+            y: CGFloat(bubble.wrappedValue.normY) * canvasSize.height
+        )
+    }
+
+    private var floatingReferenceWindow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: "photo.on.rectangle")
+                    .font(.caption2)
+                    .foregroundStyle(SuiteColorTokens.hubAccent)
+                Text("Reference Window")
+                    .font(.caption2.bold())
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Spacer()
+                Button {
+                    controller.s2ShowReferenceWindow = false
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption2.bold())
+                        .foregroundStyle(Color.white.opacity(0.75))
+                }
+                .buttonStyle(.plain)
+            }
+
+            #if canImport(CoreGraphics)
+            if let cg = controller.s2CompositeImage {
+                Image(decorative: cg, scale: 1.0)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 140, height: 160)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.white.opacity(0.2)))
+            }
+            #endif
+
+            // Quick Eyedropper Character Reference Swatches
+            HStack(spacing: 5) {
+                ForEach(controller.s2RecentColors.prefix(6), id: \.hexString) { swatch in
+                    Button {
+                        controller.setActiveColor(swatch)
+                        statusLine = "Picked reference color \(swatch.hexString)"
+                    } label: {
+                        Circle()
+                            .fill(swatch.swiftUIColor)
+                            .frame(width: 18, height: 18)
+                            .overlay(Circle().strokeBorder(Color.white.opacity(0.5), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(10)
+        .frame(width: 164)
+        .background(SuiteColorTokens.mangaPanel.opacity(0.95))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(SuiteColorTokens.hubAccent.opacity(0.65), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .shadow(color: .black.opacity(0.55), radius: 12, y: 6)
+        .gesture(
+            DragGesture()
+                .onChanged { val in
+                    refWindowOffset = CGSize(
+                        width: refWindowOffset.width + val.translation.width * 0.25,
+                        height: refWindowOffset.height + val.translation.height * 0.25
+                    )
+                }
+        )
+    }
+
+    private func fxFilterSheetView(fx: S2FilterActionKind) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label(fx.displayName, systemImage: "wand.and.rays")
+                    .font(.headline)
+                Spacer()
+                Text("1-Step Undo Protected")
+                    .font(.caption2.monospaced())
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(SuiteColorTokens.novelAccent.opacity(0.18))
+                    .foregroundStyle(SuiteColorTokens.novelAccent)
+                    .clipShape(Capsule())
+            }
+
+            Divider()
+
+            switch fx {
+            case .gaussianBlur:
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Blur Radius: \(String(format: "%.1f", fxBlurRadius)) px")
+                        .font(.caption.monospaced())
+                    Slider(value: $fxBlurRadius, in: 0.5...20.0)
+                }
+
+            case .hsbAdjust:
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Hue: \(Int(fxHueDeg))°").font(.caption.monospaced())
+                    Slider(value: $fxHueDeg, in: -180...180)
+                    Text("Saturation: \(Int(fxSatDelta * 100))%").font(.caption.monospaced())
+                    Slider(value: $fxSatDelta, in: -1.0...1.0)
+                    Text("Brightness: \(Int(fxBrightDelta * 100))%").font(.caption.monospaced())
+                    Slider(value: $fxBrightDelta, in: -1.0...1.0)
+                }
+
+            case .brightnessContrast:
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Brightness: \(Int(fxBrightDelta * 100))%").font(.caption.monospaced())
+                    Slider(value: $fxBrightDelta, in: -1.0...1.0)
+                    Text("Contrast: \(Int(fxContrast * 100))%").font(.caption.monospaced())
+                    Slider(value: $fxContrast, in: -1.0...1.0)
+                }
+
+            case .extractLineDrawing:
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Black Ink Threshold: \(Int(fxExtractBlack * 100))%").font(.caption.monospaced())
+                    Slider(value: $fxExtractBlack, in: 0.05...0.70)
+                    Text("White Paper Cutoff: \(Int(fxExtractWhite * 100))%").font(.caption.monospaced())
+                    Slider(value: $fxExtractWhite, in: 0.40...0.98)
+                }
+
+            case .outerStroke:
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Stroke Width: \(Int(fxStrokeWidth)) px (uses Active Color \(controller.s2ActiveColor.hexString))")
+                        .font(.caption.monospaced())
+                    Slider(value: $fxStrokeWidth, in: 1...20)
+                }
+
+            case .dropShadow:
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Offset X: \(Int(fxShadowDx)) px").font(.caption.monospaced())
+                    Slider(value: $fxShadowDx, in: -30...30)
+                    Text("Offset Y: \(Int(fxShadowDy)) px").font(.caption.monospaced())
+                    Slider(value: $fxShadowDy, in: -30...30)
+                    Text("Shadow Blur: \(String(format: "%.1f", fxShadowBlur)) px").font(.caption.monospaced())
+                    Slider(value: $fxShadowBlur, in: 0.5...16.0)
+                }
+            }
+
+            Divider()
+
+            HStack {
+                Button("Cancel") {
+                    controller.s2PendingFilter = nil
+                }
+                .keyboardShortcut(.cancelAction)
+
+                Spacer()
+
+                Button("Apply FX Filter") {
+                    switch fx {
+                    case .gaussianBlur:
+                        _ = controller.applyFilterGaussianBlur(radiusPx: Float(fxBlurRadius))
+                    case .hsbAdjust:
+                        _ = controller.applyFilterHsb(
+                            hueDeg: Float(fxHueDeg),
+                            satDelta: Float(fxSatDelta),
+                            brightDelta: Float(fxBrightDelta)
+                        )
+                    case .brightnessContrast:
+                        _ = controller.applyFilterBrightnessContrast(
+                            brightness: Float(fxBrightDelta),
+                            contrast: Float(fxContrast)
+                        )
+                    case .extractLineDrawing:
+                        _ = controller.applyFilterExtractLineDrawing(
+                            blackThreshold: Float(fxExtractBlack),
+                            whiteThreshold: Float(fxExtractWhite)
+                        )
+                    case .outerStroke:
+                        _ = controller.applyFilterOuterStroke(
+                            widthPx: UInt32(max(1, Int(fxStrokeWidth.rounded()))),
+                            color: controller.s2ActiveColor
+                        )
+                    case .dropShadow:
+                        _ = controller.applyFilterDropShadow(
+                            dx: Int32(fxShadowDx.rounded()),
+                            dy: Int32(fxShadowDy.rounded()),
+                            blurPx: Float(fxShadowBlur),
+                            color: PersistedRGBA(r: 0, g: 0, b: 0, a: 160)
+                        )
+                    }
+                    statusLine = controller.lastStatusBanner
+                    controller.s2PendingFilter = nil
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(SuiteColorTokens.mangaAccent)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 360)
     }
 }
 #endif

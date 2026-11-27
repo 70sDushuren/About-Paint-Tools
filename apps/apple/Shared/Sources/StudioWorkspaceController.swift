@@ -298,6 +298,7 @@ public struct ProjectWorkspaceSessionState: Codable, Equatable, Sendable {
     public var s2SelectedLayerId: UInt64
     public var s2Layers: [PersistedLayerRecord]
     public var s2Strokes: [PersistedCanvasStroke]
+    public var s2SpeechBubbles: [PersistedSpeechBubble]?
     // S3 Novel
     public var s3SelectedChapterId: String
     public var s3ActiveProseLocale: String
@@ -307,6 +308,22 @@ public struct ProjectWorkspaceSessionState: Codable, Equatable, Sendable {
     public var s3ShowAiRefDrawer: Bool
     public var s3HumanLocked: Bool
     public var savedAtEpochSec: Double
+}
+
+public struct PersistedSpeechBubble: Codable, Identifiable, Equatable, Sendable {
+    public var id: UUID
+    public var normX: Double
+    public var normY: Double
+    public var text: String
+    public var isVertical: Bool
+
+    public init(id: UUID = UUID(), normX: Double, normY: Double, text: String, isVertical: Bool = true) {
+        self.id = id
+        self.normX = normX
+        self.normY = normY
+        self.text = text
+        self.isVertical = isVertical
+    }
 }
 
 /// Unified `@MainActor` studio controller acting as Single Source of Truth for:
@@ -369,6 +386,7 @@ public final class StudioWorkspaceController: ObservableObject {
     @Published public var s2SelectedLayerId: UInt64 = 2 { didSet { scheduleAutoSave() } }
     @Published public var s2Strokes: [PersistedCanvasStroke] = []
     @Published public var s2UndoneStrokes: [PersistedCanvasStroke] = []
+    @Published public var s2SpeechBubbles: [PersistedSpeechBubble] = [] { didSet { scheduleAutoSave() } }
     @Published public var s2HasActiveSelection: Bool = false
     @Published public var s2SelectionPixelCount: Int = 0
     @Published public var s2SelectionRectNorm: CGRect? = nil
@@ -379,6 +397,7 @@ public final class StudioWorkspaceController: ObservableObject {
     @Published public var s2CanUndoRaster: Bool = false
     @Published public var s2CanRedoRaster: Bool = false
     @Published public var s2EyedropperPreview: PersistedRGBA? = nil
+    @Published public var s2PanelCount: Int = 1
     #if canImport(CoreGraphics)
     @Published public var s2CompositeImage: CGImage? = nil
     #endif
@@ -413,6 +432,7 @@ public final class StudioWorkspaceController: ObservableObject {
         case flipLayerHorizontal
         case flipLayerVertical
         case resetViewport
+        case applyScreentone
         case applyFilter(S2FilterActionKind)
         case exportPng(URL?)
         case exportPsd(URL?)
@@ -1009,6 +1029,310 @@ public final class StudioWorkspaceController: ObservableObject {
         return false
     }
 
+    // MARK: - v1.0.0-rc4 Phase 3: 6 FX Filters, Affine Transform, Rulers, Shapes, Screentone, Panels & Bubbles
+
+    @discardableResult
+    public func applyRulerAwareRasterSegment(
+        from p0: CGPoint,
+        to p1: CGPoint,
+        anchor: CGPoint,
+        radiusPx: Float,
+        hardness: Float,
+        opacity: Float
+    ) -> Int {
+        var finalFrom = p0
+        var finalTo = p1
+        let midX = Float(s2CanvasPixelWidth) * 0.5
+        let midY = Float(s2CanvasPixelHeight) * 0.5
+
+        #if canImport(MangaCoreFFI)
+        switch s2RulerMode {
+        case .parallel:
+            let s0 = MangaRulerEngine.transformPoint(
+                mode: .parallel,
+                paramX: midX, paramY: midY, paramAux: 0.0,
+                anchorX: Float(anchor.x), anchorY: Float(anchor.y),
+                inX: Float(p0.x), inY: Float(p0.y)
+            )
+            let s1 = MangaRulerEngine.transformPoint(
+                mode: .parallel,
+                paramX: midX, paramY: midY, paramAux: 0.0,
+                anchorX: Float(anchor.x), anchorY: Float(anchor.y),
+                inX: Float(p1.x), inY: Float(p1.y)
+            )
+            finalFrom = CGPoint(x: CGFloat(s0.0), y: CGFloat(s0.1))
+            finalTo = CGPoint(x: CGFloat(s1.0), y: CGFloat(s1.1))
+        case .perspective2Pt:
+            let horizon = Float(s2CanvasPixelHeight) * 0.45
+            let s0 = MangaRulerEngine.transformPoint(
+                mode: .perspective2Pt,
+                paramX: 0.0, paramY: horizon, paramAux: Float(s2CanvasPixelWidth),
+                anchorX: Float(anchor.x), anchorY: Float(anchor.y),
+                inX: Float(p0.x), inY: Float(p0.y)
+            )
+            let s1 = MangaRulerEngine.transformPoint(
+                mode: .perspective2Pt,
+                paramX: 0.0, paramY: horizon, paramAux: Float(s2CanvasPixelWidth),
+                anchorX: Float(anchor.x), anchorY: Float(anchor.y),
+                inX: Float(p1.x), inY: Float(p1.y)
+            )
+            finalFrom = CGPoint(x: CGFloat(s0.0), y: CGFloat(s0.1))
+            finalTo = CGPoint(x: CGFloat(s1.0), y: CGFloat(s1.1))
+        case .focusLines:
+            let s0 = MangaRulerEngine.transformPoint(
+                mode: .focusLines,
+                paramX: midX, paramY: midY, paramAux: 0.0,
+                anchorX: Float(anchor.x), anchorY: Float(anchor.y),
+                inX: Float(p0.x), inY: Float(p0.y)
+            )
+            let s1 = MangaRulerEngine.transformPoint(
+                mode: .focusLines,
+                paramX: midX, paramY: midY, paramAux: 0.0,
+                anchorX: Float(anchor.x), anchorY: Float(anchor.y),
+                inX: Float(p1.x), inY: Float(p1.y)
+            )
+            finalFrom = CGPoint(x: CGFloat(s0.0), y: CGFloat(s0.1))
+            finalTo = CGPoint(x: CGFloat(s1.0), y: CGFloat(s1.1))
+        default:
+            break
+        }
+        #endif
+
+        var touched = applyRasterSegment(
+            from: finalFrom,
+            to: finalTo,
+            radiusPx: radiusPx,
+            hardness: hardness,
+            opacity: opacity
+        )
+
+        if s2RulerMode == .symmetry {
+            let mirrorFrom = CGPoint(x: CGFloat(s2CanvasPixelWidth) - finalFrom.x, y: finalFrom.y)
+            let mirrorTo = CGPoint(x: CGFloat(s2CanvasPixelWidth) - finalTo.x, y: finalTo.y)
+            touched += applyRasterSegment(
+                from: mirrorFrom,
+                to: mirrorTo,
+                radiusPx: radiusPx,
+                hardness: hardness,
+                opacity: opacity
+            )
+        }
+        return touched
+    }
+
+    @discardableResult
+    public func drawRasterShape(
+        kind: S2ShapeAssistKind,
+        from p0: CGPoint,
+        to p1: CGPoint,
+        radiusPx: Float,
+        hardness: Float,
+        opacity: Float
+    ) -> Int {
+        guard kind != .freehand else { return 0 }
+        beginRasterUndoCheckpoint()
+        var touched = 0
+        switch kind {
+        case .line:
+            touched += applyRasterSegment(from: p0, to: p1, radiusPx: radiusPx, hardness: hardness, opacity: opacity)
+        case .rectangle:
+            let minX = min(p0.x, p1.x), maxX = max(p0.x, p1.x)
+            let minY = min(p0.y, p1.y), maxY = max(p0.y, p1.y)
+            let tl = CGPoint(x: minX, y: minY), tr = CGPoint(x: maxX, y: minY)
+            let br = CGPoint(x: maxX, y: maxY), bl = CGPoint(x: minX, y: maxY)
+            touched += applyRasterSegment(from: tl, to: tr, radiusPx: radiusPx, hardness: hardness, opacity: opacity)
+            touched += applyRasterSegment(from: tr, to: br, radiusPx: radiusPx, hardness: hardness, opacity: opacity)
+            touched += applyRasterSegment(from: br, to: bl, radiusPx: radiusPx, hardness: hardness, opacity: opacity)
+            touched += applyRasterSegment(from: bl, to: tl, radiusPx: radiusPx, hardness: hardness, opacity: opacity)
+        case .ellipse:
+            let cx = (p0.x + p1.x) * 0.5
+            let cy = (p0.y + p1.y) * 0.5
+            let rx = abs(p1.x - p0.x) * 0.5
+            let ry = abs(p1.y - p0.y) * 0.5
+            let segments = 48
+            var prev = CGPoint(x: cx + rx, y: cy)
+            for i in 1...segments {
+                let angle = Double(i) * (2.0 * Double.pi / Double(segments))
+                let next = CGPoint(x: cx + cos(angle) * rx, y: cy + sin(angle) * ry)
+                touched += applyRasterSegment(from: prev, to: next, radiusPx: radiusPx, hardness: hardness, opacity: opacity)
+                prev = next
+            }
+        case .freehand:
+            break
+        }
+        refreshCompositeImage()
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "Committed \(kind.displayName) shape (\(touched) px)"
+        return touched
+    }
+
+    @discardableResult
+    public func applyFilterGaussianBlur(radiusPx: Float) -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        proj.pushUndoSnapshot()
+        let count = proj.applyGaussianBlur(layerId: s2SelectedLayerId, radiusPx: radiusPx)
+        refreshCompositeImage()
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "FX: Gaussian Blur (r=\(String(format: "%.1f", radiusPx))px, \(count) px)"
+        return count
+        #else
+        return 0
+        #endif
+    }
+
+    @discardableResult
+    public func applyFilterHsb(hueDeg: Float, satDelta: Float, brightDelta: Float) -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        proj.pushUndoSnapshot()
+        let count = proj.applyHsb(layerId: s2SelectedLayerId, hueDeg: hueDeg, satDelta: satDelta, brightDelta: brightDelta)
+        refreshCompositeImage()
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "FX: HSB Adjust (H:\(Int(hueDeg))° S:\(Int(satDelta * 100))% B:\(Int(brightDelta * 100))%)"
+        return count
+        #else
+        return 0
+        #endif
+    }
+
+    @discardableResult
+    public func applyFilterBrightnessContrast(brightness: Float, contrast: Float) -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        proj.pushUndoSnapshot()
+        let count = proj.applyBrightnessContrast(layerId: s2SelectedLayerId, brightness: brightness, contrast: contrast)
+        refreshCompositeImage()
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "FX: Brightness/Contrast (\(count) px)"
+        return count
+        #else
+        return 0
+        #endif
+    }
+
+    @discardableResult
+    public func applyFilterExtractLineDrawing(blackThreshold: Float = 0.25, whiteThreshold: Float = 0.80) -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        proj.pushUndoSnapshot()
+        let count = proj.applyExtractLineDrawing(layerId: s2SelectedLayerId, blackThreshold: blackThreshold, whiteThreshold: whiteThreshold)
+        refreshCompositeImage()
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "FX: Extract Line Drawing (\(count) px)"
+        return count
+        #else
+        return 0
+        #endif
+    }
+
+    @discardableResult
+    public func applyFilterOuterStroke(widthPx: UInt32, color: PersistedRGBA) -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        proj.pushUndoSnapshot()
+        let count = proj.applyOuterStroke(layerId: s2SelectedLayerId, widthPx: widthPx, rgba: (color.r, color.g, color.b, color.a))
+        refreshCompositeImage()
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "FX: Outer Stroke (\(widthPx)px, \(count) px)"
+        return count
+        #else
+        return 0
+        #endif
+    }
+
+    @discardableResult
+    public func applyFilterDropShadow(dx: Int32, dy: Int32, blurPx: Float, color: PersistedRGBA) -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        proj.pushUndoSnapshot()
+        let count = proj.applyDropShadow(layerId: s2SelectedLayerId, dx: dx, dy: dy, blurPx: blurPx, rgba: (color.r, color.g, color.b, color.a))
+        refreshCompositeImage()
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "FX: Drop Shadow (dx=\(dx), dy=\(dy), \(count) px)"
+        return count
+        #else
+        return 0
+        #endif
+    }
+
+    @discardableResult
+    public func applyAffineTransform(dx: Float, dy: Float, scaleX: Float, scaleY: Float, rotDeg: Float) -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        proj.pushUndoSnapshot()
+        let count = proj.transformLayerAffine(
+            layerId: s2SelectedLayerId,
+            dx: dx, dy: dy, scaleX: scaleX, scaleY: scaleY, rotDeg: rotDeg
+        )
+        refreshCompositeImage()
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "Transform applied (\(count) px)"
+        return count
+        #else
+        return 0
+        #endif
+    }
+
+    @discardableResult
+    public func applyScreentoneFill(lpi: Float = 60.0, density: Float = 0.28, patternCode: UInt32 = 0) -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        proj.pushUndoSnapshot()
+        let count = proj.applyScreentone(
+            layerId: s2SelectedLayerId,
+            lpi: lpi,
+            dpi: 300.0,
+            angleDeg: 45.0,
+            density: density,
+            patternCode: patternCode,
+            rgba: (s2ActiveColor.r, s2ActiveColor.g, s2ActiveColor.b, 255)
+        )
+        refreshCompositeImage()
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "Screentone applied (\(Int(lpi)) LPI, \(Int(density * 100))%, \(count) px)"
+        return count
+        #else
+        return 0
+        #endif
+    }
+
+    @discardableResult
+    public func slicePanelFrame(from p0: CGPoint, to p1: CGPoint, gutterPx: Float = 14.0) -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        proj.pushUndoSnapshot()
+        let count = proj.sliceAndRasterizePanel(
+            layerId: s2SelectedLayerId,
+            x0: Float(p0.x),
+            y0: Float(p0.y),
+            x1: Float(p1.x),
+            y1: Float(p1.y),
+            gutterPx: gutterPx
+        )
+        s2PanelCount = count
+        refreshCompositeImage()
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "Sliced Manga Panel (\(count) panels total)"
+        return count
+        #else
+        return 0
+        #endif
+    }
+
+    public func addSpeechBubble(normX: Double, normY: Double, text: String? = nil, isVertical: Bool? = nil) {
+        let verticalDefault = isVertical ?? (activeLocale == .zhHans || activeLocale == .zhHant || activeLocale == .yueHant)
+        let defaultText = text ?? (verticalDefault ? "星辉觉醒！" : "Starlight Awakens!")
+        s2SpeechBubbles.append(PersistedSpeechBubble(normX: normX, normY: normY, text: defaultText, isVertical: verticalDefault))
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "Placed Speech Bubble (\(s2SpeechBubbles.count))"
+    }
+
+    public func removeSpeechBubble(id: UUID) {
+        s2SpeechBubbles.removeAll { $0.id == id }
+        markDirtyAndScheduleSave()
+    }
+
     public func dispatchCanvasCommand(_ cmd: CanvasMenuCommand) {
         pendingCanvasCommand = cmd
         s2CanvasActionRevision += 1
@@ -1037,6 +1361,8 @@ public final class StudioWorkspaceController: ObservableObject {
             selectAllCanvas()
         case .invertSelection:
             invertCanvasSelection()
+        case .applyScreentone:
+            _ = applyScreentoneFill()
         case .exportPng(let url):
             _ = exportCanvasPng(to: url, transparentBackground: s2Backdrop != .whitePaper)
         case .exportPsd(let url):
@@ -1305,6 +1631,7 @@ public final class StudioWorkspaceController: ObservableObject {
             s2SelectedLayerId: s2SelectedLayerId,
             s2Layers: s2CelLayers.map(PersistedLayerRecord.init(from:)),
             s2Strokes: s2Strokes,
+            s2SpeechBubbles: s2SpeechBubbles,
             s3SelectedChapterId: s3SelectedChapterId,
             s3ActiveProseLocale: s3ActiveProseLocale,
             s3PaperThemeRaw: s3PaperTheme.rawValue,
@@ -1390,6 +1717,7 @@ public final class StudioWorkspaceController: ObservableObject {
             s2CelLayers = session.s2Layers.map { $0.toCelLayerRowItem() }
             s2SelectedLayerId = session.s2SelectedLayerId
             s2Strokes = session.s2Strokes
+            s2SpeechBubbles = session.s2SpeechBubbles ?? []
             s3SelectedChapterId = session.s3SelectedChapterId
             s3ActiveProseLocale = session.s3ActiveProseLocale
             s3PaperTheme = PaperThemeKind(rawValue: session.s3PaperThemeRaw) ?? .warmPaper

@@ -16,6 +16,7 @@ pub mod canvas;
 pub mod continuity;
 pub mod ffi;
 pub mod fill;
+pub mod filters;
 pub mod gesture;
 pub mod glossary;
 pub mod ingest;
@@ -60,6 +61,11 @@ pub use continuity::{
     CONTINUITY_SQLITE_DDL,
 };
 pub use fill::{close_gap_expand_fill, FillOptions, FillResult};
+pub use filters::{
+    apply_screentone_fill, filter_brightness_contrast, filter_drop_shadow,
+    filter_extract_line_drawing, filter_gaussian_blur, filter_hsb_adjust, filter_outer_stroke,
+    rasterize_panel_borders, transform_layer_affine,
+};
 pub use gesture::{
     audit_five_locale_truncation, compute_foldable_pane_geometry, resolve_touch_gesture,
     FoldablePaneGeometry, GestureAction, UiLocale,

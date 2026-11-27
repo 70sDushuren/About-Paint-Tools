@@ -1462,6 +1462,89 @@ public final class MangaProjectEngine {
     public func invertSelection() -> Int {
         Int(manga_project_selection_invert(handle))
     }
+
+    // MARK: - v1.0.0-rc4 Phase 3: 6 Pulled-Forward FX Filters, Affine Transform, Screentone & Panels
+
+    @discardableResult
+    public func applyGaussianBlur(layerId: UInt64, radiusPx: Float) -> Int {
+        Int(manga_project_filter_gaussian_blur(handle, layerId, radiusPx))
+    }
+
+    @discardableResult
+    public func applyHsb(layerId: UInt64, hueDeg: Float, satDelta: Float, brightDelta: Float) -> Int {
+        Int(manga_project_filter_hsb(handle, layerId, hueDeg, satDelta, brightDelta))
+    }
+
+    @discardableResult
+    public func applyBrightnessContrast(layerId: UInt64, brightness: Float, contrast: Float) -> Int {
+        Int(manga_project_filter_brightness_contrast(handle, layerId, brightness, contrast))
+    }
+
+    @discardableResult
+    public func applyExtractLineDrawing(layerId: UInt64, blackThreshold: Float = 0.25, whiteThreshold: Float = 0.80) -> Int {
+        Int(manga_project_filter_extract_line_drawing(handle, layerId, blackThreshold, whiteThreshold))
+    }
+
+    @discardableResult
+    public func applyOuterStroke(layerId: UInt64, widthPx: UInt32, rgba: (UInt8, UInt8, UInt8, UInt8)) -> Int {
+        Int(manga_project_filter_outer_stroke(handle, layerId, widthPx, rgba.0, rgba.1, rgba.2, rgba.3))
+    }
+
+    @discardableResult
+    public func applyDropShadow(layerId: UInt64, dx: Int32, dy: Int32, blurPx: Float, rgba: (UInt8, UInt8, UInt8, UInt8)) -> Int {
+        Int(manga_project_filter_drop_shadow(handle, layerId, dx, dy, blurPx, rgba.0, rgba.1, rgba.2, rgba.3))
+    }
+
+    @discardableResult
+    public func transformLayerAffine(
+        layerId: UInt64,
+        dx: Float,
+        dy: Float,
+        scaleX: Float,
+        scaleY: Float,
+        rotDeg: Float
+    ) -> Int {
+        Int(manga_project_transform_layer_affine(handle, layerId, dx, dy, scaleX, scaleY, rotDeg))
+    }
+
+    @discardableResult
+    public func applyScreentone(
+        layerId: UInt64,
+        lpi: Float = 60.0,
+        dpi: Float = 300.0,
+        angleDeg: Float = 45.0,
+        density: Float = 0.30,
+        patternCode: UInt32 = 0,
+        rgba: (UInt8, UInt8, UInt8, UInt8) = (0, 0, 0, 255)
+    ) -> Int {
+        Int(
+            manga_project_apply_screentone(
+                handle,
+                layerId,
+                lpi,
+                dpi,
+                angleDeg,
+                density,
+                patternCode,
+                rgba.0,
+                rgba.1,
+                rgba.2,
+                rgba.3
+            )
+        )
+    }
+
+    @discardableResult
+    public func sliceAndRasterizePanel(
+        layerId: UInt64,
+        x0: Float,
+        y0: Float,
+        x1: Float,
+        y1: Float,
+        gutterPx: Float = 14.0
+    ) -> Int {
+        Int(manga_project_slice_and_rasterize_panel(handle, layerId, x0, y0, x1, y1, gutterPx))
+    }
 }
 
 /// `S1/S2/S3 v0.3.1` — Story Bible (`bible/characters.xml`) atomic writer (`S1`) and

@@ -2195,6 +2195,248 @@ pub unsafe extern "C" fn manga_project_export_psd_bytes(
     bytes.len()
 }
 
+// ============================================================================
+// v1.0.0-rc4 Phase 3: 6 Pulled-Forward FX Filters, Affine Transform, Screentone & Panel Slicing
+// ============================================================================
+
+/// Filter 1: Separable Gaussian Blur on `layer_id` (`radius_px` in `0.5..=24.0`).
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_filter_gaussian_blur(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    radius_px: f32,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let sel = h.active_selection.as_ref();
+    let Some(layer) = h.doc.layers.get_mut(LayerId(layer_id)) else {
+        return 0;
+    };
+    crate::filters::filter_gaussian_blur(layer, radius_px, sel)
+}
+
+/// Filter 2: Hue / Saturation / Brightness adjustment on `layer_id`.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_filter_hsb(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    hue_deg: f32,
+    sat_delta: f32,
+    bright_delta: f32,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let sel = h.active_selection.as_ref();
+    let Some(layer) = h.doc.layers.get_mut(LayerId(layer_id)) else {
+        return 0;
+    };
+    crate::filters::filter_hsb_adjust(layer, hue_deg, sat_delta, bright_delta, sel)
+}
+
+/// Filter 3: Brightness & Contrast adjustment on `layer_id`.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_filter_brightness_contrast(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    brightness: f32,
+    contrast: f32,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let sel = h.active_selection.as_ref();
+    let Some(layer) = h.doc.layers.get_mut(LayerId(layer_id)) else {
+        return 0;
+    };
+    crate::filters::filter_brightness_contrast(layer, brightness, contrast, sel)
+}
+
+/// Filter 4: Extract Line Drawing (converts white/light paper to transparent & extracts crisp ink).
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_filter_extract_line_drawing(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    black_threshold: f32,
+    white_threshold: f32,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let sel = h.active_selection.as_ref();
+    let Some(layer) = h.doc.layers.get_mut(LayerId(layer_id)) else {
+        return 0;
+    };
+    crate::filters::filter_extract_line_drawing(layer, black_threshold, white_threshold, sel)
+}
+
+/// Filter 5: Outer Stroke border around opaque alpha on `layer_id`.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_filter_outer_stroke(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    width_px: u32,
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let sel = h.active_selection.as_ref();
+    let Some(layer) = h.doc.layers.get_mut(LayerId(layer_id)) else {
+        return 0;
+    };
+    crate::filters::filter_outer_stroke(layer, width_px, [r, g, b, a], sel)
+}
+
+/// Filter 6: Offset Gaussian Drop Shadow behind artwork on `layer_id`.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn manga_project_filter_drop_shadow(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    dx: i32,
+    dy: i32,
+    blur_px: f32,
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let sel = h.active_selection.as_ref();
+    let Some(layer) = h.doc.layers.get_mut(LayerId(layer_id)) else {
+        return 0;
+    };
+    crate::filters::filter_drop_shadow(layer, dx, dy, blur_px, [r, g, b, a], sel)
+}
+
+/// Bilinear affine transform (`dx`, `dy`, `scale_x`, `scale_y`, `rot_deg`) on `layer_id`.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_transform_layer_affine(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    dx: f32,
+    dy: f32,
+    scale_x: f32,
+    scale_y: f32,
+    rot_deg: f32,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let Some(layer) = h.doc.layers.get_mut(LayerId(layer_id)) else {
+        return 0;
+    };
+    crate::filters::transform_layer_affine(layer, dx, dy, scale_x, scale_y, rot_deg)
+}
+
+/// Applies procedural manga halftone screentone fill onto `layer_id` (clipped to active selection if set).
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn manga_project_apply_screentone(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    lpi: f32,
+    dpi: f32,
+    angle_deg: f32,
+    density: f32,
+    pattern_code: u32,
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let pattern = match pattern_code {
+        1 => crate::screentone::TonePattern::LineScreen,
+        2 => crate::screentone::TonePattern::CrossHatch,
+        3 => crate::screentone::TonePattern::NoiseGrain,
+        _ => crate::screentone::TonePattern::CircleDot,
+    };
+    let spec = crate::screentone::ScreentoneSpec {
+        lpi,
+        dpi,
+        angle_deg,
+        density,
+        pattern,
+        ink_rgba: [r, g, b, a],
+    };
+    let sel = h.active_selection.as_ref();
+    let Some(layer) = h.doc.layers.get_mut(LayerId(layer_id)) else {
+        return 0;
+    };
+    crate::filters::apply_screentone_fill(layer, spec, sel)
+}
+
+/// Slices any intersected panel in `PanelLayout` along `(x0, y0) -> (x1, y1)` with `gutter_px`,
+/// rasterizes crisp comic borders onto `layer_id`, and returns updated total panel count.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_slice_and_rasterize_panel(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    x0: f32,
+    y0: f32,
+    x1: f32,
+    y1: f32,
+    gutter_px: f32,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    // Find first panel whose polygon contains the midpoint of the knife drag (or fallback to panel 0)
+    let mid_x = (x0 + x1) * 0.5;
+    let mid_y = (y0 + y1) * 0.5;
+    let target_id = h
+        .panels
+        .panels()
+        .iter()
+        .find(|p| p.polygon.contains_point(mid_x, mid_y))
+        .or_else(|| h.panels.panels().first())
+        .map(|p| p.id);
+    if let Some(pid) = target_id {
+        let _ = h.panels.slice_panel(pid, (x0, y0), (x1, y1), gutter_px.max(4.0));
+    }
+    if let Some(layer) = h.doc.layers.get_mut(LayerId(layer_id)) {
+        let _ = crate::filters::rasterize_panel_borders(layer, &h.panels);
+    }
+    h.panels.panels().len()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

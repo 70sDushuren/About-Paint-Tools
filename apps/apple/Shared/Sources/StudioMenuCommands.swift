@@ -227,6 +227,11 @@ public struct StudioMenuCommands: Commands {
             }
             .disabled(!controller.isMangaContext)
 
+            Button("Apply Procedural Screentone (60 LPI)") {
+                controller.dispatchCanvasCommand(.applyScreentone)
+            }
+            .disabled(!controller.isMangaContext)
+
             Divider()
 
             Button("Toggle Reference Layer (R)") {

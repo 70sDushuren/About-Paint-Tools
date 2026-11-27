@@ -609,6 +609,92 @@ size_t manga_project_export_psd_bytes(
     size_t out_cap
 );
 
+/* --- v1.0.0-rc4 Phase 3: 6 Pulled-Forward FX Filters, Affine Transform, Screentone & Panels --- */
+
+size_t manga_project_filter_gaussian_blur(
+    MangaProjectHandle *handle,
+    uint64_t layer_id,
+    float radius_px
+);
+
+size_t manga_project_filter_hsb(
+    MangaProjectHandle *handle,
+    uint64_t layer_id,
+    float hue_deg,
+    float sat_delta,
+    float bright_delta
+);
+
+size_t manga_project_filter_brightness_contrast(
+    MangaProjectHandle *handle,
+    uint64_t layer_id,
+    float brightness,
+    float contrast
+);
+
+size_t manga_project_filter_extract_line_drawing(
+    MangaProjectHandle *handle,
+    uint64_t layer_id,
+    float black_threshold,
+    float white_threshold
+);
+
+size_t manga_project_filter_outer_stroke(
+    MangaProjectHandle *handle,
+    uint64_t layer_id,
+    uint32_t width_px,
+    uint8_t r,
+    uint8_t g,
+    uint8_t b,
+    uint8_t a
+);
+
+size_t manga_project_filter_drop_shadow(
+    MangaProjectHandle *handle,
+    uint64_t layer_id,
+    int32_t dx,
+    int32_t dy,
+    float blur_px,
+    uint8_t r,
+    uint8_t g,
+    uint8_t b,
+    uint8_t a
+);
+
+size_t manga_project_transform_layer_affine(
+    MangaProjectHandle *handle,
+    uint64_t layer_id,
+    float dx,
+    float dy,
+    float scale_x,
+    float scale_y,
+    float rot_deg
+);
+
+size_t manga_project_apply_screentone(
+    MangaProjectHandle *handle,
+    uint64_t layer_id,
+    float lpi,
+    float dpi,
+    float angle_deg,
+    float density,
+    uint32_t pattern_code,
+    uint8_t r,
+    uint8_t g,
+    uint8_t b,
+    uint8_t a
+);
+
+size_t manga_project_slice_and_rasterize_panel(
+    MangaProjectHandle *handle,
+    uint64_t layer_id,
+    float x0,
+    float y0,
+    float x1,
+    float y1,
+    float gutter_px
+);
+
 #ifdef __cplusplus
 }
 #endif
