@@ -9,6 +9,9 @@ import XCTest
 ///    and RGBA8 Photo Import as a new raster layer & Floating Reference Window photo.
 /// 4. Live Brush & Eraser Size Visualizer HUD (`s2ShowBrushSizePreviewHUD`), Layer Deletion Pixel Cleanup
 ///    (including single-layer delete-to-clear & session-restore ID reconciliation), and Synchronized Step-by-Step Undo/Redo.
+/// 5. Custom Layer Renaming (`renameLayer(id:newName:)`) preserved invariant across `moveLayer(id:up:)` & session reload,
+///    and ibisPaint-aligned Lasso & Selection Modes (`.selection` + `.replace`/`.add`/`.subtract`, `.lassoFill`, `.lassoEraser`,
+///    point-inside-selection hit-testing, and large selection uniform scanline fill/erase).
 @MainActor
 final class MangaStudioV100Rc5IpadTests: XCTestCase {
 
@@ -308,6 +311,170 @@ final class MangaStudioV100Rc5IpadTests: XCTestCase {
         XCTAssertEqual(ctrl.s2CelLayers[2].id, topId)
         let sampleAfterMoveDown = ctrl.rustProject?.sampleEyedropper(x: 180, y: 180)
         XCTAssertGreaterThan(sampleAfterMoveDown?.2 ?? 0, 200)
+        #endif
+    }
+
+    func testCustomLayerRenamePreservedAcrossMoveUpDownUndoRedoAndSessionReload() throws {
+        #if canImport(MangaCoreFFI)
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MangaV100Rc5LayerRename-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        XCTAssertTrue(MangaHubProjectBootstrap.initProject(parentDir: tmp.path, folderName: "RenamePrj", author: "M5Pro"))
+        let prjDir = tmp.appendingPathComponent("RenamePrj").path
+        let appStateUrl = tmp.appendingPathComponent("app_state.json")
+
+        let ctrl = StudioWorkspaceController(appStateFileUrl: appStateUrl, initialProjectDir: prjDir)
+        XCTAssertEqual(ctrl.s2CelLayers.count, 3)
+
+        let id0 = ctrl.s2CelLayers[0].id
+        let id1 = ctrl.s2CelLayers[1].id
+        let id2 = ctrl.s2CelLayers[2].id
+
+        // Rename all 3 layers to custom names
+        XCTAssertTrue(ctrl.renameLayer(id: id0, newName: "背景底色_BG"))
+        XCTAssertTrue(ctrl.renameLayer(id: id1, newName: "人物肤色_Skin"))
+        XCTAssertTrue(ctrl.renameLayer(id: id2, newName: "主线稿_Ink"))
+
+        XCTAssertEqual(ctrl.s2CelLayers.first(where: { $0.id == id0 })?.name, "背景底色_BG")
+        XCTAssertEqual(ctrl.s2CelLayers.first(where: { $0.id == id1 })?.name, "人物肤色_Skin")
+        XCTAssertEqual(ctrl.s2CelLayers.first(where: { $0.id == id2 })?.name, "主线稿_Ink")
+
+        // Move "人物肤色_Skin" UP above "主线稿_Ink" -> both custom names and IDs must remain 100% intact
+        ctrl.moveLayer(id: id1, up: true)
+        XCTAssertEqual(ctrl.s2CelLayers[2].id, id1)
+        XCTAssertEqual(ctrl.s2CelLayers[2].name, "人物肤色_Skin")
+        XCTAssertEqual(ctrl.s2CelLayers[1].id, id2)
+        XCTAssertEqual(ctrl.s2CelLayers[1].name, "主线稿_Ink")
+        XCTAssertEqual(ctrl.s2CelLayers[0].id, id0)
+        XCTAssertEqual(ctrl.s2CelLayers[0].name, "背景底色_BG")
+
+        // Move "背景底色_BG" UP twice to the very top -> names still 100% intact
+        ctrl.moveLayer(id: id0, up: true)
+        ctrl.moveLayer(id: id0, up: true)
+        XCTAssertEqual(ctrl.s2CelLayers.map(\.name), ["主线稿_Ink", "人物肤色_Skin", "背景底色_BG"])
+        XCTAssertEqual(ctrl.s2CelLayers.map(\.id), [id2, id1, id0])
+
+        // Add a custom-named layer and move it down
+        ctrl.addLayer(customName: "高光特效_Glow")
+        let glowId = ctrl.s2SelectedLayerId
+        XCTAssertEqual(ctrl.s2CelLayers.last?.name, "高光特效_Glow")
+        ctrl.moveLayer(id: glowId, up: false)
+        XCTAssertEqual(ctrl.s2CelLayers[2].id, glowId)
+        XCTAssertEqual(ctrl.s2CelLayers[2].name, "高光特效_Glow")
+
+        // Reload controller from disk -> reordered layer IDs and custom names must never be overwritten!
+        ctrl.flushAllSync()
+        let reloaded = StudioWorkspaceController(appStateFileUrl: appStateUrl, initialProjectDir: prjDir)
+        XCTAssertEqual(reloaded.s2CelLayers.map(\.name), ["主线稿_Ink", "人物肤色_Skin", "高光特效_Glow", "背景底色_BG"])
+        XCTAssertEqual(reloaded.s2CelLayers.map(\.id), [id2, id1, glowId, id0])
+
+        // Test Undo / Redo of layer rename
+        XCTAssertTrue(reloaded.renameLayer(id: glowId, newName: "新名称_Renamed"))
+        XCTAssertEqual(reloaded.s2CelLayers.first(where: { $0.id == glowId })?.name, "新名称_Renamed")
+        reloaded.performUndoStroke()
+        XCTAssertEqual(reloaded.s2CelLayers.first(where: { $0.id == glowId })?.name, "高光特效_Glow")
+        reloaded.performRedoStroke()
+        XCTAssertEqual(reloaded.s2CelLayers.first(where: { $0.id == glowId })?.name, "新名称_Renamed")
+        #endif
+    }
+
+    func testIbisPaintLassoModesAddSubtractFillEraseAndInsideHitTest() throws {
+        #if canImport(MangaCoreFFI)
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MangaV100Rc5IbisLasso-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        XCTAssertTrue(MangaHubProjectBootstrap.initProject(parentDir: tmp.path, folderName: "IbisLassoPrj", author: "M5Pro"))
+        let prjDir = tmp.appendingPathComponent("IbisLassoPrj").path
+        let appStateUrl = tmp.appendingPathComponent("app_state.json")
+
+        let ctrl = StudioWorkspaceController(appStateFileUrl: appStateUrl, initialProjectDir: prjDir)
+        let w = CGFloat(max(1, ctrl.s2CanvasPixelWidth))
+        let h = CGFloat(max(1, ctrl.s2CanvasPixelHeight))
+
+        // 1. Freehand Selection Mode (.selection) with Replace (.replace): select box A [100..220, 100..220]
+        ctrl.s2LassoWorkMode = .selection
+        ctrl.s2SelectionCombineMode = .replace
+        let polyA: [CGPoint] = [
+            CGPoint(x: 100, y: 100),
+            CGPoint(x: 220, y: 100),
+            CGPoint(x: 220, y: 220),
+            CGPoint(x: 100, y: 220)
+        ]
+        let normA = polyA.map { CGPoint(x: $0.x / w, y: $0.y / h) }
+        let countReplace = ctrl.setLassoSelection(canvasPoints: polyA, normPoints: normA)
+        XCTAssertGreaterThan(countReplace, 10_000)
+
+        // Verify point-inside-active-selection hit-test (used for direct drag-to-move inside selection)
+        XCTAssertTrue(ctrl.isNormalizedPointInsideActiveSelection(CGPoint(x: 160.0 / w, y: 160.0 / h)))
+        XCTAssertFalse(ctrl.isNormalizedPointInsideActiveSelection(CGPoint(x: 400.0 / w, y: 400.0 / h)))
+
+        // 2. Boolean Add (+ 加选, .add): add disjoint box B [320..420, 100..200]
+        ctrl.s2SelectionCombineMode = .add
+        let polyB: [CGPoint] = [
+            CGPoint(x: 320, y: 100),
+            CGPoint(x: 420, y: 100),
+            CGPoint(x: 420, y: 200),
+            CGPoint(x: 320, y: 200)
+        ]
+        let normB = polyB.map { CGPoint(x: $0.x / w, y: $0.y / h) }
+        let countAfterAdd = ctrl.setLassoSelection(canvasPoints: polyB, normPoints: normB)
+        XCTAssertGreaterThan(countAfterAdd, countReplace + 8_000, "Add (+ 加选) must union the second lasso polygon")
+        XCTAssertTrue(ctrl.isNormalizedPointInsideActiveSelection(CGPoint(x: 160.0 / w, y: 160.0 / h)))
+        XCTAssertTrue(ctrl.isNormalizedPointInsideActiveSelection(CGPoint(x: 370.0 / w, y: 150.0 / h)))
+
+        // 3. Boolean Subtract (- 减选, .subtract): carve hole C [130..190, 130..190] inside box A
+        ctrl.s2SelectionCombineMode = .subtract
+        let polyHole: [CGPoint] = [
+            CGPoint(x: 130, y: 130),
+            CGPoint(x: 190, y: 130),
+            CGPoint(x: 190, y: 190),
+            CGPoint(x: 130, y: 190)
+        ]
+        let normHole = polyHole.map { CGPoint(x: $0.x / w, y: $0.y / h) }
+        let countAfterSub = ctrl.setLassoSelection(canvasPoints: polyHole, normPoints: normHole)
+        XCTAssertLessThan(countAfterSub, countAfterAdd - 2_500, "Subtract (- 减选) must carve out interior pixels")
+        // Center of carved hole (160, 160) is now OUTSIDE active selection, while rim (115, 115) remains INSIDE!
+        XCTAssertFalse(ctrl.isNormalizedPointInsideActiveSelection(CGPoint(x: 160.0 / w, y: 160.0 / h)))
+        XCTAssertTrue(ctrl.isNormalizedPointInsideActiveSelection(CGPoint(x: 115.0 / w, y: 115.0 / h)))
+
+        ctrl.clearCanvasSelection()
+
+        // 4. ibisPaint Lasso Fill (.lassoFill): drawing a closed loop immediately fills enclosed pixels on release
+        ctrl.s2LassoWorkMode = .lassoFill
+        ctrl.setActiveColor(PersistedRGBA(r: 240, g: 50, b: 190, a: 255))
+        let fillPoly: [CGPoint] = [
+            CGPoint(x: 480, y: 300),
+            CGPoint(x: 620, y: 300),
+            CGPoint(x: 620, y: 440),
+            CGPoint(x: 480, y: 440)
+        ]
+        let fillNorm = fillPoly.map { CGPoint(x: $0.x / w, y: $0.y / h) }
+        _ = ctrl.setLassoSelection(canvasPoints: fillPoly, normPoints: fillNorm)
+        // Must have filled center (550, 370) with magenta and left no dangling selection mask
+        XCTAssertEqual(ctrl.s2SelectionPixelCount, 0)
+        let filledSample = ctrl.rustProject?.sampleEyedropper(x: 550, y: 370)
+        XCTAssertGreaterThan(filledSample?.0 ?? 0, 200)
+        XCTAssertGreaterThan(filledSample?.2 ?? 0, 150)
+        XCTAssertGreaterThan(filledSample?.3 ?? 0, 220)
+
+        // 5. ibisPaint Lasso Eraser (.lassoEraser): drawing a closed loop immediately erases enclosed pixels on release
+        ctrl.s2LassoWorkMode = .lassoEraser
+        let erasePoly: [CGPoint] = [
+            CGPoint(x: 510, y: 330),
+            CGPoint(x: 590, y: 330),
+            CGPoint(x: 590, y: 410),
+            CGPoint(x: 510, y: 410)
+        ]
+        let eraseNorm = erasePoly.map { CGPoint(x: $0.x / w, y: $0.y / h) }
+        _ = ctrl.setLassoSelection(canvasPoints: erasePoly, normPoints: eraseNorm)
+        XCTAssertEqual(ctrl.s2SelectionPixelCount, 0)
+        // Center (550, 370) is now erased to alpha 0, while outer border (495, 315) remains filled!
+        XCTAssertEqual(ctrl.rustProject?.sampleEyedropper(x: 550, y: 370)?.3 ?? 255, 0)
+        XCTAssertGreaterThan(ctrl.rustProject?.sampleEyedropper(x: 495, y: 315)?.3 ?? 0, 220)
         #endif
     }
 }

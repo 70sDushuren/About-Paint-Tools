@@ -75,7 +75,7 @@ extension LayerBlendMode {
 /// `S2 v1.0.0-rc3` — `雕龙 / DracoNib` ibisPaint-aligned Real RGBA8 Raster Studio Stage:
 /// - Real Rust `LayerStack` RGBA8 pixel compositing (`CGImage`) with 22 blend modes & clipping masks.
 /// - 16 ibisPaint brushes + Force Fade + Rope Stabilizer + real transparent Eraser / Smudge / Blur.
-/// - Focused Per-Tool Tuning Bar, Interactive Lasso/Marquee Selection Action Bar, 2-Finger/Hand Canvas Panning,
+/// - Focused Per-Tool Tuning Bar, Interactive ibisPaint Lasso/Marquee Selection Action Bar, 2-Finger/Hand Canvas Panning,
 ///   High-Contrast Eyedropper Loupe, Live Brush/Eraser Size Visualizer HUD, and 1-Tap Dual Novel+Manga Split View.
 public struct MangaCanvasStageView: View {
     @ObservedObject public var controller: StudioWorkspaceController
@@ -89,6 +89,7 @@ public struct MangaCanvasStageView: View {
     @State private var dragCurrentNorm: CGPoint?
     @State private var shapeStartCanvas: CGPoint?
     @State private var shapeEndCanvas: CGPoint?
+    @State private var isDraggingSelectionMoveMac: Bool = false
     @State private var activeLassoNorm: [CGPoint] = []
     @State private var activeLassoCanvas: [CGPoint] = []
     @State private var eyedropperLoupePos: CGPoint?
@@ -185,6 +186,10 @@ public struct MangaCanvasStageView: View {
                         onDeleteLayer: { controller.deleteSelectedLayer() },
                         onMergeDown: { controller.mergeSelectedLayerDown() },
                         onMoveLayer: { id, up in controller.moveLayer(id: id, up: up) },
+                        onRenameLayer: { id, newName in
+                            _ = controller.renameLayer(id: id, newName: newName)
+                            statusLine = controller.lastStatusBanner
+                        },
                         onClearLayer: { controller.clearCurrentLayer() },
                         onUpdateLayer: { item in
                             controller.syncLayerToRust(item)
@@ -882,28 +887,119 @@ public struct MangaCanvasStageView: View {
                 .foregroundStyle(Color.white.opacity(0.72))
                 .fixedSize(horizontal: true, vertical: false)
 
-        case .lasso, .rectSelect:
-            // Focused Lasso & Marquee Selection Guide + Quick Actions
-            if !controller.s2HasActiveSelection {
-                HStack(spacing: 6) {
-                    Image(systemName: "hand.point.up.left.fill")
-                        .font(.caption2)
-                        .foregroundStyle(SuiteColorTokens.hubAccent)
-                    Text("第1步: 在画布上拖动圈出选区 → 第2步: 在弹出选区栏中【填色/擦除/扩缩/变形/网点】")
-                        .font(.caption2.bold())
+        case .lasso:
+            // ibisPaint X Lasso Work Modes: [自由选区 Lasso] / [套索填色 Lasso Fill] / [套索橡皮 Lasso Eraser]
+            HStack(spacing: 4) {
+                ForEach(S2LassoWorkMode.allCases) { mode in
+                    let active = controller.s2LassoWorkMode == mode
+                    Button {
+                        controller.s2LassoWorkMode = mode
+                        statusLine = "套索模式: \(mode.displayName)"
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: mode.systemSymbol)
+                                .font(.system(size: 10, weight: .bold))
+                            Text(mode.displayName)
+                                .font(.caption2.bold())
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(
+                            active
+                                ? (mode == .lassoFill ? SuiteColorTokens.mangaAccent : (mode == .lassoEraser ? Color.red.opacity(0.8) : SuiteColorTokens.hubAccent))
+                                : Color.white.opacity(0.09)
+                        )
                         .foregroundStyle(.white)
-                        .fixedSize(horizontal: true, vertical: false)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .fixedSize(horizontal: true, vertical: false)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(SuiteColorTokens.hubAccent.opacity(0.22))
-                .clipShape(Capsule())
-            } else {
-                Text("已选中 \(controller.s2SelectionPixelCount) px · 请使用下方选区调整栏操作，或直接重新圈选")
+            }
+
+            if controller.s2LassoWorkMode == .selection {
+                // ibisPaint Boolean Selection Combine Modes: [新选区] / [+ 加选] / [- 减选]
+                HStack(spacing: 4) {
+                    ForEach(S2SelectionCombineMode.allCases) { cMode in
+                        let active = controller.s2SelectionCombineMode == cMode
+                        Button {
+                            controller.s2SelectionCombineMode = cMode
+                            statusLine = "选区叠加模式: \(cMode.displayName)"
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: cMode.systemSymbol)
+                                    .font(.system(size: 10, weight: .bold))
+                                Text(cMode.displayName)
+                                    .font(.caption2.bold())
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(active ? SuiteColorTokens.novelAccent : Color.white.opacity(0.09))
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .fixedSize(horizontal: true, vertical: false)
+                    }
+                }
+
+                Toggle("选区内拖动直接移动像素", isOn: $controller.s2LassoDragInsideMovesPixels)
+                    .toggleStyle(.button)
                     .font(.caption2.bold())
-                    .foregroundStyle(SuiteColorTokens.hubAccent)
+                    .tint(SuiteColorTokens.hubAccent)
+                    .fixedSize(horizontal: true, vertical: false)
+            } else if controller.s2LassoWorkMode == .lassoFill {
+                ColorPicker("", selection: activeColorBinding, supportsOpacity: false)
+                    .labelsHidden()
+                    .frame(width: 22, height: 22)
+                focusedSliderCluster(
+                    label: "填色不透明度 \(Int(controller.s2BrushOpacity * 100))%",
+                    value: $controller.s2BrushOpacity,
+                    range: 0.05...1.0,
+                    width: 84
+                )
+                Text("ibisPaint 套索填色：圈出闭合区域松手即自动上色")
+                    .font(.caption2.bold())
+                    .foregroundStyle(SuiteColorTokens.mangaAccent)
+                    .fixedSize(horizontal: true, vertical: false)
+            } else {
+                Text("ibisPaint 套索橡皮：圈出闭合区域松手即自动擦除")
+                    .font(.caption2.bold())
+                    .foregroundStyle(Color.red.opacity(0.9))
                     .fixedSize(horizontal: true, vertical: false)
             }
+
+        case .rectSelect:
+            // ibisPaint Boolean Selection Combine Modes for Marquee as well
+            HStack(spacing: 4) {
+                ForEach(S2SelectionCombineMode.allCases) { cMode in
+                    let active = controller.s2SelectionCombineMode == cMode
+                    Button {
+                        controller.s2SelectionCombineMode = cMode
+                        statusLine = "选区叠加模式: \(cMode.displayName)"
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: cMode.systemSymbol)
+                                .font(.system(size: 10, weight: .bold))
+                            Text(cMode.displayName)
+                                .font(.caption2.bold())
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(active ? SuiteColorTokens.novelAccent : Color.white.opacity(0.09))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .fixedSize(horizontal: true, vertical: false)
+                }
+            }
+
+            Toggle("选区内拖动直接移动像素", isOn: $controller.s2LassoDragInsideMovesPixels)
+                .toggleStyle(.button)
+                .font(.caption2.bold())
+                .tint(SuiteColorTokens.hubAccent)
+                .fixedSize(horizontal: true, vertical: false)
 
         case .magicWand:
             // Focused Magic Wand Tolerance Slider
@@ -952,7 +1048,7 @@ public struct MangaCanvasStageView: View {
             #endif
 
         case .transform:
-            Text("在下方【自由变换栏】调整位移(dX/dY)、缩放(Scale)、旋转(Rotate)或翻转图层")
+            Text("直接在画布上拖动即可平移选区/图层 · 也可在下方【自由变换栏】精细调整缩放与旋转")
                 .font(.caption2.bold())
                 .foregroundStyle(SuiteColorTokens.hubAccent)
                 .fixedSize(horizontal: true, vertical: false)
@@ -1013,7 +1109,7 @@ public struct MangaCanvasStageView: View {
         }
     }
 
-    // MARK: - Fix #1: Clear Step-by-Step Selection Adjustment & Action Bar (Lasso / Marquee / Magic Wand)
+    // MARK: - Fix #1: Clear Step-by-Step ibisPaint Selection Adjustment & Action Bar (Lasso / Marquee / Magic Wand)
 
     private var activeSelectionWorkflowBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -1022,11 +1118,28 @@ public struct MangaCanvasStageView: View {
                     Image(systemName: "lasso.badge.sparkles")
                         .font(.caption2.bold())
                         .foregroundStyle(SuiteColorTokens.hubAccent)
-                    Text("选区已激活 (\(controller.s2SelectionPixelCount) px):")
+                    Text("选区 (\(controller.s2SelectionPixelCount) px):")
                         .font(.caption2.bold())
                         .foregroundStyle(.white)
                 }
                 .fixedSize(horizontal: true, vertical: false)
+
+                // Quick ibisPaint Boolean Combine Switcher (+ Add / - Subtract / Replace) right in the selection bar
+                ForEach(S2SelectionCombineMode.allCases) { cMode in
+                    let active = controller.s2SelectionCombineMode == cMode
+                    Button {
+                        controller.s2SelectionCombineMode = cMode
+                        if !controller.s2Tool.isSelectionTool {
+                            controller.selectTool(.lasso)
+                        }
+                        statusLine = "选区模式: \(cMode.displayName)"
+                    } label: {
+                        Text(cMode.displayName)
+                    }
+                    .buttonStyle(FocusedActionPillStyle(accent: active ? SuiteColorTokens.novelAccent : Color.white.opacity(0.11)))
+                }
+
+                Divider().frame(height: 14).background(SuiteColorTokens.mangaBorder)
 
                 Button {
                     let count = controller.fillActiveSelectionWithCurrentColor()
@@ -1041,6 +1154,26 @@ public struct MangaCanvasStageView: View {
                     statusLine = "已清除选区内像素 (\(count) px)"
                 } label: {
                     Label("清除 Erase", systemImage: "eraser.fill")
+                }
+                .buttonStyle(FocusedActionPillStyle())
+
+                Button {
+                    controller.s2TransformSelectionOnly = true
+                    controller.s2TransformKeepOriginal = false
+                    controller.selectTool(.transform)
+                    statusLine = "选区移动/变形：直接在画布上拖动即可平移选区像素"
+                } label: {
+                    Label("拖动平移 Move", systemImage: "arrow.up.and.down.and.arrow.left.and.right")
+                }
+                .buttonStyle(FocusedActionPillStyle(accent: SuiteColorTokens.hubAccent))
+
+                Button {
+                    controller.s2TransformSelectionOnly = true
+                    controller.s2TransformKeepOriginal = true
+                    controller.selectTool(.transform)
+                    statusLine = "复制移动模式：在画布上拖动即可将选区内容复制盖章到新位置"
+                } label: {
+                    Label("复制移动 Clone", systemImage: "plus.square.on.square")
                 }
                 .buttonStyle(FocusedActionPillStyle())
 
@@ -1080,15 +1213,7 @@ public struct MangaCanvasStageView: View {
                     controller.selectTool(.brush)
                     statusLine = "已切到画笔：现在绘画将仅作用在选区内部"
                 } label: {
-                    Label("在选区内绘画", systemImage: "pencil.tip")
-                }
-                .buttonStyle(FocusedActionPillStyle(accent: SuiteColorTokens.hubAccent))
-
-                Button {
-                    controller.selectTool(.transform)
-                    statusLine = "已开启自由变换栏"
-                } label: {
-                    Label("变换图层", systemImage: "arrow.up.left.and.down.right.magnifyingglass")
+                    Label("选区内手绘", systemImage: "pencil.tip")
                 }
                 .buttonStyle(FocusedActionPillStyle())
 
@@ -1912,6 +2037,17 @@ public struct MangaCanvasStageView: View {
         let canvasPt = mapped.canvas
         let normPt = mapped.norm
 
+        if isDraggingSelectionMoveMac, let sNorm = dragStartNorm, let sCanvas = shapeStartCanvas {
+            controller.s2LiveTransformPreviewOffsetNorm = CGSize(
+                width: normPt.x - sNorm.x,
+                height: normPt.y - sNorm.y
+            )
+            let dx = Int((canvasPt.x - sCanvas.x).rounded())
+            let dy = Int((canvasPt.y - sCanvas.y).rounded())
+            statusLine = "拖动平移选区/图层: dX=\(dx)px, dY=\(dy)px (松手即完成移动)"
+            return
+        }
+
         switch controller.s2Tool {
         case .eyedropper:
             eyedropperLoupePos = viewPoint
@@ -1921,7 +2057,16 @@ public struct MangaCanvasStageView: View {
             }
             return
 
-        case .bucket, .magicWand, .textBubble, .transform, .handPan:
+        case .bucket, .magicWand, .textBubble, .handPan:
+            return
+
+        case .transform:
+            if dragStartNorm == nil {
+                dragStartNorm = normPt
+                shapeStartCanvas = canvasPt
+                isDraggingSelectionMoveMac = true
+                controller.s2LiveTransformPreviewOffsetNorm = .zero
+            }
             return
 
         case .panelKnife:
@@ -1937,6 +2082,16 @@ public struct MangaCanvasStageView: View {
 
         case .rectSelect:
             if dragStartNorm == nil {
+                if controller.s2LassoDragInsideMovesPixels,
+                   controller.s2SelectionCombineMode == .replace,
+                   controller.isNormalizedPointInsideActiveSelection(normPt)
+                {
+                    dragStartNorm = normPt
+                    shapeStartCanvas = canvasPt
+                    isDraggingSelectionMoveMac = true
+                    controller.s2LiveTransformPreviewOffsetNorm = .zero
+                    return
+                }
                 dragStartNorm = normPt
                 controller.s2LiveMarqueeStartNorm = normPt
             }
@@ -1945,6 +2100,18 @@ public struct MangaCanvasStageView: View {
             return
 
         case .lasso:
+            if activeLassoNorm.isEmpty,
+               controller.s2LassoWorkMode == .selection,
+               controller.s2LassoDragInsideMovesPixels,
+               controller.s2SelectionCombineMode == .replace,
+               controller.isNormalizedPointInsideActiveSelection(normPt)
+            {
+                dragStartNorm = normPt
+                shapeStartCanvas = canvasPt
+                isDraggingSelectionMoveMac = true
+                controller.s2LiveTransformPreviewOffsetNorm = .zero
+                return
+            }
             activeLassoNorm.append(normPt)
             activeLassoCanvas.append(canvasPt)
             controller.s2LiveLassoNorm = activeLassoNorm
@@ -2030,6 +2197,31 @@ public struct MangaCanvasStageView: View {
         let canvasPt = mapped.canvas
         let normPt = mapped.norm
 
+        if isDraggingSelectionMoveMac, let sCanvas = shapeStartCanvas {
+            let dx = Float(canvasPt.x - sCanvas.x)
+            let dy = Float(canvasPt.y - sCanvas.y)
+            controller.s2LiveTransformPreviewOffsetNorm = .zero
+            isDraggingSelectionMoveMac = false
+            dragStartNorm = nil
+            shapeStartCanvas = nil
+            if hypot(dx, dy) >= 2.0 {
+                _ = controller.applyAffineTransform(
+                    dx: dx,
+                    dy: dy,
+                    scaleX: 1.0,
+                    scaleY: 1.0,
+                    rotDeg: 0.0,
+                    selectionOnly: controller.s2HasActiveSelection ? controller.s2TransformSelectionOnly : false,
+                    clearSource: !controller.s2TransformKeepOriginal
+                )
+                statusLine = controller.lastStatusBanner
+            } else if controller.s2Tool == .lasso || controller.s2Tool == .rectSelect {
+                controller.clearCanvasSelection()
+                statusLine = "已取消选区 (Deselected)"
+            }
+            return
+        }
+
         switch controller.s2Tool {
         case .eyedropper:
             if let picked = controller.sampleEyedropper(canvasX: Int(canvasPt.x), canvasY: Int(canvasPt.y)) {
@@ -2086,8 +2278,8 @@ public struct MangaCanvasStageView: View {
                     width: max(4.0, normRect.width * CGFloat(controller.s2CanvasPixelWidth)),
                     height: max(4.0, normRect.height * CGFloat(controller.s2CanvasPixelHeight))
                 )
-                let count = controller.setMarqueeSelection(canvasRect: canvasRect, normRect: normRect)
-                statusLine = "选区已建立 (\(count) px) · 请使用上方选区栏进行填色、清除或调整"
+                _ = controller.setMarqueeSelection(canvasRect: canvasRect, normRect: normRect)
+                statusLine = controller.lastStatusBanner
             }
             dragStartNorm = nil
             dragCurrentNorm = nil
@@ -2097,11 +2289,14 @@ public struct MangaCanvasStageView: View {
 
         case .lasso:
             if activeLassoCanvas.count >= 3 {
-                let count = controller.setLassoSelection(
+                _ = controller.setLassoSelection(
                     canvasPoints: activeLassoCanvas,
                     normPoints: activeLassoNorm
                 )
-                statusLine = "套索已选中 \(count) px · 请在上方选区栏进行填色、清除或扩缩调整"
+                statusLine = controller.lastStatusBanner
+            } else if controller.s2HasActiveSelection && controller.s2LassoWorkMode == .selection {
+                controller.clearCanvasSelection()
+                statusLine = "已轻点画布取消选区 (Deselected)"
             }
             activeLassoCanvas.removeAll()
             activeLassoNorm.removeAll()
@@ -2178,11 +2373,39 @@ public struct MangaCanvasStageView: View {
 
     private func renderSelectionOverlay(in context: inout GraphicsContext, size: CGSize) {
         let dashStyle = StrokeStyle(lineWidth: 2.0, dash: [6, 4])
+        let movePreview = controller.s2LiveTransformPreviewOffsetNorm
+        let dxPx = movePreview.width * size.width
+        let dyPx = movePreview.height * size.height
 
-        // Live marquee drag preview (works on both iPadOS UIKit touch & macOS drag)
+        // 1. Always render existing committed selection (with live translation offset when dragging inside selection!)
+        if let rectNorm = controller.s2SelectionRectNorm {
+            let rect = CGRect(
+                x: rectNorm.minX * size.width + dxPx,
+                y: rectNorm.minY * size.height + dyPx,
+                width: rectNorm.width * size.width,
+                height: rectNorm.height * size.height
+            )
+            let p = Path(rect)
+            context.fill(p, with: .color(SuiteColorTokens.hubAccent.opacity(0.11)))
+            context.stroke(p, with: .color(.black.opacity(0.85)), lineWidth: 2.5)
+            context.stroke(p, with: .color(SuiteColorTokens.hubAccent), style: dashStyle)
+        } else if controller.s2SelectionLassoNorm.count >= 3 {
+            var p = Path()
+            let pts = controller.s2SelectionLassoNorm
+            p.move(to: CGPoint(x: pts[0].x * size.width + dxPx, y: pts[0].y * size.height + dyPx))
+            for pt in pts.dropFirst() {
+                p.addLine(to: CGPoint(x: pt.x * size.width + dxPx, y: pt.y * size.height + dyPx))
+            }
+            p.closeSubpath()
+            context.fill(p, with: .color(SuiteColorTokens.hubAccent.opacity(0.11)))
+            context.stroke(p, with: .color(.black.opacity(0.85)), lineWidth: 2.5)
+            context.stroke(p, with: .color(SuiteColorTokens.hubAccent), style: dashStyle)
+        }
+
+        // 2. Live marquee drag preview (works on both iPadOS UIKit touch & macOS drag)
         let sOpt = dragStartNorm ?? controller.s2LiveMarqueeStartNorm
         let eOpt = dragCurrentNorm ?? controller.s2LiveMarqueeCurrentNorm
-        if controller.s2Tool == .rectSelect, let s = sOpt, let e = eOpt {
+        if controller.s2Tool == .rectSelect, !isDraggingSelectionMoveMac, let s = sOpt, let e = eOpt {
             let rect = CGRect(
                 x: min(s.x, e.x) * size.width,
                 y: min(s.y, e.y) * size.height,
@@ -2190,49 +2413,46 @@ public struct MangaCanvasStageView: View {
                 height: abs(e.y - s.y) * size.height
             )
             let p = Path(rect)
-            context.fill(p, with: .color(SuiteColorTokens.hubAccent.opacity(0.14)))
+            context.fill(p, with: .color(SuiteColorTokens.hubAccent.opacity(0.15)))
             context.stroke(p, with: .color(.black), lineWidth: 2.5)
             context.stroke(p, with: .color(.white), style: dashStyle)
             return
         }
 
-        // Live lasso drag preview (works on both iPadOS UIKit touch & macOS drag)
+        // 3. Live ibisPaint auto-closing lasso loop preview (shows shaded fill + auto-closing chord back to start point)
         let liveLasso = !controller.s2LiveLassoNorm.isEmpty ? controller.s2LiveLassoNorm : activeLassoNorm
         if liveLasso.count >= 2 {
-            var p = Path()
-            p.move(to: CGPoint(x: liveLasso[0].x * size.width, y: liveLasso[0].y * size.height))
+            var closedPath = Path()
+            let startPt = CGPoint(x: liveLasso[0].x * size.width, y: liveLasso[0].y * size.height)
+            closedPath.move(to: startPt)
             for pt in liveLasso.dropFirst() {
-                p.addLine(to: CGPoint(x: pt.x * size.width, y: pt.y * size.height))
+                closedPath.addLine(to: CGPoint(x: pt.x * size.width, y: pt.y * size.height))
             }
-            context.fill(p, with: .color(SuiteColorTokens.hubAccent.opacity(0.14)))
-            context.stroke(p, with: .color(.black), lineWidth: 2.5)
-            context.stroke(p, with: .color(.white), style: dashStyle)
-            return
-        }
+            closedPath.closeSubpath()
 
-        // Committed marching-ants selection with subtle cyan highlight tint
-        if let rectNorm = controller.s2SelectionRectNorm {
-            let rect = CGRect(
-                x: rectNorm.minX * size.width,
-                y: rectNorm.minY * size.height,
-                width: rectNorm.width * size.width,
-                height: rectNorm.height * size.height
-            )
-            let p = Path(rect)
-            context.fill(p, with: .color(SuiteColorTokens.hubAccent.opacity(0.10)))
-            context.stroke(p, with: .color(.black.opacity(0.85)), lineWidth: 2.5)
-            context.stroke(p, with: .color(SuiteColorTokens.hubAccent), style: dashStyle)
-        } else if controller.s2SelectionLassoNorm.count >= 3 {
-            var p = Path()
-            let pts = controller.s2SelectionLassoNorm
-            p.move(to: CGPoint(x: pts[0].x * size.width, y: pts[0].y * size.height))
-            for pt in pts.dropFirst() {
-                p.addLine(to: CGPoint(x: pt.x * size.width, y: pt.y * size.height))
-            }
-            p.closeSubpath()
-            context.fill(p, with: .color(SuiteColorTokens.hubAccent.opacity(0.10)))
-            context.stroke(p, with: .color(.black.opacity(0.85)), lineWidth: 2.5)
-            context.stroke(p, with: .color(SuiteColorTokens.hubAccent), style: dashStyle)
+            // Color-coded preview matching ibisPaint Lasso Mode:
+            // - Lasso Fill: shows live preview of the active fill color inside the loop!
+            // - Lasso Eraser: shows red/white cut-out tint inside the loop!
+            // - Lasso Selection: shows cyan selection tint!
+            let fillTint: Color = {
+                if controller.s2Tool == .lasso {
+                    switch controller.s2LassoWorkMode {
+                    case .lassoFill:
+                        return controller.s2ActiveColor.swiftUIColor.opacity(max(0.25, controller.s2BrushOpacity * 0.55))
+                    case .lassoEraser:
+                        return Color.red.opacity(0.22)
+                    case .selection:
+                        return controller.s2SelectionCombineMode == .subtract
+                            ? Color.orange.opacity(0.18)
+                            : SuiteColorTokens.hubAccent.opacity(0.16)
+                    }
+                }
+                return SuiteColorTokens.hubAccent.opacity(0.16)
+            }()
+
+            context.fill(closedPath, with: .color(fillTint))
+            context.stroke(closedPath, with: .color(.black), lineWidth: 2.5)
+            context.stroke(closedPath, with: .color(.white), style: dashStyle)
         }
     }
 

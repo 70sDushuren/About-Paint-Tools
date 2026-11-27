@@ -15,7 +15,7 @@ import UniformTypeIdentifiers
 import AppKit
 #endif
 
-// MARK: - ibisPaint-Aligned S2 Tooling, Ruler, Shape & Filter Enums
+// MARK: - ibisPaint-Aligned S2 Tooling, Ruler, Shape, Lasso & Filter Enums
 
 public enum S2DrawingToolKind: String, CaseIterable, Codable, Sendable, Identifiable {
     case brush
@@ -84,6 +84,62 @@ public enum S2DrawingToolKind: String, CaseIterable, Codable, Sendable, Identifi
         switch self {
         case .lasso, .rectSelect, .magicWand: return true
         default: return false
+        }
+    }
+}
+
+/// ibisPaint X Lasso sub-mode:
+/// - `.selection`: Standard freehand lasso selection (with New / Add + / Subtract - / Drag-inside-to-move)
+/// - `.lassoFill`: ibisPaint signature speed-painting "Lasso Fill" (套索填色) — immediately fills enclosed loop on release
+/// - `.lassoEraser`: ibisPaint "Lasso Eraser" (套索橡皮) — immediately erases pixels inside enclosed loop on release
+public enum S2LassoWorkMode: String, CaseIterable, Codable, Sendable, Identifiable {
+    case selection
+    case lassoFill
+    case lassoEraser
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .selection: return "自由选区 Lasso"
+        case .lassoFill: return "套索填色 Fill"
+        case .lassoEraser: return "套索橡皮 Erase"
+        }
+    }
+
+    public var systemSymbol: String {
+        switch self {
+        case .selection: return "lasso"
+        case .lassoFill: return "lasso.badge.sparkles"
+        case .lassoEraser: return "eraser.line.dashed.fill"
+        }
+    }
+}
+
+/// ibisPaint X Selection Boolean Combine Mode:
+/// - `.replace`: Creates a fresh selection
+/// - `.add`: Adds (`+`) the newly lassoed/marqueed region to the existing selection
+/// - `.subtract`: Subtracts (`-`) the newly lassoed/marqueed region from the existing selection
+public enum S2SelectionCombineMode: String, CaseIterable, Codable, Sendable, Identifiable {
+    case replace
+    case add
+    case subtract
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .replace: return "新选区"
+        case .add: return "+ 加选"
+        case .subtract: return "- 减选"
+        }
+    }
+
+    public var systemSymbol: String {
+        switch self {
+        case .replace: return "plus.square.dashed"
+        case .add: return "plus.circle.fill"
+        case .subtract: return "minus.circle.fill"
         }
     }
 }
@@ -445,6 +501,10 @@ public final class StudioWorkspaceController: ObservableObject {
     ]
     @Published public var s2RulerMode: RulerModeKind = .off { didSet { scheduleAutoSave() } }
     @Published public var s2ShapeAssist: S2ShapeAssistKind = .freehand { didSet { scheduleAutoSave() } }
+    @Published public var s2LassoWorkMode: S2LassoWorkMode = .selection
+    @Published public var s2SelectionCombineMode: S2SelectionCombineMode = .replace
+    @Published public var s2LassoDragInsideMovesPixels: Bool = true
+    @Published public var s2LiveTransformPreviewOffsetNorm: CGSize = .zero
     @Published public var s2ShowBrushDrawer: Bool = true { didSet { scheduleAutoSave() } }
     @Published public var s2ShowLayerDrawer: Bool = false { didSet { scheduleAutoSave() } }
     @Published public var s2ShowReferenceWindow: Bool = false { didSet { scheduleAutoSave() } }
@@ -733,9 +793,10 @@ public final class StudioWorkspaceController: ObservableObject {
         markDirtyAndScheduleSave()
     }
 
-    public func addLayer() {
+    public func addLayer(customName: String? = nil) {
         let nextNum = (s2CelLayers.map(\.id).max() ?? 0) + 1
-        let name = "Cel_Layer_\(nextNum)"
+        let trimmed = customName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let name = trimmed.isEmpty ? "Cel_Layer_\(nextNum)" : trimmed
         #if canImport(MangaCoreFFI)
         if let proj = rustProject {
             beginRasterUndoCheckpoint()
@@ -751,6 +812,23 @@ public final class StudioWorkspaceController: ObservableObject {
         s2CelLayers.append(CelLayerRowItem(id: nextNum, name: name))
         s2SelectedLayerId = nextNum
         markDirtyAndScheduleSave()
+    }
+
+    /// Renames any layer by `id` with a user-defined custom name.
+    /// The custom name is stored in Undo/Redo checkpoints and `.about-paint-session.json` and is never altered when layers move up or down.
+    @discardableResult
+    public func renameLayer(id: UInt64, newName: String) -> Bool {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let idx = s2CelLayers.firstIndex(where: { $0.id == id })
+        else { return false }
+        let oldName = s2CelLayers[idx].name
+        guard oldName != trimmed else { return true }
+        beginRasterUndoCheckpoint()
+        s2CelLayers[idx].name = trimmed
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "已将图层 '\(oldName)' 重命名为 '\(trimmed)'"
+        return true
     }
 
     public func duplicateSelectedLayer() {
@@ -867,7 +945,7 @@ public final class StudioWorkspaceController: ObservableObject {
         s2SelectedLayerId = id
         refreshCompositeImage()
         markDirtyAndScheduleSave()
-        lastStatusBanner = up ? "已上移图层 '\(movedName)' (#\(target + 1))" : "已下移图层 '\(movedName)' (#\(target + 1))"
+        lastStatusBanner = up ? "已上移图层 '\(movedName)'" : "已下移图层 '\(movedName)'"
     }
 
     public func clearCurrentLayer() {
@@ -895,7 +973,7 @@ public final class StudioWorkspaceController: ObservableObject {
         lastStatusBanner = horizontal ? "Flipped layer horizontally" : "Flipped layer vertically"
     }
 
-    // MARK: - Selection Operations (Fill / Erase / Transform / Expand / Contract Active Selection)
+    // MARK: - ibisPaint-Aligned Selection & Lasso Operations (Selection / Lasso Fill / Lasso Eraser / Add / Subtract / Drag-to-Move)
 
     private var activeSelectionBoundsCanvas: CGRect {
         let w = CGFloat(s2CanvasPixelWidth)
@@ -919,31 +997,116 @@ public final class StudioWorkspaceController: ObservableObject {
         return CGRect(x: 0, y: 0, width: w, height: h)
     }
 
+    /// Returns `true` if `normPt` (`0..1`) lies inside the currently active Lasso or Marquee selection.
+    /// Used in ibisPaint mode so dragging inside an active selection can directly translate the selected pixels.
+    public func isNormalizedPointInsideActiveSelection(_ normPt: CGPoint) -> Bool {
+        guard s2HasActiveSelection else { return false }
+        if let rect = s2SelectionRectNorm {
+            return rect.insetBy(dx: -0.015, dy: -0.015).contains(normPt)
+        }
+        let pts = s2SelectionLassoNorm
+        guard pts.count >= 3 else { return false }
+        // Exact even-odd ray-casting point-in-polygon test (handle both positive and negative edge dy!)
+        var inside = false
+        var j = pts.count - 1
+        for i in 0..<pts.count {
+            let pi = pts[i]
+            let pj = pts[j]
+            let dy = pj.y - pi.y
+            if ((pi.y > normPt.y) != (pj.y > normPt.y)), abs(dy) > 1e-9 {
+                let xIntersect = (pj.x - pi.x) * (normPt.y - pi.y) / dy + pi.x
+                if normPt.x < xIntersect {
+                    inside.toggle()
+                }
+            }
+            j = i
+        }
+        return inside
+    }
+
+    /// Sweeps horizontal scanlines across `bounds` with a hard 192px brush so large selections (> 512px)
+    /// are 100% uniformly filled despite Rust's `256px` per-dab radius clamp.
+    private func paintUniformFillAcrossSelectionBounds(_ bounds: CGRect, rgba: (UInt8, UInt8, UInt8, UInt8), opacity: Float) -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        let radius: Float = 160.0
+        let stepY = CGFloat(radius * 1.15)
+        let minX = Float(max(0.0, bounds.minX - 8.0))
+        let maxX = Float(min(CGFloat(s2CanvasPixelWidth), bounds.maxX + 8.0))
+        var y = max(0.0, bounds.minY)
+        let endY = min(CGFloat(s2CanvasPixelHeight), bounds.maxY)
+        var totalTouched = 0
+        while true {
+            let fy = Float(y)
+            totalTouched += proj.paintSegment(
+                layerId: s2SelectedLayerId,
+                x0: minX,
+                y0: fy,
+                x1: maxX,
+                y1: fy,
+                radiusPx: radius,
+                hardness: 1.0,
+                opacity: opacity,
+                rgba: rgba
+            )
+            if y >= endY { break }
+            y = min(endY, y + stepY)
+        }
+        return totalTouched
+        #else
+        return 0
+        #endif
+    }
+
+    /// Sweeps horizontal scanlines across `bounds` with a hard 160px eraser so large selections (> 512px)
+    /// are 100% cleanly erased despite Rust's `256px` per-dab radius clamp.
+    private func eraseUniformAcrossSelectionBounds(_ bounds: CGRect) -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        let radius: Float = 160.0
+        let stepY = CGFloat(radius * 1.15)
+        let minX = Float(max(0.0, bounds.minX - 8.0))
+        let maxX = Float(min(CGFloat(s2CanvasPixelWidth), bounds.maxX + 8.0))
+        var y = max(0.0, bounds.minY)
+        let endY = min(CGFloat(s2CanvasPixelHeight), bounds.maxY)
+        var totalTouched = 0
+        while true {
+            let fy = Float(y)
+            totalTouched += proj.eraseSegment(
+                layerId: s2SelectedLayerId,
+                x0: minX,
+                y0: fy,
+                x1: maxX,
+                y1: fy,
+                radiusPx: radius,
+                hardness: 1.0,
+                opacity: 1.0
+            )
+            if y >= endY { break }
+            y = min(endY, y + stepY)
+        }
+        return totalTouched
+        #else
+        return 0
+        #endif
+    }
+
     /// Fills the currently active Lasso / Marquee / Magic Wand selection with the active foreground color.
     @discardableResult
     public func fillActiveSelectionWithCurrentColor() -> Int {
         #if canImport(MangaCoreFFI)
-        guard let proj = rustProject else { return 0 }
+        guard rustProject != nil else { return 0 }
         beginRasterUndoCheckpoint()
         let bounds = activeSelectionBoundsCanvas
-        let radius = Float(max(bounds.width, bounds.height) + 16.0)
-        let midX = Float(bounds.midX)
-        let midY = Float(bounds.midY)
         let alpha = UInt8(max(1, min(255, Int(round(s2BrushOpacity * 255.0)))))
-        let touched = proj.paintSegment(
-            layerId: s2SelectedLayerId,
-            x0: midX,
-            y0: midY,
-            x1: midX,
-            y1: midY,
-            radiusPx: radius,
-            hardness: 1.0,
-            opacity: Float(s2BrushOpacity),
-            rgba: (s2ActiveColor.r, s2ActiveColor.g, s2ActiveColor.b, alpha)
+        let touched = paintUniformFillAcrossSelectionBounds(
+            bounds,
+            rgba: (s2ActiveColor.r, s2ActiveColor.g, s2ActiveColor.b, alpha),
+            opacity: Float(s2BrushOpacity)
         )
         refreshCompositeImage()
         markDirtyAndScheduleSave()
-        lastStatusBanner = "Filled selection (\(touched) px) with \(s2ActiveColor.hexString)"
+        lastStatusBanner = "已在选区内填充颜色 \(s2ActiveColor.hexString) (\(touched) px)"
         return touched
         #else
         return 0
@@ -954,29 +1117,47 @@ public final class StudioWorkspaceController: ObservableObject {
     @discardableResult
     public func eraseActiveSelectionPixels() -> Int {
         #if canImport(MangaCoreFFI)
-        guard let proj = rustProject else { return 0 }
+        guard rustProject != nil else { return 0 }
         beginRasterUndoCheckpoint()
         let bounds = activeSelectionBoundsCanvas
-        let radius = Float(max(bounds.width, bounds.height) + 16.0)
-        let midX = Float(bounds.midX)
-        let midY = Float(bounds.midY)
-        let touched = proj.eraseSegment(
-            layerId: s2SelectedLayerId,
-            x0: midX,
-            y0: midY,
-            x1: midX,
-            y1: midY,
-            radiusPx: radius,
-            hardness: 1.0,
-            opacity: 1.0
-        )
+        let touched = eraseUniformAcrossSelectionBounds(bounds)
         refreshCompositeImage()
         markDirtyAndScheduleSave()
-        lastStatusBanner = "Cleared pixels inside selection (\(touched) px)"
+        lastStatusBanner = "已清除选区内像素 (\(touched) px)"
         return touched
         #else
         return 0
         #endif
+    }
+
+    /// Combines an existing normalized polygon (`existing`) with a newly drawn polygon (`incoming`)
+    /// using `.replace`, `.add` (union via bridge vertices), or `.subtract` (even-odd hole cutout).
+    private func combineLassoPolygonsNorm(
+        existing: [CGPoint],
+        incoming: [CGPoint],
+        mode: S2SelectionCombineMode
+    ) -> [CGPoint] {
+        guard mode != .replace, existing.count >= 3, incoming.count >= 3, let firstExisting = existing.first, let firstIncoming = incoming.first else {
+            return incoming
+        }
+        // In even-odd polygon scanline filling (Rust SelectionMask::from_lasso),
+        // connecting two disjoint or hole loops via a zero-width bridge edge (`firstExisting -> firstIncoming -> ... -> firstIncoming -> firstExisting`)
+        // creates an exact union for disjoint loops and a cutout hole for interior loops!
+        var combined = existing
+        combined.append(firstExisting)
+        combined.append(contentsOf: incoming)
+        combined.append(firstIncoming)
+        combined.append(firstExisting)
+        return combined
+    }
+
+    private func rectToNormPolygon(_ rect: CGRect) -> [CGPoint] {
+        [
+            CGPoint(x: rect.minX, y: rect.minY),
+            CGPoint(x: rect.maxX, y: rect.minY),
+            CGPoint(x: rect.maxX, y: rect.maxY),
+            CGPoint(x: rect.minX, y: rect.maxY),
+        ]
     }
 
     /// Expands or contracts the active Lasso or Marquee selection outline and updates the Rust selection mask.
@@ -1001,7 +1182,7 @@ public final class StudioWorkspaceController: ObservableObject {
                 width: clamped.width * w,
                 height: clamped.height * h
             )
-            return setMarqueeSelection(canvasRect: canvasRect, normRect: clamped)
+            return setMarqueeSelection(canvasRect: canvasRect, normRect: clamped, combineMode: .replace)
         } else if s2SelectionLassoNorm.count >= 3 {
             let cx = s2SelectionLassoNorm.map(\.x).reduce(0, +) / CGFloat(s2SelectionLassoNorm.count)
             let cy = s2SelectionLassoNorm.map(\.y).reduce(0, +) / CGFloat(s2SelectionLassoNorm.count)
@@ -1016,7 +1197,7 @@ public final class StudioWorkspaceController: ObservableObject {
                 newNorm.append(CGPoint(x: nx, y: ny))
                 newCanvas.append(CGPoint(x: nx * w, y: ny * h))
             }
-            return setLassoSelection(canvasPoints: newCanvas, normPoints: newNorm)
+            return setLassoSelection(canvasPoints: newCanvas, normPoints: newNorm, combineMode: .replace, workMode: .selection)
         }
         return s2SelectionPixelCount
     }
@@ -1052,7 +1233,7 @@ public final class StudioWorkspaceController: ObservableObject {
             }
             lastInteractiveCompositeTime = now
             #if canImport(CoreGraphics)
-            s2CompositeImage = proj.makeCGImage(backdropCode: s2Backdrop.rustBackdropCode)
+            s2CompositeImage = proj.makeCGImage(backdropCode: self.s2Backdrop.rustBackdropCode)
             #endif
             return
         }
@@ -1073,7 +1254,7 @@ public final class StudioWorkspaceController: ObservableObject {
         if s2CanUndoRaster != canUndo { s2CanUndoRaster = canUndo }
         if s2CanRedoRaster != canRedo { s2CanRedoRaster = canRedo }
         #if canImport(CoreGraphics)
-        s2CompositeImage = proj.makeCGImage(backdropCode: s2Backdrop.rustBackdropCode)
+        s2CompositeImage = proj.makeCGImage(backdropCode: self.s2Backdrop.rustBackdropCode)
         #endif
         #endif
     }
@@ -1222,7 +1403,30 @@ public final class StudioWorkspaceController: ObservableObject {
     }
 
     @discardableResult
-    public func setMarqueeSelection(canvasRect: CGRect, normRect: CGRect) -> Int {
+    public func setMarqueeSelection(
+        canvasRect: CGRect,
+        normRect: CGRect,
+        combineMode: S2SelectionCombineMode? = nil
+    ) -> Int {
+        let mode = combineMode ?? s2SelectionCombineMode
+        if mode != .replace && s2HasActiveSelection {
+            let existingPoly = !s2SelectionLassoNorm.isEmpty
+                ? s2SelectionLassoNorm
+                : (s2SelectionRectNorm.map(rectToNormPolygon) ?? [])
+            if existingPoly.count >= 3 {
+                let incomingNorm = rectToNormPolygon(normRect)
+                let w = CGFloat(max(1, s2CanvasPixelWidth))
+                let h = CGFloat(max(1, s2CanvasPixelHeight))
+                let incomingCanvas = incomingNorm.map { CGPoint(x: $0.x * w, y: $0.y * h) }
+                return setLassoSelection(
+                    canvasPoints: incomingCanvas,
+                    normPoints: incomingNorm,
+                    combineMode: mode,
+                    workMode: .selection
+                )
+            }
+        }
+
         #if canImport(MangaCoreFFI)
         guard let proj = rustProject else { return 0 }
         let x0 = UInt32(max(0, min(Int(proj.width), Int(canvasRect.minX.rounded()))))
@@ -1234,7 +1438,7 @@ public final class StudioWorkspaceController: ObservableObject {
         s2HasActiveSelection = count > 0
         s2SelectionRectNorm = count > 0 ? normRect : nil
         s2SelectionLassoNorm = []
-        lastStatusBanner = count > 0 ? "Marquee selected \(count) px" : "Selection cleared"
+        lastStatusBanner = count > 0 ? "矩形选区已选中 \(count) px" : "选区已清除"
         return count
         #else
         s2HasActiveSelection = true
@@ -1243,18 +1447,116 @@ public final class StudioWorkspaceController: ObservableObject {
         #endif
     }
 
+    /// ibisPaint-aligned Lasso execution:
+    /// - Supports `.selection` (with `.replace`, `.add`, `.subtract` boolean modes)
+    /// - Supports `.lassoFill` (套索填色: immediately fills enclosed polygon with active color & opacity on release!)
+    /// - Supports `.lassoEraser` (套索橡皮: immediately erases enclosed polygon on release!)
     @discardableResult
-    public func setLassoSelection(canvasPoints: [CGPoint], normPoints: [CGPoint]) -> Int {
+    public func setLassoSelection(
+        canvasPoints: [CGPoint],
+        normPoints: [CGPoint],
+        combineMode: S2SelectionCombineMode? = nil,
+        workMode: S2LassoWorkMode? = nil
+    ) -> Int {
+        guard canvasPoints.count >= 3, normPoints.count >= 3 else { return 0 }
+        let activeWorkMode = workMode ?? s2LassoWorkMode
+        let activeCombineMode = combineMode ?? s2SelectionCombineMode
+
         #if canImport(MangaCoreFFI)
-        guard let proj = rustProject, canvasPoints.count >= 3 else { return 0 }
-        let xs = canvasPoints.map { Float($0.x) }
-        let ys = canvasPoints.map { Float($0.y) }
+        guard let proj = rustProject else { return 0 }
+        let w = CGFloat(max(1, s2CanvasPixelWidth))
+        let h = CGFloat(max(1, s2CanvasPixelHeight))
+
+        // 1. Immediate ibisPaint "Lasso Fill" (套索填色) or "Lasso Eraser" (套索橡皮)
+        if activeWorkMode == .lassoFill || activeWorkMode == .lassoEraser {
+            // Preserve any pre-existing selection polygon so temporary lasso fill/erase doesn't destroy user's selection
+            let prevHadSelection = s2HasActiveSelection
+            let prevRectNorm = s2SelectionRectNorm
+            let prevLassoNorm = s2SelectionLassoNorm
+
+            let xs = canvasPoints.map { Float($0.x) }
+            let ys = canvasPoints.map { Float($0.y) }
+            let maskCount = proj.setSelectionLasso(xs: xs, ys: ys)
+            guard maskCount > 0 else {
+                if !prevHadSelection { proj.clearSelection() }
+                return 0
+            }
+
+            let minX = canvasPoints.map(\.x).min() ?? 0
+            let maxX = canvasPoints.map(\.x).max() ?? w
+            let minY = canvasPoints.map(\.y).min() ?? 0
+            let maxY = canvasPoints.map(\.y).max() ?? h
+            let loopBounds = CGRect(x: minX, y: minY, width: max(1, maxX - minX), height: max(1, maxY - minY))
+
+            beginRasterUndoCheckpoint()
+            let touched: Int
+            if activeWorkMode == .lassoFill {
+                let alpha = UInt8(max(1, min(255, Int(round(s2BrushOpacity * 255.0)))))
+                touched = paintUniformFillAcrossSelectionBounds(
+                    loopBounds,
+                    rgba: (s2ActiveColor.r, s2ActiveColor.g, s2ActiveColor.b, alpha),
+                    opacity: Float(s2BrushOpacity)
+                )
+                lastStatusBanner = "套索填色已完成 (\(touched) px · \(s2ActiveColor.hexString))"
+            } else {
+                touched = eraseUniformAcrossSelectionBounds(loopBounds)
+                lastStatusBanner = "套索橡皮已擦除 (\(touched) px)"
+            }
+
+            // Restore previous selection state or clear temporary lasso mask
+            if prevHadSelection {
+                if let r = prevRectNorm {
+                    _ = proj.setSelectionRect(
+                        x0: UInt32(max(0, min(Int(proj.width), Int((r.minX * w).rounded())))),
+                        y0: UInt32(max(0, min(Int(proj.height), Int((r.minY * h).rounded())))),
+                        x1: UInt32(max(0, min(Int(proj.width), Int((r.maxX * w).rounded())))),
+                        y1: UInt32(max(0, min(Int(proj.height), Int((r.maxY * h).rounded()))))
+                    )
+                } else if prevLassoNorm.count >= 3 {
+                    _ = proj.setSelectionLasso(
+                        xs: prevLassoNorm.map { Float($0.x * w) },
+                        ys: prevLassoNorm.map { Float($0.y * h) }
+                    )
+                }
+            } else {
+                proj.clearSelection()
+                s2HasActiveSelection = false
+                s2SelectionPixelCount = 0
+                s2SelectionRectNorm = nil
+                s2SelectionLassoNorm = []
+            }
+
+            refreshCompositeImage()
+            markDirtyAndScheduleSave()
+            return touched
+        }
+
+        // 2. Standard ibisPaint Freehand Lasso Selection (with Replace / Add + / Subtract -)
+        var finalNormPoints = normPoints
+        if activeCombineMode != .replace && s2HasActiveSelection {
+            let existingPoly = !s2SelectionLassoNorm.isEmpty
+                ? s2SelectionLassoNorm
+                : (s2SelectionRectNorm.map(rectToNormPolygon) ?? [])
+            if existingPoly.count >= 3 {
+                finalNormPoints = combineLassoPolygonsNorm(
+                    existing: existingPoly,
+                    incoming: normPoints,
+                    mode: activeCombineMode
+                )
+            }
+        }
+
+        let xs = finalNormPoints.map { Float($0.x * w) }
+        let ys = finalNormPoints.map { Float($0.y * h) }
         let count = proj.setSelectionLasso(xs: xs, ys: ys)
         s2SelectionPixelCount = count
         s2HasActiveSelection = count > 0
         s2SelectionRectNorm = nil
-        s2SelectionLassoNorm = count > 0 ? normPoints : []
-        lastStatusBanner = count > 0 ? "Lasso selected \(count) px — Use Selection Action Bar to Fill, Clear, Invert, or Transform" : "Selection cleared"
+        s2SelectionLassoNorm = count > 0 ? finalNormPoints : []
+        let modeTag = activeCombineMode == .replace ? "套索选区" : (activeCombineMode == .add ? "套索加选(+)" : "套索减选(-)")
+        lastStatusBanner = count > 0
+            ? "\(modeTag)已选中 \(count) px · 可在选区内直接拖动平移，或用上方工具栏填色/擦除/变形"
+            : "选区已清除"
         return count
         #else
         s2HasActiveSelection = true
@@ -1309,6 +1611,7 @@ public final class StudioWorkspaceController: ObservableObject {
         s2LiveLassoNorm = []
         s2LiveMarqueeStartNorm = nil
         s2LiveMarqueeCurrentNorm = nil
+        s2LiveTransformPreviewOffsetNorm = .zero
         lastStatusBanner = "Deselected"
     }
 
@@ -1710,6 +2013,7 @@ public final class StudioWorkspaceController: ObservableObject {
             )
             lastStatusBanner = "整层变形已应用 (\(count) px)"
         }
+        s2LiveTransformPreviewOffsetNorm = .zero
         refreshCompositeImage()
         markDirtyAndScheduleSave()
         return count
@@ -2726,8 +3030,9 @@ public final class StudioWorkspaceController: ObservableObject {
                         CelLayerRowItem(id: UInt64(i), name: "Cel_Layer_\(i)")
                     }
                 }
-                var validCount = 0
-                for item in s2CelLayers {
+                var matchedIds = Set<UInt64>()
+                var unmatchedIndices: [Int] = []
+                for (idx, item) in s2CelLayers.enumerated() {
                     if proj.setLayerFlags(
                         layerId: item.id,
                         visible: item.visible,
@@ -2738,13 +3043,15 @@ public final class StudioWorkspaceController: ObservableObject {
                         opacity: Float(item.opacity),
                         blueSketchTint: item.blueSketchTint
                     ) {
-                        validCount += 1
+                        matchedIds.insert(item.id)
+                    } else {
+                        unmatchedIndices.append(idx)
                     }
                 }
-                // If session JSON LayerIds drifted from p001.mnga LayerIds, probe active Rust IDs in order
-                if validCount != s2CelLayers.count {
-                    var activeRustIds: [UInt64] = []
-                    for candidate in 1...UInt64(max(64, proj.layerCount * 4)) {
+                // Only remap unmatched entries so reordered layers that matched by ID keep their exact stack order & custom names!
+                if !unmatchedIndices.isEmpty {
+                    var orphanRustIds: [UInt64] = []
+                    for candidate in 1...UInt64(max(64, proj.layerCount * 4)) where !matchedIds.contains(candidate) {
                         if proj.setLayerFlags(
                             layerId: candidate,
                             visible: true,
@@ -2755,32 +3062,26 @@ public final class StudioWorkspaceController: ObservableObject {
                             opacity: 1.0,
                             blueSketchTint: false
                         ) {
-                            activeRustIds.append(candidate)
-                            if activeRustIds.count == proj.layerCount {
+                            orphanRustIds.append(candidate)
+                            if matchedIds.count + orphanRustIds.count >= proj.layerCount {
                                 break
                             }
                         }
                     }
-                    if !activeRustIds.isEmpty {
-                        var remapped: [CelLayerRowItem] = []
-                        for (idx, rustId) in activeRustIds.enumerated() {
-                            var row = idx < s2CelLayers.count
-                                ? s2CelLayers[idx]
-                                : CelLayerRowItem(id: rustId, name: "Cel_Layer_\(rustId)")
-                            row.id = rustId
-                            _ = proj.setLayerFlags(
-                                layerId: rustId,
-                                visible: row.visible,
-                                alphaLock: row.alphaLock,
-                                clippingMask: row.clippingMask,
-                                isReference: row.isReference,
-                                blendMode: row.blendMode,
-                                opacity: Float(row.opacity),
-                                blueSketchTint: row.blueSketchTint
-                            )
-                            remapped.append(row)
-                        }
-                        s2CelLayers = remapped
+                    for (orphanOffset, idx) in unmatchedIndices.enumerated() where orphanOffset < orphanRustIds.count {
+                        let rustId = orphanRustIds[orphanOffset]
+                        s2CelLayers[idx].id = rustId
+                        let row = s2CelLayers[idx]
+                        _ = proj.setLayerFlags(
+                            layerId: rustId,
+                            visible: row.visible,
+                            alphaLock: row.alphaLock,
+                            clippingMask: row.clippingMask,
+                            isReference: row.isReference,
+                            blendMode: row.blendMode,
+                            opacity: Float(row.opacity),
+                            blueSketchTint: row.blueSketchTint
+                        )
                     }
                 }
                 if !s2CelLayers.contains(where: { $0.id == s2SelectedLayerId }) {

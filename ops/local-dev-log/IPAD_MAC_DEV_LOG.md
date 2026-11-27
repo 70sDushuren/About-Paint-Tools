@@ -1,5 +1,35 @@
 # iPad Pro & Mac Local Device Dev Log
 
+## 2026-11-27 16:45 CST — v1.0.0-rc5+ 图层自定义重命名（上下移动保持不变）与 ibisPaint 标准套索/选区工作流修订 (Physical iPad Pro 13" M5)
+
+- **测试设备**：iPad Pro 13" (M5) (`iPad (103)` via USB-C 真机部署)
+- **修复问题清单**：
+  1. **各图层支持自定义名称且在上下移动及重启恢复时绝不改变 (`Custom Layer Renaming & Invariant Preservation Across Up/Down Reordering`)**：
+     - 在 `StudioWorkspaceController.swift` 中新增 `renameLayer(id:newName:)` 与 `addLayer(customName:)`，支持对任意图层自定义命名并纳入单步 Undo/Redo 快照与 `.about-paint-session.json` 持久化。
+     - 在 `CelLayerDrawerView.swift` 中提供多入口一键重命名（顶部工具栏 `pencil` 按钮、当前图层控制卡 `重命名` 按钮、每行图层右侧铅笔图标、以及长按 `.contextMenu`），点击即可在图层行内联弹出 `TextField` 直接输入新名称并回车确认。
+     - 移除原先在图层名称前缀拼接的动态序号 `#\(index + 1)` 徽标，并将所有图层属性修改闭包改为按稳定的 `item.id` 索引，同时修复 `ensureRustCanvasAndLayersInitialized()` 在加载重排过顺序的图层时按递增 ID (`1, 2, 3...`) 覆盖图层 ID 的问题，确保无论如何上下移动图层或重启恢复，各图层的自定义名称与绑定像素 100% 保持不变。
+  2. **对齐 ibisPaint X (爱笔思画) 的套索与选区特性及操作习惯 (`ibisPaint-Aligned Lasso & Selection Workflow`)**：
+     - **3 种 ibisPaint 套索工作模式 (`S2LassoWorkMode`)**：
+       - **自由选区 (`Lasso`, `.selection`)**：手绘闭合虚线选区（实时渲染自动闭合预览线与半透明选区底色）。
+       - **套索填色 (`Lasso Fill`, `.lassoFill`)**：还原 ibisPaint 标志性的“套索填色”速涂功能，圈出闭合区域松手即自动填充当前前景色与不透明度，无需二次点击油漆桶（且不破坏原有选区）。
+       - **套索橡皮 (`Lasso Eraser`, `.lassoEraser`)**：圈出闭合区域松手即精准擦除区域内像素。
+     - **3 种布尔选区组合模式 (`S2SelectionCombineMode`)**：支持 **`新选区` (`.replace`)**、**`+ 加选` (`.add`)**、**`- 减选` (`.subtract`)**（套索与矩形选框均适用，通过零宽桥接边在 Rust 奇偶扫描线掩码中实现并集与挖洞减选，并在圈选过程中保持已有选区高亮显示）。
+     - **选区内直接拖动平移像素 & 轻点取消选区 (`Direct On-Canvas Drag-to-Move Inside Selection & Tap-to-Deselect`)**：
+       - 新增 `isNormalizedPointInsideActiveSelection(_:)` 精确奇偶射线命中判定；在套索/选框工具下开启 `选区内拖动直接移动像素`（或在 `变形 T` 工具下）时，直接在画布选区内单指或 Apple Pencil 拖动即可实时预览选区位移并在松手时执行局部像素平移（或开启 `复制移动 Clone` 进行局部复制盖章）；轻点画布空白处（移动距离 `< 2px`）即可像 ibisPaint 一样一键取消选区。
+     - **大选区 100% 均匀填色与擦除 (`Scanline Sweep Fill/Erase Bypassing 256px Radius Clamp`)**：修复原先单圆点涂抹受限于 Rust `radius_px.clamp(0.5, 256.0)` 导致大尺寸选区四角填色/擦除不全的问题，改为 `160px` 硬边扫描线遍历整个选区包围盒，确保任意尺寸选区 100% 均匀填色与擦除。
+- **验证结果**：
+  - `MangaStudio-macOS-Tests`：`MangaStudioV100Rc5IpadTests` 全部 **9 项测试 100% 通过 (`0 failures`)**，含新增的 `testCustomLayerRenamePreservedAcrossMoveUpDownUndoRedoAndSessionReload` 与 `testIbisPaintLassoModesAddSubtractFillEraseAndInsideHitTest`。
+  - 已通过 `devicectl` 将最新 `MangaStudio-iPadOS.app` 安装至物理 `iPad (103)` (`org.aboutpainttools.mangastudio.ipad`)。
+- **涉及修改的文件清单**：
+  - `apps/apple/Shared/Sources/CelLayerDrawerView.swift`
+  - `apps/apple/Shared/Sources/StudioWorkspaceController.swift`
+  - `apps/apple/Shared/Sources/MangaCanvasStageView.swift`
+  - `apps/apple/iPadOS/ApplePencilInputAdapter.swift`
+  - `apps/apple/Shared/Tests/MangaStudioV100Rc5IpadTests.swift`
+  - `ops/local-dev-log/IPAD_MAC_DEV_LOG.md`
+
+---
+
 ## 2026-11-27 15:05 CST — v1.0.0-rc5+ 顶栏固定 LED 保存指示灯 + 悬浮 Hint、多图层上下顺序调整与 60FPS 零阻塞绘制性能优化 (Physical iPad Pro 13" M5)
 
 - **测试设备**：iPad Pro 13" (M5) (`iPad (103)` via USB-C 真机部署启动)

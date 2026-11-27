@@ -69,6 +69,8 @@ public enum ApplePencilInputAdapter {
 /// - `UIPencilInteraction`: Double-Tap (Brush ↔ Eraser) & Apple Pencil Pro Squeeze (toggle Drawer).
 /// - Built-in Palm Rejection + `Apple Pencil Only` mode (finger pans canvas while Pencil draws).
 /// - Always-on 2-finger drag canvas pan + 2-finger tap Undo & 3-finger tap Redo gestures.
+/// - ibisPaint-aligned Lasso Selection (`New / Add + / Subtract -`), `Lasso Fill (套索填色)`, `Lasso Eraser (套索橡皮)`,
+///   and direct on-canvas drag-inside-selection to translate selected pixels!
 public struct ApplePencilCanvasOverlayView: UIViewRepresentable {
     public let controller: StudioWorkspaceController
     public let presetHardness: Float
@@ -110,6 +112,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
     private var activeTouch: UITouch?
     private var hasOpenedStrokeUndoCheckpoint: Bool = false
     private var hasStampedInitialContact: Bool = false
+    private var isDraggingSelectionMove: Bool = false
     private var lastCanvasPt: CGPoint?
     private var anchorCanvasPt: CGPoint?
     private var stabilizedPt: CGPoint?
@@ -362,15 +365,44 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
             if let picked = ctrl.sampleEyedropper(canvasX: Int(mapped.canvas.x), canvasY: Int(mapped.canvas.y)) {
                 onStatusUpdate?("吸色成功 Eyedropper: \(picked.hexString) (RGB \(picked.r),\(picked.g),\(picked.b))")
             }
-        case .bucket, .magicWand, .textBubble, .transform:
+        case .bucket, .magicWand, .textBubble:
             dragStartCanvasPt = mapped.canvas
             dragStartNormPt = mapped.norm
+        case .transform:
+            dragStartCanvasPt = mapped.canvas
+            dragStartNormPt = mapped.norm
+            isDraggingSelectionMove = true
+            ctrl.s2LiveTransformPreviewOffsetNorm = .zero
         case .rectSelect, .panelKnife:
+            if ctrl.s2Tool == .rectSelect,
+               ctrl.s2LassoDragInsideMovesPixels,
+               ctrl.s2SelectionCombineMode == .replace,
+               ctrl.isNormalizedPointInsideActiveSelection(mapped.norm)
+            {
+                dragStartCanvasPt = mapped.canvas
+                dragStartNormPt = mapped.norm
+                isDraggingSelectionMove = true
+                ctrl.s2LiveTransformPreviewOffsetNorm = .zero
+                return
+            }
             dragStartCanvasPt = mapped.canvas
             dragStartNormPt = mapped.norm
             ctrl.s2LiveMarqueeStartNorm = mapped.norm
             ctrl.s2LiveMarqueeCurrentNorm = mapped.norm
         case .lasso:
+            // ibisPaint habit: if an active selection exists and the user touches INSIDE it in Replace+Selection mode,
+            // dragging directly moves the selected pixels instead of destroying the selection!
+            if ctrl.s2LassoWorkMode == .selection,
+               ctrl.s2LassoDragInsideMovesPixels,
+               ctrl.s2SelectionCombineMode == .replace,
+               ctrl.isNormalizedPointInsideActiveSelection(mapped.norm)
+            {
+                dragStartCanvasPt = mapped.canvas
+                dragStartNormPt = mapped.norm
+                isDraggingSelectionMove = true
+                ctrl.s2LiveTransformPreviewOffsetNorm = .zero
+                return
+            }
             lassoCanvasPts = [mapped.canvas]
             lassoNormPts = [mapped.norm]
             ctrl.s2LiveLassoNorm = lassoNormPts
@@ -428,6 +460,17 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         guard let touch = activeTouch, touches.contains(touch) else { return }
         let mapped = mapToCanvas(touch.preciseLocation(in: self))
 
+        if isDraggingSelectionMove, let sNorm = dragStartNormPt, let sCanvas = dragStartCanvasPt {
+            ctrl.s2LiveTransformPreviewOffsetNorm = CGSize(
+                width: mapped.norm.x - sNorm.x,
+                height: mapped.norm.y - sNorm.y
+            )
+            let dx = Int((mapped.canvas.x - sCanvas.x).rounded())
+            let dy = Int((mapped.canvas.y - sCanvas.y).rounded())
+            onStatusUpdate?("拖动平移选区/图层: dX=\(dx)px, dY=\(dy)px (松手即完成移动)")
+            return
+        }
+
         switch ctrl.s2Tool {
         case .eyedropper:
             ctrl.s2EyedropperLoupeNorm = mapped.norm
@@ -469,6 +512,32 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         guard let ctrl = controller, let touch = activeTouch, touches.contains(touch) else { return }
         let mapped = mapToCanvas(touch.preciseLocation(in: self))
 
+        if isDraggingSelectionMove, let sCanvas = dragStartCanvasPt {
+            let dx = Float(mapped.canvas.x - sCanvas.x)
+            let dy = Float(mapped.canvas.y - sCanvas.y)
+            ctrl.s2LiveTransformPreviewOffsetNorm = .zero
+            isDraggingSelectionMove = false
+            if hypot(dx, dy) >= 2.0 {
+                _ = ctrl.applyAffineTransform(
+                    dx: dx,
+                    dy: dy,
+                    scaleX: 1.0,
+                    scaleY: 1.0,
+                    rotDeg: 0.0,
+                    selectionOnly: ctrl.s2HasActiveSelection ? ctrl.s2TransformSelectionOnly : false,
+                    clearSource: !ctrl.s2TransformKeepOriginal
+                )
+                onStatusUpdate?(ctrl.lastStatusBanner)
+            } else if ctrl.s2Tool == .lasso || ctrl.s2Tool == .rectSelect {
+                // Single tap inside selection without dragging: deselect cleanly like ibisPaint tap-to-cancel
+                ctrl.clearCanvasSelection()
+                onStatusUpdate?("已取消选区 (Deselected)")
+            }
+            ctrl.isCanvasInteractionActive = false
+            resetTransientStrokeState()
+            return
+        }
+
         switch ctrl.s2Tool {
         case .eyedropper:
             if let picked = ctrl.sampleEyedropper(canvasX: Int(mapped.canvas.x), canvasY: Int(mapped.canvas.y)) {
@@ -498,27 +567,36 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
             ctrl.s2LiveMarqueeCurrentNorm = nil
         case .rectSelect:
             if let sNorm = dragStartNormPt, let sCanvas = dragStartCanvasPt {
-                let normRect = CGRect(
-                    x: min(sNorm.x, mapped.norm.x),
-                    y: min(sNorm.y, mapped.norm.y),
-                    width: max(0.01, abs(mapped.norm.x - sNorm.x)),
-                    height: max(0.01, abs(mapped.norm.y - sNorm.y))
-                )
-                let canvasRect = CGRect(
-                    x: min(sCanvas.x, mapped.canvas.x),
-                    y: min(sCanvas.y, mapped.canvas.y),
-                    width: max(4.0, abs(mapped.canvas.x - sCanvas.x)),
-                    height: max(4.0, abs(mapped.canvas.y - sCanvas.y))
-                )
-                let count = ctrl.setMarqueeSelection(canvasRect: canvasRect, normRect: normRect)
-                onStatusUpdate?("选区已建立 (\(count) px) · 请使用选区操作栏填充/擦除/调整")
+                if hypot(mapped.canvas.x - sCanvas.x, mapped.canvas.y - sCanvas.y) < 4.0 {
+                    ctrl.clearCanvasSelection()
+                    onStatusUpdate?("已取消选区 (Deselected)")
+                } else {
+                    let normRect = CGRect(
+                        x: min(sNorm.x, mapped.norm.x),
+                        y: min(sNorm.y, mapped.norm.y),
+                        width: max(0.01, abs(mapped.norm.x - sNorm.x)),
+                        height: max(0.01, abs(mapped.norm.y - sNorm.y))
+                    )
+                    let canvasRect = CGRect(
+                        x: min(sCanvas.x, mapped.canvas.x),
+                        y: min(sCanvas.y, mapped.canvas.y),
+                        width: max(4.0, abs(mapped.canvas.x - sCanvas.x)),
+                        height: max(4.0, abs(mapped.canvas.y - sCanvas.y))
+                    )
+                    _ = ctrl.setMarqueeSelection(canvasRect: canvasRect, normRect: normRect)
+                    onStatusUpdate?(ctrl.lastStatusBanner)
+                }
             }
             ctrl.s2LiveMarqueeStartNorm = nil
             ctrl.s2LiveMarqueeCurrentNorm = nil
         case .lasso:
             if lassoCanvasPts.count >= 3 {
-                let count = ctrl.setLassoSelection(canvasPoints: lassoCanvasPts, normPoints: lassoNormPts)
-                onStatusUpdate?("套索已选中 \(count) px · 请在上方/底部选区栏进行填充、清除或扩缩调整")
+                _ = ctrl.setLassoSelection(canvasPoints: lassoCanvasPts, normPoints: lassoNormPts)
+                onStatusUpdate?(ctrl.lastStatusBanner)
+            } else if ctrl.s2HasActiveSelection && ctrl.s2LassoWorkMode == .selection {
+                // Quick tap outside active selection clears the selection, matching ibisPaint X!
+                ctrl.clearCanvasSelection()
+                onStatusUpdate?("已轻点画布取消选区 (Deselected)")
             }
             lassoCanvasPts.removeAll()
             lassoNormPts.removeAll()
@@ -565,6 +643,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
 
     private func resetTransientStrokeState() {
         activeTouch = nil
+        isDraggingSelectionMove = false
         lastCanvasPt = nil
         anchorCanvasPt = nil
         stabilizedPt = nil
@@ -575,6 +654,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         controller?.s2LiveLassoNorm.removeAll()
         controller?.s2LiveMarqueeStartNorm = nil
         controller?.s2LiveMarqueeCurrentNorm = nil
+        controller?.s2LiveTransformPreviewOffsetNorm = .zero
         controller?.s2EyedropperLoupeNorm = nil
     }
 
