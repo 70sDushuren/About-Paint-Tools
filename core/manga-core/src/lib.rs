@@ -69,8 +69,9 @@ pub use glossary::{
 pub use ingest::{ingest_bytes_atomic, sanitize_ingest_filename, IngestAssetKind, IngestResult};
 pub use layer::{blend_rgba, BlendMode, LayerId, LayerKind, LayerNode, LayerStack};
 pub use mnga::{
-    encode_minimal_psd_rgb8, validate_novel_illustration_slot, MngaDocumentSnapshot,
-    MngaLayerHeader, MNGA_MAGIC,
+    decode_layer_stack_v2, encode_layer_stack_v2, encode_minimal_psd_rgb8, load_layer_stack_v2,
+    save_layer_stack_v2_atomic, validate_novel_illustration_slot, MngaDocumentSnapshot,
+    MngaLayerHeader, MNGA_MAGIC, MNGA_MAGIC_V2,
 };
 pub use novel::{
     count_novel_words, write_novel_prose_atomic, DivergenceNote, NovelChapterMeta, NovelWordStats,

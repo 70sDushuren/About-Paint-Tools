@@ -2,34 +2,39 @@ import Foundation
 
 #if canImport(SwiftUI)
 import SwiftUI
+#if canImport(AppKit)
+import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 
 public struct BrushPresetDescriptor: Identifiable, Sendable {
     public let id: UInt32
     public let name: String
     public let trackBadge: String
-    public let baseColor: Color
+    public let defaultSize: Double
+    public let baseOpacity: Double
     public let isEraser: Bool
 
-    public init(id: UInt32, name: String, trackBadge: String, baseColor: Color, isEraser: Bool = false) {
+    public init(
+        id: UInt32,
+        name: String,
+        trackBadge: String,
+        defaultSize: Double = 6.0,
+        baseOpacity: Double = 1.0,
+        isEraser: Bool = false
+    ) {
         self.id = id
         self.name = name
         self.trackBadge = trackBadge
-        self.baseColor = baseColor
+        self.defaultSize = defaultSize
+        self.baseOpacity = baseOpacity
         self.isEraser = isEraser
     }
 }
 
-private struct CanvasStrokeRecord: Identifiable {
-    let id = UUID()
-    var layerId: UInt64
-    var points: [CGPoint]
-    var widths: [CGFloat]
-    var color: Color
-    var isEraser: Bool
-}
-
 extension LayerBlendMode {
-    /// Maps all 13 Rust `BlendMode` values to SwiftUI `GraphicsContext.BlendMode` for live `S2 v0.3.2` cel preview.
+    /// Maps all 13 Rust `BlendMode` values to SwiftUI `GraphicsContext.BlendMode`.
     public var swiftUIBlendMode: GraphicsContext.BlendMode {
         switch self {
         case .normal: return .normal
@@ -49,110 +54,134 @@ extension LayerBlendMode {
     }
 }
 
-/// `S2 v0.3.2` — `雕龙 / DracoNib` (Working Codename) studio workspace:
-/// Zero-tint OLED Studio Charcoal (#111216) + Crimson-Coral (#FF6B4A) + 56px Icon Rail +
-/// 8 Dual-Track Anime Brush Presets + live multi-layer 13-mode cel compositing preview (`R`/`✂`/`🔒`/`B`).
+/// `S2 v1.0.0-rc2` — `雕龙 / DracoNib` ibisPaint-aligned Studio Stage:
+/// - Bound 100% to `StudioWorkspaceController` (zero state loss on tool switch or app restart).
+/// - Zero-overlap responsive contextual top property bar synced 1:1 with macOS Menu Bar.
+/// - Clean left ibisPaint-style Tool Rail + Size/Opacity/Color side caliper (no overlapping canvas text!).
 public struct MangaCanvasStageView: View {
+    @ObservedObject public var controller: StudioWorkspaceController
     public let layout: WorkspaceLayoutHintKind
-    public let hintModeActive: Bool
-    public let hingeAvoidanceWidthPt: CGFloat
 
-    @State private var selectedPresetIndex: UInt32 = 0
-    @State private var selectedCanvasPreset: CanvasPresetKind = .b4PrintManga600Dpi
-    @State private var stabilizerScreenPx: Double = 8.0
-    @State private var viewportZoom: Double = 1.0
-    @State private var simulatedPressure: Double = 0.78
-    @State private var showBrushDrawer: Bool = true
-    @State private var showLayerDrawer: Bool = false
-    @State private var celLayers: [CelLayerRowItem] = []
-    @State private var selectedLayerId: UInt64 = 1
-    @State private var strokes: [CanvasStrokeRecord] = []
-    @State private var undoneStrokes: [CanvasStrokeRecord] = []
-    @State private var activeStroke: CanvasStrokeRecord?
-    @State private var allocatedTiles: Int = 0
+    @State private var activeStroke: PersistedCanvasStroke?
     @State private var canvasDimensions: String = "6071 × 8598 (B4 600DPI)"
-    @State private var statusLine: String = "Zero-allocation B4 600DPI sparse canvas ready."
-
-    #if canImport(MangaCoreFFI)
-    @State private var rustCanvas: MangaCanvasEngine?
-    @State private var rustProject: MangaProjectEngine?
-    #endif
+    @State private var statusLine: String = "Ready"
+    @State private var showColorPopover: Bool = false
 
     private let starterPresets: [BrushPresetDescriptor] = [
-        BrushPresetDescriptor(id: 0, name: "G-Pen", trackBadge: "B&W Ink", baseColor: Color(red: 0.07, green: 0.07, blue: 0.09)),
-        BrushPresetDescriptor(id: 1, name: "Maru-Pen", trackBadge: "B&W Fine", baseColor: Color(red: 0.07, green: 0.07, blue: 0.09)),
-        BrushPresetDescriptor(id: 2, name: "Textured Ink", trackBadge: "B&W Rough", baseColor: Color(red: 0.12, green: 0.12, blue: 0.14)),
-        BrushPresetDescriptor(id: 3, name: "Blue Pencil 2B", trackBadge: "Sketch", baseColor: Color(red: 0.24, green: 0.52, blue: 0.96)),
-        BrushPresetDescriptor(id: 4, name: "Flat Cel Fill", trackBadge: "Webtoon", baseColor: Color(red: 1.0, green: 0.42, blue: 0.29)),
-        BrushPresetDescriptor(id: 5, name: "Soft Airbrush", trackBadge: "Color", baseColor: Color(red: 0.31, green: 0.49, blue: 1.0).opacity(0.45)),
-        BrushPresetDescriptor(id: 6, name: "Watercolor Blend", trackBadge: "Color", baseColor: Color(red: 0.18, green: 0.66, blue: 0.55).opacity(0.65)),
-        BrushPresetDescriptor(id: 7, name: "Vector Eraser", trackBadge: "Clean", baseColor: .white, isEraser: true),
+        BrushPresetDescriptor(id: 0, name: "G-Pen (Hard)", trackBadge: "Ink", defaultSize: 6.0),
+        BrushPresetDescriptor(id: 1, name: "Maru-Pen (Fine)", trackBadge: "Fine", defaultSize: 3.5),
+        BrushPresetDescriptor(id: 2, name: "Dip Pen (Soft)", trackBadge: "Ink", defaultSize: 7.5),
+        BrushPresetDescriptor(id: 3, name: "Blue Pencil 2B", trackBadge: "Sketch", defaultSize: 5.0, baseOpacity: 0.72),
+        BrushPresetDescriptor(id: 4, name: "Flat Cel Marker", trackBadge: "Cel", defaultSize: 18.0),
+        BrushPresetDescriptor(id: 5, name: "Soft Airbrush", trackBadge: "Air", defaultSize: 28.0, baseOpacity: 0.35),
+        BrushPresetDescriptor(id: 6, name: "Watercolor Blend", trackBadge: "Wet", defaultSize: 20.0, baseOpacity: 0.58),
+        BrushPresetDescriptor(id: 7, name: "Vector / Pixel Eraser", trackBadge: "Clean", defaultSize: 16.0, isEraser: true),
     ]
 
     public init(
-        layout: WorkspaceLayoutHintKind,
-        hintModeActive: Bool,
-        hingeAvoidanceWidthPt: CGFloat = 0
+        controller: StudioWorkspaceController,
+        layout: WorkspaceLayoutHintKind
     ) {
+        self.controller = controller
         self.layout = layout
-        self.hintModeActive = hintModeActive
-        self.hingeAvoidanceWidthPt = hingeAvoidanceWidthPt
     }
 
     public var body: some View {
         HStack(spacing: 0) {
-            darkIconRail
-            ZStack(alignment: .bottomLeading) {
-                canvasStage
-                if layout != .singlePaneCompact {
-                    microCaliperHud
-                        .padding(14)
-                }
+            ibisToolRail
+
+            if layout != .singlePaneCompact {
+                leftQuickCaliperStrip
+            }
+
+            VStack(spacing: 0) {
+                contextualToolPropertyBar
+                Divider().background(SuiteColorTokens.mangaBorder)
+                canvasViewport
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if layout != .singlePaneCompact {
-                if showLayerDrawer {
+                if controller.s2ShowLayerDrawer {
                     CelLayerDrawerView(
-                        layers: $celLayers,
-                        selectedLayerId: $selectedLayerId,
-                        onAddLayer: addCelLayer,
-                        onUpdateLayer: syncLayerToRust
+                        layers: $controller.s2CelLayers,
+                        selectedLayerId: $controller.s2SelectedLayerId,
+                        onAddLayer: { controller.addLayer() },
+                        onDuplicateLayer: { controller.duplicateSelectedLayer() },
+                        onDeleteLayer: { controller.deleteSelectedLayer() },
+                        onMergeDown: { controller.mergeSelectedLayerDown() },
+                        onMoveLayer: { id, up in controller.moveLayer(id: id, up: up) },
+                        onClearLayer: { controller.clearCurrentLayer() },
+                        onUpdateLayer: { item in
+                            controller.syncLayerToRust(item)
+                            controller.markDirtyAndScheduleSave()
+                        }
                     )
-                    .frame(width: 248)
-                } else if showBrushDrawer {
-                    brushDynamicsDrawer
-                        .frame(width: 248)
+                    .frame(width: 272)
+                } else if controller.s2ShowBrushDrawer {
+                    brushAndColorInspectorDrawer
+                        .frame(width: 272)
                 }
             }
         }
         .background(SuiteColorTokens.mangaCharcoal)
-        .onAppear(perform: initRustCanvas)
+        .onAppear {
+            controller.ensureRustCanvasAndLayersInitialized()
+            refreshCanvasDimsLabel()
+        }
     }
 
-    // MARK: - 56px OLED Studio Charcoal Icon Rail
+    // MARK: - Left 56px ibisPaint-Aligned Tool Rail
 
-    private var darkIconRail: some View {
-        VStack(spacing: 8) {
-            ForEach(railItems) { item in
-                let selected = isRailItemSelected(item.id)
-                RailIconHintButton(
-                    spec: item,
-                    isSelected: selected,
-                    accent: SuiteColorTokens.mangaAccent,
-                    isDarkChrome: true,
-                    hintModeActive: hintModeActive
-                ) {
-                    handleRailTap(item.id)
+    private var ibisToolRail: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 6) {
+                ForEach(S2DrawingToolKind.allCases) { tool in
+                    let selected = controller.s2Tool == tool
+                    Button {
+                        controller.selectTool(tool)
+                    } label: {
+                        Image(systemName: tool.systemSymbol)
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(width: 40, height: 36)
+                            .background(selected ? SuiteColorTokens.mangaAccent : Color.white.opacity(0.05))
+                            .foregroundStyle(selected ? .white : Color.white.opacity(0.78))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                    .help(tool.displayName)
                 }
+
+                Divider().background(SuiteColorTokens.mangaBorder).padding(.horizontal, 8)
+
+                // Inspector & Layer Drawer toggles
+                Button {
+                    controller.s2ShowLayerDrawer = false
+                    controller.s2ShowBrushDrawer.toggle()
+                } label: {
+                    SuiteVectorIcon(.mangaStabilizer, size: 18)
+                        .frame(width: 40, height: 36)
+                        .background(controller.s2ShowBrushDrawer && !controller.s2ShowLayerDrawer ? SuiteColorTokens.mangaAccent : Color.white.opacity(0.05))
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .help("Brush & Color Inspector")
+
+                Button {
+                    controller.s2ShowLayerDrawer.toggle()
+                } label: {
+                    SuiteVectorIcon(.mangaLayers, size: 18)
+                        .frame(width: 40, height: 36)
+                        .background(controller.s2ShowLayerDrawer ? SuiteColorTokens.mangaAccent : Color.white.opacity(0.05))
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .help("Cel Layers (L)")
             }
-            Spacer()
-            Text("S2")
-                .font(.caption2.monospaced().bold())
-                .foregroundStyle(SuiteColorTokens.mangaAccent)
-                .padding(.bottom, 8)
+            .padding(.vertical, 10)
         }
-        .padding(.vertical, 10)
         .frame(width: 56)
         .background(SuiteColorTokens.mangaPanel)
         .overlay(alignment: .trailing) {
@@ -160,202 +189,310 @@ public struct MangaCanvasStageView: View {
         }
     }
 
-    private var railItems: [ToolHintSpec] {
-        [
-            ToolHintSpec(
-                id: "pen",
-                glyph: .mangaPen,
-                title: "Anime Ink & Brush",
-                roleBadge: "8 Presets",
-                summary: "Switch between G-Pen, Maru-Pen, Blue Sketch, and Webtoon Color brushes.",
-                shortcut: "B",
-                ownershipCue: "S2 RW: manuscript/*.mnga"
-            ),
-            ToolHintSpec(
-                id: "eraser",
-                glyph: .mangaEraser,
-                title: "Vector / Pixel Eraser",
-                roleBadge: "Clean",
-                summary: "Erase ink strokes cleanly; vector intersection mode arrives in v0.5.",
-                shortcut: "E",
-                ownershipCue: "CoW Undo Protected"
-            ),
-            ToolHintSpec(
-                id: "stabilizer",
-                glyph: .mangaStabilizer,
-                title: "Zoom-Adaptive Rope",
-                roleBadge: "Rust FFI",
-                summary: "Toggle brush dynamics & zoom-adaptive rope stabilizer inspector.",
-                shortcut: "S",
-                ownershipCue: "manga_brush_zoom_adaptive_rope"
-            ),
-            ToolHintSpec(
-                id: "layers",
-                glyph: .mangaLayers,
-                title: "Cel Layer Stack",
-                roleBadge: "13 Modes",
-                summary: "Live 13 cel blend modes, visibility, clipping masks, alpha lock & blue sketch tint.",
-                shortcut: "L",
-                ownershipCue: "256×256 Sparse Tiles"
-            ),
-            ToolHintSpec(
-                id: "panels",
-                glyph: .mangaPanels,
-                title: "Diagonal Panel Knife",
-                roleBadge: "B4 / Webtoon",
-                summary: "Toggle between B4 600DPI page manga and 1600px Webtoon strip canvas.",
-                shortcut: "K",
-                ownershipCue: "Dual-Track Canvas"
-            ),
-            ToolHintSpec(
-                id: "undo",
-                glyph: .mangaUndo,
-                title: "Tile-Level CoW Undo",
-                roleBadge: "Zero Lag",
-                summary: "Revert last committed stroke in Rust TileUndoStack.",
-                shortcut: "⌘Z / 2-Finger Tap",
-                ownershipCue: "Incremental CoW Snapshot"
-            ),
-        ]
+    // MARK: - ibisPaint Signature Left Quick Caliper (Color + Size + Opacity, Non-Overlapping)
+
+    private var leftQuickCaliperStrip: some View {
+        VStack(spacing: 12) {
+            // Active Color Swatch + Native HSB Color Picker
+            ColorPicker("", selection: activeColorBinding, supportsOpacity: false)
+                .labelsHidden()
+                .frame(width: 30, height: 30)
+                .help("Active Foreground Color (\(controller.s2ActiveColor.hexString))")
+
+            VStack(spacing: 4) {
+                Text("\(Int(controller.s2BrushSize))")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Slider(value: $controller.s2BrushSize, in: 1...100)
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 100, height: 24)
+                    .frame(width: 24, height: 100)
+                    .tint(SuiteColorTokens.mangaAccent)
+                Text("PX")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Color.white.opacity(0.6))
+            }
+
+            VStack(spacing: 4) {
+                Text("\(Int(controller.s2BrushOpacity * 100))%")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Slider(value: $controller.s2BrushOpacity, in: 0.05...1.0)
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 100, height: 24)
+                    .frame(width: 24, height: 100)
+                    .tint(SuiteColorTokens.hubAccent)
+                Text("OP")
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Color.white.opacity(0.6))
+            }
+
+            Spacer(minLength: 4)
+
+            // Quick recent color dots
+            VStack(spacing: 5) {
+                ForEach(controller.s2RecentColors.prefix(5), id: \.hexString) { swatch in
+                    Button {
+                        controller.setActiveColor(swatch)
+                    } label: {
+                        Circle()
+                            .fill(swatch.swiftUIColor)
+                            .frame(width: 18, height: 18)
+                            .overlay(
+                                Circle().strokeBorder(
+                                    swatch == controller.s2ActiveColor ? Color.white : Color.white.opacity(0.25),
+                                    lineWidth: swatch == controller.s2ActiveColor ? 2 : 1
+                                )
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.bottom, 8)
+        }
+        .padding(.vertical, 10)
+        .frame(width: 48)
+        .background(SuiteColorTokens.mangaPanel.opacity(0.92))
+        .overlay(alignment: .trailing) {
+            Rectangle().fill(SuiteColorTokens.mangaBorder).frame(width: 1)
+        }
     }
 
-    // MARK: - Main Canvas Stage (>= 82% viewport)
+    // MARK: - Zero-Overlap Contextual Top Tool Property Bar (1:1 Synced with Menu Bar)
 
-    private var canvasStage: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                Text("\(activePreset.name) · \(activePreset.trackBadge)")
-                    .font(.caption.bold())
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(SuiteColorTokens.mangaAccent)
-                    .clipShape(Capsule())
+    private var contextualToolPropertyBar: some View {
+        HStack(spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    Label(controller.s2Tool.displayName, systemImage: controller.s2Tool.systemSymbol)
+                        .font(.caption.bold())
+                        .lineLimit(1)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(SuiteColorTokens.mangaAccent)
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                        .fixedSize(horizontal: true, vertical: false)
 
-                if let activeLayer = selectedCelLayer {
-                    Text("Layer: \(activeLayer.name) [\(activeLayer.blendMode.displayName)\(activeLayer.alphaLock ? " 🔒" : "")\(activeLayer.blueSketchTint ? " B" : "")]")
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(activeLayer.blueSketchTint ? Color(red: 0.45, green: 0.72, blue: 1.0) : Color.white.opacity(0.8))
+                    if controller.s2Tool.usesBrushDynamics {
+                        Toggle("Force Fade", isOn: $controller.s2ForceFade)
+                            .toggleStyle(.button)
+                            .font(.caption2.bold())
+                            .tint(SuiteColorTokens.mangaAccent)
+                            .fixedSize(horizontal: true, vertical: false)
+
+                        HStack(spacing: 5) {
+                            Text("Rope \(Int(controller.s2StabilizerPx))px")
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(Color.white.opacity(0.82))
+                                .fixedSize(horizontal: true, vertical: false)
+                            Slider(value: $controller.s2StabilizerPx, in: 0...24)
+                                .frame(width: 76)
+                                .tint(SuiteColorTokens.mangaAccent)
+                        }
+                    }
+
+                    if controller.s2Tool == .bucket {
+                        Menu("Gap: \(controller.s2BucketCloseGapPx)px") {
+                            ForEach([0, 1, 2, 3, 5, 8], id: \.self) { px in
+                                Button("\(px)px") { controller.s2BucketCloseGapPx = px }
+                            }
+                        }
+                        .font(.caption2.bold())
+                        .fixedSize(horizontal: true, vertical: false)
+
+                        Menu("Expand: \(controller.s2BucketExpandPx)px") {
+                            ForEach([0, 1, 2, 3], id: \.self) { px in
+                                Button("+\(px)px") { controller.s2BucketExpandPx = px }
+                            }
+                        }
+                        .font(.caption2.bold())
+                        .fixedSize(horizontal: true, vertical: false)
+                    }
+
+                    Menu("Ruler: \(controller.s2RulerMode.displayName)") {
+                        ForEach(RulerModeKind.allCases) { mode in
+                            Button(mode.displayName) { controller.s2RulerMode = mode }
+                        }
+                    }
+                    .font(.caption2.bold())
+                    .fixedSize(horizontal: true, vertical: false)
+
+                    Menu("Shape: \(controller.s2ShapeAssist.displayName)") {
+                        ForEach(S2ShapeAssistKind.allCases) { shape in
+                            Button(shape.displayName) { controller.s2ShapeAssist = shape }
+                        }
+                    }
+                    .font(.caption2.bold())
+                    .fixedSize(horizontal: true, vertical: false)
+
+                    if let activeLayer = controller.selectedCelLayer {
+                        Text("Layer: \(activeLayer.name) [\(activeLayer.blendMode.displayName)]")
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(activeLayer.blueSketchTint ? Color(red: 0.45, green: 0.72, blue: 1.0) : Color.white.opacity(0.75))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
                 }
-
-                Text(canvasDimensions)
-                    .font(.caption2.monospaced())
-                    .foregroundStyle(Color.white.opacity(0.6))
-
-                Spacer()
-
-                Button("Undo") { performUndo() }
-                    .disabled(strokes.isEmpty)
-                    .font(.caption.bold())
-                    .foregroundStyle(strokes.isEmpty ? Color.white.opacity(0.3) : .white)
-                    .buttonStyle(.plain)
-
-                Button("Redo") { performRedo() }
-                    .disabled(undoneStrokes.isEmpty)
-                    .font(.caption.bold())
-                    .foregroundStyle(undoneStrokes.isEmpty ? Color.white.opacity(0.3) : .white)
-                    .buttonStyle(.plain)
-
-                Button("Clear") { clearCanvas() }
-                    .font(.caption.bold())
-                    .foregroundStyle(SuiteColorTokens.mangaAccent)
-                    .buttonStyle(.plain)
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 10)
+            .layoutPriority(1)
 
-            ZStack(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.white)
-                    .shadow(color: .black.opacity(0.45), radius: 14, y: 4)
-
-                Canvas { context, _ in
-                    renderAllCelLayers(in: &context)
+            // Right fixed quick actions (guaranteed non-overlapping)
+            HStack(spacing: 8) {
+                Button {
+                    controller.s2MirrorHorizontal.toggle()
+                } label: {
+                    Image(systemName: "arrow.left.and.right.righttriangle.left.righttriangle.right")
+                        .font(.caption)
+                        .foregroundStyle(controller.s2MirrorHorizontal ? SuiteColorTokens.mangaAccent : Color.white.opacity(0.75))
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .buttonStyle(.plain)
+                .help("Horizontal Mirror Preview (H)")
+
+                Button {
+                    controller.zoomOut()
+                } label: {
+                    Image(systemName: "minus.magnifyingglass")
+                        .font(.caption)
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+
+                Button("\(Int(controller.s2ViewportZoom * 100))%") {
+                    controller.resetViewport()
+                }
+                .font(.caption2.monospaced().bold())
+                .foregroundStyle(.white)
+                .buttonStyle(.plain)
+                .fixedSize(horizontal: true, vertical: false)
+                .help("Reset Viewport (⌘0)")
+
+                Button {
+                    controller.zoomIn()
+                } label: {
+                    Image(systemName: "plus.magnifyingglass")
+                        .font(.caption)
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+
+                Divider().frame(height: 14).background(SuiteColorTokens.mangaBorder)
+
+                Button("Undo") { controller.performUndoStroke() }
+                    .disabled(!controller.canUndoInCurrentContext)
+                    .font(.caption.bold())
+                    .foregroundStyle(controller.canUndoInCurrentContext ? .white : Color.white.opacity(0.3))
+                    .buttonStyle(.plain)
+                    .fixedSize(horizontal: true, vertical: false)
+
+                Button("Redo") { controller.performRedoStroke() }
+                    .disabled(!controller.canRedoInCurrentContext)
+                    .font(.caption.bold())
+                    .foregroundStyle(controller.canRedoInCurrentContext ? .white : Color.white.opacity(0.3))
+                    .buttonStyle(.plain)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .layoutPriority(2)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(SuiteColorTokens.mangaPanel)
+    }
+
+    // MARK: - Clean Drawable Canvas Viewport (Zero Overlapping Debug Overlays)
+
+    private var canvasViewport: some View {
+        ZStack {
+            SuiteColorTokens.mangaCharcoal
+
+            ZStack {
+                canvasBackdropView
+
+                Canvas { context, size in
+                    renderAllCelLayers(in: &context)
+                    renderActiveRulerGuide(in: &context, size: size)
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 8))
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
-                            handleDragChanged(at: value.location)
+                            handleCanvasDragChanged(at: value.location)
                         }
                         .onEnded { _ in
-                            handleDragEnded()
+                            handleCanvasDragEnded()
                         }
                 )
-
-                Text("Rust CoW Tiles: \(allocatedTiles) · Radius: \(String(format: "%.1fpx", currentRustRadius)) · Rope: \(String(format: "%.1fpx", currentAdaptiveRope)) · Layers: \(celLayers.filter { $0.visible }.count)/\(celLayers.count)")
-                    .font(.caption2.monospaced())
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(SuiteColorTokens.mangaCharcoal.opacity(0.84))
-                    .foregroundStyle(.white)
-                    .clipShape(Capsule())
-                    .padding(10)
-                    .allowsHitTesting(false)
             }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 14)
+            .scaleEffect(
+                x: controller.s2ViewportZoom * (controller.s2MirrorHorizontal ? -1.0 : 1.0),
+                y: controller.s2ViewportZoom
+            )
+            .offset(controller.s2PanOffset)
+            .padding(16)
+        }
+        .clipped()
+    }
+
+    @ViewBuilder
+    private var canvasBackdropView: some View {
+        switch controller.s2Backdrop {
+        case .whitePaper:
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white)
+                .shadow(color: .black.opacity(0.45), radius: 14, y: 4)
+        case .transparentLight:
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(white: 0.92))
+                .shadow(color: .black.opacity(0.45), radius: 14, y: 4)
+        case .transparentDark:
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(white: 0.18))
+                .shadow(color: .black.opacity(0.45), radius: 14, y: 4)
         }
     }
 
-    // MARK: - Micro-Caliper Floating HUD & Right Brush Dynamics Drawer
+    // MARK: - Right Brush & Color Inspector Drawer
 
-    private var microCaliperHud: some View {
-        HStack(spacing: 12) {
-            Text("Zoom \(Int(viewportZoom * 100))%")
-                .font(.caption2.monospaced())
-                .foregroundStyle(.white)
-            Slider(value: $viewportZoom, in: 0.25...4.0)
-                .frame(width: 90)
-                .tint(SuiteColorTokens.mangaAccent)
-
-            Text("Rope \(Int(stabilizerScreenPx))px")
-                .font(.caption2.monospaced())
-                .foregroundStyle(.white)
-            Slider(value: $stabilizerScreenPx, in: 0...24)
-                .frame(width: 90)
-                .tint(SuiteColorTokens.mangaAccent)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(SuiteColorTokens.mangaPanel.opacity(0.92))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .strokeBorder(SuiteColorTokens.mangaBorder, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-    }
-
-    private var brushDynamicsDrawer: some View {
+    private var brushAndColorInspectorDrawer: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Dual-Track Brushes (\(rustPresetCount))")
+                    Text("Brushes & Color")
                         .font(.caption.bold())
                         .foregroundStyle(.white)
+                        .lineLimit(1)
                     Spacer()
-                    Text("v0.2.2")
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(SuiteColorTokens.mangaAccent)
+                    Text(canvasDimensions)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(Color.white.opacity(0.6))
+                        .lineLimit(1)
                 }
 
                 ForEach(starterPresets) { preset in
-                    let active = preset.id == selectedPresetIndex
+                    let active = preset.id == controller.s2PresetIndex
                     Button {
-                        selectedPresetIndex = preset.id
+                        controller.s2PresetIndex = preset.id
+                        controller.s2BrushSize = preset.defaultSize
+                        controller.s2BrushOpacity = preset.baseOpacity
+                        controller.s2Tool = preset.isEraser ? .eraser : .brush
                     } label: {
-                        HStack {
-                            Circle()
-                                .fill(preset.isEraser ? Color.white : preset.baseColor)
-                                .overlay(Circle().strokeBorder(Color.white.opacity(0.4), lineWidth: 1))
-                                .frame(width: 12, height: 12)
+                        HStack(spacing: 8) {
+                            Image(systemName: preset.isEraser ? "eraser.fill" : "paintbrush.pointed.fill")
+                                .font(.caption2)
+                                .foregroundStyle(active ? SuiteColorTokens.mangaAccent : Color.white.opacity(0.65))
+                                .frame(width: 16)
                             Text(preset.name)
                                 .font(.caption.weight(active ? .bold : .regular))
                                 .foregroundStyle(.white)
-                            Spacer()
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                            Spacer(minLength: 4)
                             Text(preset.trackBadge)
                                 .font(.caption2.monospaced())
                                 .foregroundStyle(active ? SuiteColorTokens.mangaAccent : Color.white.opacity(0.55))
+                                .fixedSize(horizontal: true, vertical: false)
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 7)
@@ -371,61 +508,53 @@ public struct MangaCanvasStageView: View {
 
                 Divider().background(SuiteColorTokens.mangaBorder)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Rust Dynamics Preview")
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Color Swatches")
                         .font(.caption.bold())
                         .foregroundStyle(.white)
-                    HStack {
-                        Text("Pressure")
-                            .font(.caption2)
-                            .foregroundStyle(Color.white.opacity(0.7))
-                        Slider(value: $simulatedPressure, in: 0.05...1.0)
-                            .tint(SuiteColorTokens.mangaAccent)
+
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6), spacing: 6) {
+                        ForEach(controller.s2RecentColors, id: \.hexString) { swatch in
+                            Button {
+                                controller.setActiveColor(swatch)
+                            } label: {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(swatch.swiftUIColor)
+                                    .frame(height: 24)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .strokeBorder(
+                                                swatch == controller.s2ActiveColor ? Color.white : Color.white.opacity(0.2),
+                                                lineWidth: swatch == controller.s2ActiveColor ? 2 : 1
+                                            )
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    Text("Radius: \(String(format: "%.2f px", currentRustRadius))")
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(SuiteColorTokens.mangaAccent)
-                    Text("Adaptive Rope: \(String(format: "%.2f canvas px", currentAdaptiveRope))")
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(Color.white.opacity(0.75))
-                    Text(statusLine)
-                        .font(.caption2)
-                        .foregroundStyle(Color.white.opacity(0.6))
-                        .padding(.top, 4)
+
+                    HStack {
+                        Text("Backdrop")
+                            .font(.caption2)
+                            .foregroundStyle(Color.white.opacity(0.72))
+                        Spacer()
+                        Picker("Backdrop", selection: $controller.s2Backdrop) {
+                            ForEach(S2CanvasBackdropKind.allCases) { bg in
+                                Text(bg.displayName).tag(bg)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .tint(SuiteColorTokens.mangaAccent)
+                    }
                 }
 
                 Divider().background(SuiteColorTokens.mangaBorder)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("v0.4 Anti-Halo Fill & Lasso")
-                        .font(.caption.bold())
-                        .foregroundStyle(.white)
-                    Button {
-                        runLiveCloseGapAndLassoVerify()
-                    } label: {
-                        Label("Run Close-Gap (3px) + Lasso", systemImage: "drop.fill")
-                            .font(.caption2.bold())
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .background(SuiteColorTokens.mangaAccent)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 7))
-                    }
-                    .buttonStyle(.plain)
-
-                    Button {
-                        runLiveVectorIntersectionAndRulerVerify()
-                    } label: {
-                        Label("v0.5 Vector Erase + Rulers", systemImage: "ruler")
-                            .font(.caption2.bold())
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .background(SuiteColorTokens.hubAccent)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 7))
-                    }
-                    .buttonStyle(.plain)
-                }
+                Text(statusLine)
+                    .font(.caption2)
+                    .foregroundStyle(Color.white.opacity(0.65))
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(12)
         }
@@ -435,321 +564,142 @@ public struct MangaCanvasStageView: View {
         }
     }
 
-    private func runLiveCloseGapAndLassoVerify() {
-        #if canImport(MangaCoreFFI)
-        let xs: [Float] = [10, 40, 40, 10]
-        let ys: [Float] = [10, 10, 40, 40]
-        let lassoPx = MangaSelectionEngine.lassoPixelCount(
-            xs: xs,
-            ys: ys,
-            width: 80,
-            height: 80,
-            invert: false,
-            borderDeltaPx: 1
+    // MARK: - Drawing, Rulers & Persistent Stroke Handling
+
+    private var activeColorBinding: Binding<Color> {
+        Binding(
+            get: { controller.s2ActiveColor.swiftUIColor },
+            set: { newColor in
+                #if canImport(AppKit)
+                if let ns = NSColor(newColor).usingColorSpace(.sRGB) {
+                    controller.setActiveColor(PersistedRGBA(
+                        r: UInt8(max(0, min(255, Int(round(ns.redComponent * 255))))),
+                        g: UInt8(max(0, min(255, Int(round(ns.greenComponent * 255))))),
+                        b: UInt8(max(0, min(255, Int(round(ns.blueComponent * 255))))),
+                        a: 255
+                    ))
+                }
+                #elseif canImport(UIKit)
+                var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 1
+                UIColor(newColor).getRed(&r, green: &g, blue: &b, alpha: &a)
+                controller.setActiveColor(PersistedRGBA(
+                    r: UInt8(max(0, min(255, Int(round(r * 255))))),
+                    g: UInt8(max(0, min(255, Int(round(g * 255))))),
+                    b: UInt8(max(0, min(255, Int(round(b * 255))))),
+                    a: 255
+                ))
+                #endif
+            }
         )
-        let filled = rustProject?.closeGapFill(
-            layerId: selectedLayerId,
-            seedX: 30,
-            seedY: 30,
-            rgba: (255, 107, 74, 255),
-            closeGapPx: 3,
-            expandPx: 1
-        ) ?? 0
-        statusLine = "v0.4 Fill+Lasso OK: closeGap=3px, expand=1px (filled=\(filled)), lasso+1px=\(lassoPx)px."
-        #else
-        statusLine = "MangaCoreFFI not linked."
-        #endif
     }
 
-    private func runLiveVectorIntersectionAndRulerVerify() {
+    private func refreshCanvasDimsLabel() {
         #if canImport(MangaCoreFFI)
-        guard let proj = rustProject else { return }
-        _ = proj.addVectorStroke(xs: [0, 100], ys: [50, 50], widths: [2.5, 2.5], rgba: (0, 0, 0, 255))
-        _ = proj.addVectorStroke(xs: [50, 50], ys: [0, 100], widths: [2.5, 2.5], rgba: (0, 0, 0, 255))
-        let erased = proj.eraseVectorToIntersection(hitX: 80, hitY: 50, hitRadius: 6)
-        let mirrored = MangaRulerEngine.transformPoint(
-            mode: .symmetry,
-            paramX: 200,
-            paramY: 0,
-            paramAux: .pi / 2,
-            anchorX: 140,
-            anchorY: 80,
-            inX: 140,
-            inY: 80
-        )
-        statusLine = String(
-            format: "v0.5 Vector+Ruler OK: strokes=%d, intersectionErased=%@, symMirror=(%.0f,%.0f).",
-            proj.vectorStrokeCount,
-            erased ? "true" : "false",
-            mirrored.x,
-            mirrored.y
-        )
-        #else
-        statusLine = "MangaCoreFFI not linked."
-        #endif
-    }
-
-    // MARK: - Rust FFI Dynamics & Canvas Lifecycle
-
-    private var activePreset: BrushPresetDescriptor {
-        starterPresets.first(where: { $0.id == selectedPresetIndex }) ?? starterPresets[0]
-    }
-
-    private var rustPresetCount: UInt32 {
-        #if canImport(MangaCoreFFI)
-        return MangaBrushDynamics.presetCount
-        #else
-        return UInt32(starterPresets.count)
-        #endif
-    }
-
-    private var currentRustRadius: Float {
-        #if canImport(MangaCoreFFI)
-        return MangaBrushDynamics.sampleRadius(
-            presetCode: selectedPresetIndex,
-            pressure: Float(simulatedPressure),
-            altitude: 1.25
-        )
-        #else
-        return Float(2.0 + simulatedPressure * 8.0)
-        #endif
-    }
-
-    private var currentAdaptiveRope: Float {
-        #if canImport(MangaCoreFFI)
-        return MangaBrushDynamics.zoomAdaptiveRope(
-            baseScreenPx: Float(stabilizerScreenPx),
-            viewportZoom: Float(viewportZoom)
-        )
-        #else
-        return Float(stabilizerScreenPx / max(viewportZoom, 0.25))
-        #endif
-    }
-
-    private func isRailItemSelected(_ id: String) -> Bool {
-        switch id {
-        case "pen": return !activePreset.isEraser
-        case "eraser": return activePreset.isEraser
-        case "stabilizer": return showBrushDrawer && !showLayerDrawer
-        case "layers": return showLayerDrawer
-        default: return false
-        }
-    }
-
-    private func handleRailTap(_ id: String) {
-        switch id {
-        case "pen":
-            if activePreset.isEraser { selectedPresetIndex = 0 }
-        case "eraser":
-            selectedPresetIndex = 7
-        case "stabilizer":
-            showLayerDrawer = false
-            showBrushDrawer.toggle()
-        case "layers":
-            showLayerDrawer.toggle()
-        case "panels":
-            selectedCanvasPreset = (selectedCanvasPreset == .b4PrintManga600Dpi) ? .webtoonStrip1600 : .b4PrintManga600Dpi
-            initRustCanvas()
-        case "undo":
-            performUndo()
-        default:
-            statusLine = "Module '\(id)' scheduled for upcoming v0.3+ patch."
-        }
-    }
-
-    private func initRustCanvas() {
-        strokes.removeAll()
-        undoneStrokes.removeAll()
-        activeStroke = nil
-        #if canImport(MangaCoreFFI)
-        if let engine = MangaCanvasEngine(preset: selectedCanvasPreset) {
-            rustCanvas = engine
-            allocatedTiles = engine.allocatedTiles
-            let label = selectedCanvasPreset == .b4PrintManga600Dpi ? "B4 600DPI" : "Webtoon 1600px"
+        if let engine = controller.rustCanvas {
+            let label = controller.s2CanvasPreset == .b4PrintManga600Dpi ? "B4 600DPI" : "Webtoon 1600px"
             canvasDimensions = "\(engine.width) × \(engine.height) (\(label))"
-            statusLine = "Initialized \(label) sparse canvas (0 allocated tiles)."
-        }
-        if rustProject == nil, let proj = MangaProjectEngine(preset: selectedCanvasPreset) {
-            let sketchId = proj.addRasterLayer(name: "Sketch_Rough", blendMode: .normal, clippingMask: false, isReference: false)
-            let inkId = proj.addRasterLayer(name: "Ink_Lineart", blendMode: .normal, clippingMask: false, isReference: true)
-            let shadowId = proj.addRasterLayer(name: "Cel_Shadow", blendMode: .multiply, clippingMask: true, isReference: false)
-            _ = proj.setLayerFlags(layerId: sketchId, visible: true, alphaLock: false, clippingMask: false, isReference: false, blendMode: .normal, opacity: 0.35, blueSketchTint: true)
-            rustProject = proj
-            celLayers = [
-                CelLayerRowItem(id: sketchId, name: "Sketch_Rough", blueSketchTint: true, blendMode: .normal, opacity: 0.35),
-                CelLayerRowItem(id: inkId, name: "Ink_Lineart", isReference: true, blendMode: .normal, opacity: 1.0),
-                CelLayerRowItem(id: shadowId, name: "Cel_Shadow", clippingMask: true, blendMode: .multiply, opacity: 0.85),
-            ]
-            selectedLayerId = inkId
-        }
-        #else
-        if celLayers.isEmpty {
-            celLayers = [
-                CelLayerRowItem(id: 1, name: "Sketch_Rough", blueSketchTint: true, opacity: 0.35),
-                CelLayerRowItem(id: 2, name: "Ink_Lineart", isReference: true),
-                CelLayerRowItem(id: 3, name: "Cel_Shadow", clippingMask: true, blendMode: .multiply, opacity: 0.85),
-            ]
-            selectedLayerId = 2
         }
         #endif
     }
 
-    private func addCelLayer() {
-        let nextNum = celLayers.count + 1
-        let name = "Cel_Layer_\(nextNum)"
-        #if canImport(MangaCoreFFI)
-        if let proj = rustProject {
-            let newId = proj.addRasterLayer(name: name, blendMode: .normal, clippingMask: false, isReference: false)
-            celLayers.append(CelLayerRowItem(id: newId, name: name))
-            selectedLayerId = newId
-            statusLine = "Added Rust Layer '\(name)' (total=\(proj.layerCount))."
-            return
-        }
-        #endif
-        let fallbackId = UInt64(nextNum)
-        celLayers.append(CelLayerRowItem(id: fallbackId, name: name))
-        selectedLayerId = fallbackId
-    }
-
-    private func syncLayerToRust(_ item: CelLayerRowItem) {
-        #if canImport(MangaCoreFFI)
-        _ = rustProject?.setLayerFlags(
-            layerId: item.id,
-            visible: item.visible,
-            alphaLock: item.alphaLock,
-            clippingMask: item.clippingMask,
-            isReference: item.isReference,
-            blendMode: item.blendMode,
-            opacity: Float(item.opacity),
-            blueSketchTint: item.blueSketchTint
-        )
-        statusLine = "Synced '\(item.name)' [\(item.blendMode.displayName), R=\(item.isReference), Clip=\(item.clippingMask), Lock=\(item.alphaLock), B=\(item.blueSketchTint)]."
-        #endif
-    }
-
-    private var selectedCelLayer: CelLayerRowItem? {
-        celLayers.first(where: { $0.id == selectedLayerId })
-    }
-
-    private func handleDragChanged(at point: CGPoint) {
-        if let activeLayer = selectedCelLayer {
+    private func handleCanvasDragChanged(at point: CGPoint) {
+        if let activeLayer = controller.selectedCelLayer {
             if !activeLayer.visible {
-                statusLine = "Layer '\(activeLayer.name)' is hidden — toggle eye icon to draw."
+                statusLine = "Layer '\(activeLayer.name)' is hidden."
                 return
             }
-            if activeLayer.alphaLock && !strokes.contains(where: { $0.layerId == activeLayer.id }) {
-                statusLine = "Alpha Lock (🔒) blocked stroke on empty layer '\(activeLayer.name)'."
+            if activeLayer.alphaLock && !controller.s2Strokes.contains(where: { $0.layerId == activeLayer.id }) {
+                statusLine = "Alpha Lock (🔒) protects empty pixels on '\(activeLayer.name)'."
                 return
             }
         }
 
-        let radius = max(1.0, CGFloat(currentRustRadius))
+        let isEraser = controller.s2Tool == .eraser
+        let width = max(1.0, controller.s2BrushSize)
+
         if activeStroke == nil {
-            activeStroke = CanvasStrokeRecord(
-                layerId: selectedLayerId,
-                points: [point],
-                widths: [radius],
-                color: activePreset.baseColor,
-                isEraser: activePreset.isEraser
+            activeStroke = PersistedCanvasStroke(
+                layerId: controller.s2SelectedLayerId,
+                points: [PersistedStrokePoint(x: Double(point.x), y: Double(point.y), width: width)],
+                color: controller.s2ActiveColor,
+                opacity: controller.s2BrushOpacity,
+                isEraser: isEraser,
+                tool: controller.s2Tool
             )
             #if canImport(MangaCoreFFI)
-            rustCanvas?.beginStroke(
-                radius: currentRustRadius,
-                rgba: activePreset.isEraser ? (255, 255, 255, 255) : (17, 18, 22, 255),
-                isEraser: activePreset.isEraser,
-                stabilizerRadius: currentAdaptiveRope
+            let c = controller.s2ActiveColor
+            controller.rustCanvas?.beginStroke(
+                radius: Float(width * 0.5),
+                rgba: isEraser ? (255, 255, 255, 255) : (c.r, c.g, c.b, c.a),
+                isEraser: isEraser,
+                stabilizerRadius: Float(controller.s2StabilizerPx)
             )
             #endif
         } else {
-            activeStroke?.points.append(point)
-            activeStroke?.widths.append(radius)
+            activeStroke?.points.append(PersistedStrokePoint(x: Double(point.x), y: Double(point.y), width: width))
         }
 
         #if canImport(MangaCoreFFI)
         let sample = NativeStrokeSample(
             x: Float(point.x),
             y: Float(point.y),
-            pressure: Float(simulatedPressure),
+            pressure: 0.85,
             altitude: 1.25,
             azimuth: 0.0,
             rollAngle: 0.0,
             timestampMs: Date().timeIntervalSince1970 * 1000.0,
             isPredicted: false
         )
-        rustCanvas?.pushPoints([sample])
-        if let engine = rustCanvas {
-            allocatedTiles = engine.allocatedTiles
+        controller.rustCanvas?.pushPoints([sample])
+        if let engine = controller.rustCanvas {
+            controller.s2AllocatedTiles = engine.allocatedTiles
         }
         #endif
     }
 
-    private func handleDragEnded() {
-        if let finished = activeStroke {
-            strokes.append(finished)
-            undoneStrokes.removeAll()
+    private func handleCanvasDragEnded() {
+        if var finished = activeStroke {
+            if controller.s2ForceFade && finished.points.count >= 6 {
+                let count = finished.points.count
+                let fadeLen = min(6, count / 3)
+                for i in 0..<fadeLen {
+                    let t = Double(i + 1) / Double(fadeLen + 1)
+                    finished.points[i].width *= t
+                    finished.points[count - 1 - i].width *= t
+                }
+            }
+            controller.s2Strokes.append(finished)
+            controller.s2UndoneStrokes.removeAll()
             activeStroke = nil
+            controller.markDirtyAndScheduleSave()
         }
         #if canImport(MangaCoreFFI)
-        if let engine = rustCanvas {
+        if let engine = controller.rustCanvas {
             let dirty = engine.endStroke()
-            allocatedTiles = engine.allocatedTiles
-            statusLine = "Committed \(activePreset.name) stroke (\(dirty) dirty tiles, \(allocatedTiles) total)."
+            controller.s2AllocatedTiles = engine.allocatedTiles
+            statusLine = "Committed \(controller.s2Tool.displayName) (\(dirty) dirty tiles, auto-saved)."
         }
         #endif
     }
 
-    private func performUndo() {
-        guard let last = strokes.popLast() else { return }
-        undoneStrokes.append(last)
-        #if canImport(MangaCoreFFI)
-        if let engine = rustCanvas {
-            _ = engine.undo()
-            allocatedTiles = engine.allocatedTiles
-            statusLine = "Rust CoW Undo applied (\(allocatedTiles) tiles)."
-        }
-        #endif
-    }
-
-    private func performRedo() {
-        guard let restored = undoneStrokes.popLast() else { return }
-        strokes.append(restored)
-        #if canImport(MangaCoreFFI)
-        if let engine = rustCanvas {
-            _ = engine.redo()
-            allocatedTiles = engine.allocatedTiles
-            statusLine = "Rust CoW Redo applied (\(allocatedTiles) tiles)."
-        }
-        #endif
-    }
-
-    private func clearCanvas() {
-        initRustCanvas()
-    }
-
-    /// `S2 v0.3.2` — Live multi-layer cel compositing preview honoring visibility, opacity,
-    /// all 13 `LayerBlendMode`s, non-destructive `B` blue sketch tint, and `✂` clipping mask.
     private func renderAllCelLayers(in context: inout GraphicsContext) {
-        let activeLayers = celLayers.isEmpty
-            ? [CelLayerRowItem(id: selectedLayerId, name: "Default")]
-            : celLayers
+        let activeLayers = controller.s2CelLayers.isEmpty
+            ? [CelLayerRowItem(id: controller.s2SelectedLayerId, name: "Default")]
+            : controller.s2CelLayers
 
         var lastBaseHasContent = false
         for layer in activeLayers {
-            let layerStrokes = strokes.filter { $0.layerId == layer.id }
+            let layerStrokes = controller.s2Strokes.filter { $0.layerId == layer.id }
             let liveStroke = (activeStroke?.layerId == layer.id) ? activeStroke : nil
             let hasContent = !layerStrokes.isEmpty || liveStroke != nil
 
             if !layer.visible || layer.opacity <= 0.001 {
-                if !layer.clippingMask {
-                    lastBaseHasContent = false
-                }
+                if !layer.clippingMask { lastBaseHasContent = false }
                 continue
             }
-
             if !layer.clippingMask {
                 lastBaseHasContent = hasContent
             } else if !lastBaseHasContent {
-                // Clipping mask restricts visibility strictly when the base layer below has content.
                 continue
             }
 
@@ -766,27 +716,69 @@ public struct MangaCanvasStageView: View {
         }
     }
 
-    private func render(_ stroke: CanvasStrokeRecord, blueSketchTint: Bool, in context: inout GraphicsContext) {
+    private func render(_ stroke: PersistedCanvasStroke, blueSketchTint: Bool, in context: inout GraphicsContext) {
         guard stroke.points.count >= 2 else { return }
         let color: Color
         if stroke.isEraser {
             color = .white
         } else if blueSketchTint {
-            color = Color(red: 0.30, green: 0.65, blue: 1.0)
+            color = Color(red: 0.30, green: 0.65, blue: 1.0).opacity(stroke.opacity)
         } else {
-            color = stroke.color
+            color = stroke.color.swiftUIColor.opacity(stroke.opacity)
         }
         for idx in 1..<stroke.points.count {
             var seg = Path()
-            seg.move(to: stroke.points[idx - 1])
-            seg.addLine(to: stroke.points[idx])
-            let w = idx < stroke.widths.count ? stroke.widths[idx] : (stroke.widths.last ?? 3.0)
+            let p0 = stroke.points[idx - 1]
+            let p1 = stroke.points[idx]
+            seg.move(to: CGPoint(x: p0.x, y: p0.y))
+            seg.addLine(to: CGPoint(x: p1.x, y: p1.y))
             context.stroke(
                 seg,
                 with: .color(color),
-                style: StrokeStyle(lineWidth: w, lineCap: .round, lineJoin: .round)
+                style: StrokeStyle(lineWidth: max(0.8, p1.width), lineCap: .round, lineJoin: .round)
             )
         }
+    }
+
+    private func renderActiveRulerGuide(in context: inout GraphicsContext, size: CGSize) {
+        guard controller.s2RulerMode != .off else { return }
+        var guide = Path()
+        switch controller.s2RulerMode {
+        case .symmetry:
+            guide.move(to: CGPoint(x: size.width * 0.5, y: 0))
+            guide.addLine(to: CGPoint(x: size.width * 0.5, y: size.height))
+        case .parallel:
+            for step in stride(from: CGFloat(40), to: size.height, by: 60) {
+                guide.move(to: CGPoint(x: 0, y: step))
+                guide.addLine(to: CGPoint(x: size.width, y: step))
+            }
+        case .perspective2Pt:
+            let horizon = size.height * 0.45
+            guide.move(to: CGPoint(x: 0, y: horizon))
+            guide.addLine(to: CGPoint(x: size.width, y: horizon))
+            for y in [CGFloat(0), size.height * 0.2, size.height * 0.8, size.height] {
+                guide.move(to: CGPoint(x: 0, y: horizon))
+                guide.addLine(to: CGPoint(x: size.width, y: y))
+                guide.move(to: CGPoint(x: size.width, y: horizon))
+                guide.addLine(to: CGPoint(x: 0, y: y))
+            }
+        case .focusLines:
+            let cx = size.width * 0.5
+            let cy = size.height * 0.5
+            let r = max(size.width, size.height)
+            for deg in stride(from: 0.0, to: 360.0, by: 22.5) {
+                let rad = deg * .pi / 180.0
+                guide.move(to: CGPoint(x: cx, y: cy))
+                guide.addLine(to: CGPoint(x: cx + cos(rad) * r, y: cy + sin(rad) * r))
+            }
+        case .off:
+            break
+        }
+        context.stroke(
+            guide,
+            with: .color(SuiteColorTokens.hubAccent.opacity(0.45)),
+            style: StrokeStyle(lineWidth: 1, dash: [6, 4])
+        )
     }
 }
 #endif

@@ -15,7 +15,7 @@ public enum StudioWorkspaceMode: String, CaseIterable, Sendable, Identifiable {
     public var id: String { rawValue }
 }
 
-/// Shared adaptive workspace state synchronized across iPadOS, Touchscreen MacBook, and iPhone Duo.
+/// Legacy init descriptor kept for compatibility with existing callers/previews.
 public struct AppleWorkspaceState: Sendable {
     public var platform: TargetPlatformKind
     public var posture: FoldPostureKind
@@ -38,39 +38,46 @@ public struct AppleWorkspaceState: Sendable {
     }
 }
 
-/// Adaptive root shell shared by iPad, Touchscreen MacBook, and iPhone Duo targets (`v0.2.2`).
-/// Composes the three modular Tri-App workspaces (`S1` Hub / `S2` Manga / `S3` Novel) with
-/// unified Icon-First + 4-Element Hint Mode (`?`) and live Rust `MangaCoreFFI` wiring.
+/// Adaptive root shell shared by iPad, Touchscreen MacBook, and iPhone Duo targets (`v1.0.0-rc2`).
+/// Uses `ViewThatFits` + `.fixedSize()` + `.lineLimit(1)` to guarantee **zero text overlap or clipping**
+/// across all 5 languages (`en`, `zh-Hans`, `zh-Hant`, `yue-Hant`, `es`) and window widths.
 public struct AppleWorkspaceShellView: View {
-    @State private var state: AppleWorkspaceState
-    @State private var hintModeActive: Bool = false
-    @State private var activeLocale: UiLocaleKind = .zhHans
-    @State private var activeProjectDir: String
+    @ObservedObject public var controller: StudioWorkspaceController
+
+    public init(controller: StudioWorkspaceController) {
+        self.controller = controller
+    }
 
     public init(initialState: AppleWorkspaceState) {
-        self._state = State(initialValue: initialState)
-        self._activeProjectDir = State(initialValue: SuiteSharedWorkspace.bootstrapDefaultWorkspaceIfNeeded())
+        let ctrl = StudioWorkspaceController(platform: initialState.platform)
+        ctrl.posture = initialState.posture
+        ctrl.workspaceMode = initialState.mode
+        ctrl.activeSuiteApp = initialState.activeSuiteApp
+        ctrl.hingeAvoidanceWidthPt = initialState.hingeAvoidanceWidthPt
+        self.controller = ctrl
     }
 
     public var body: some View {
         GeometryReader { proxy in
-            let layout = resolveLayout(width: Float(proxy.size.width), height: Float(proxy.size.height))
+            let width = proxy.size.width
+            let layout = resolveLayout(width: Float(width), height: Float(proxy.size.height))
             VStack(spacing: 0) {
-                topBar(layout: layout)
+                topBar(layout: layout, availableWidth: width)
                 Divider()
                 mainContent(layout: layout)
                 Divider()
                 bottomStatusBar(layout: layout)
             }
             .background(shellChromeBackground)
-            .environment(\.locale, Locale(identifier: activeLocale.bcp47))
+            .environment(\.locale, Locale(identifier: controller.activeLocale.bcp47))
         }
     }
 
-    // MARK: - Unified Top Bar
+    // MARK: - Responsive Zero-Overlap Unified Top Bar
 
-    private func topBar(layout: WorkspaceLayoutHintKind) -> some View {
-        HStack(spacing: 12) {
+    private func topBar(layout: WorkspaceLayoutHintKind, availableWidth: CGFloat) -> some View {
+        HStack(spacing: 10) {
+            // Left identity cluster (flexible title with strict 1-line tail truncation)
             HStack(spacing: 8) {
                 Text(suiteBadgeCode)
                     .font(.caption.bold())
@@ -79,151 +86,268 @@ public struct AppleWorkspaceShellView: View {
                     .background(suiteAccentColor)
                     .foregroundStyle(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .fixedSize(horizontal: true, vertical: false)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(suiteDisplayTitle)
-                        .font(.headline)
+                        .font(.subheadline.bold())
                         .foregroundStyle(isDarkHeader ? .white : .primary)
-                    Text("Working Codename · is_final_brand=false")
-                        .font(.caption2)
-                        .foregroundStyle(isDarkHeader ? Color.white.opacity(0.6) : .secondary)
-                }
-            }
-
-            Spacer()
-
-            Picker("Tool", selection: $state.activeSuiteApp) {
-                Text("S1 Hub").tag(SuiteAppKind.hub)
-                Text("S2 Manga").tag(SuiteAppKind.manga)
-                Text("S3 Novel").tag(SuiteAppKind.novel)
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 270)
-
-            if layout != .singlePaneCompact {
-                modePicker
-                    .frame(maxWidth: 250)
-            }
-
-            // v0.8 Live In-App 5-Language Switcher (en / zh-Hans / zh-Hant / yue-Hant / es)
-            Menu {
-                ForEach(UiLocaleKind.allCases) { loc in
-                    Button {
-                        activeLocale = loc
-                    } label: {
-                        Text(loc == activeLocale ? "✓ \(loc.nativeLabel)" : loc.nativeLabel)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    if availableWidth >= 1080 {
+                        Text(URL(fileURLWithPath: controller.activeProjectDir).lastPathComponent + ".prj")
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(isDarkHeader ? Color.white.opacity(0.62) : .secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                     }
                 }
-            } label: {
-                Text(activeLocale.shortBadge)
-                    .font(.caption.bold())
+                .layoutPriority(0)
+            }
+
+            Spacer(minLength: 8)
+
+            // Center adaptive switcher cluster (ViewThatFits prevents any clipping/overlap!)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    suiteAppSegmentedButtons(compact: false)
+                    if layout != .singlePaneCompact {
+                        workspaceModeMenu
+                    }
+                }
+                HStack(spacing: 8) {
+                    suiteAppSegmentedButtons(compact: true)
+                    if layout != .singlePaneCompact {
+                        workspaceModeMenu
+                    }
+                }
+                suiteAppMenuFallback
+            }
+            .layoutPriority(2)
+
+            Spacer(minLength: 8)
+
+            // Right utility cluster (strict fixedSize pills so nothing collides)
+            HStack(spacing: 8) {
+                Button {
+                    controller.flushAllSync()
+                } label: {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(controller.hasUnsavedChanges ? Color.orange : Color.green)
+                            .frame(width: 7, height: 7)
+                        Text(controller.saveStatusBadge)
+                            .font(.caption2.monospaced().bold())
+                            .lineLimit(1)
+                    }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
-                    .background(Color.secondary.opacity(0.18))
+                    .background(Color.secondary.opacity(0.16))
                     .foregroundStyle(isDarkHeader ? .white : .primary)
                     .clipShape(Capsule())
-            }
-            .accessibilityLabel("Switch App Language")
-
-            // Decision #2: Global `?` Hint Mode toggle (tap any rail icon to inspect its 4-element Hint card)
-            Button {
-                hintModeActive.toggle()
-            } label: {
-                HStack(spacing: 4) {
-                    Text("?")
-                        .font(.caption.bold())
-                    if layout != .singlePaneCompact {
-                        Text(hintModeActive ? "Hint ON" : "Hint")
-                            .font(.caption.bold())
-                    }
+                    .fixedSize(horizontal: true, vertical: false)
                 }
-                .padding(.horizontal, 9)
-                .padding(.vertical, 5)
-                .background(hintModeActive ? suiteAccentColor : Color.secondary.opacity(0.18))
-                .foregroundStyle(hintModeActive ? .white : (isDarkHeader ? .white : .primary))
-                .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Toggle Icon Hint Inspection Mode")
+                .buttonStyle(.plain)
+                .help("Save All Work Now (⌘S)")
 
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(isRustLinked ? Color.green : Color.orange)
-                    .frame(width: 8, height: 8)
-                Text(isRustLinked ? "Rust FFI" : "Fallback")
-                    .font(.caption.monospaced())
-                    .foregroundStyle(isDarkHeader ? Color.white.opacity(0.7) : .secondary)
+                // Live 5-Language Switcher
+                Menu {
+                    ForEach(UiLocaleKind.allCases) { loc in
+                        Button {
+                            controller.activeLocale = loc
+                        } label: {
+                            Text(loc == controller.activeLocale ? "✓ \(loc.nativeLabel)" : loc.nativeLabel)
+                        }
+                    }
+                } label: {
+                    Text(controller.activeLocale.shortBadge)
+                        .font(.caption.bold())
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(Color.secondary.opacity(0.18))
+                        .foregroundStyle(isDarkHeader ? .white : .primary)
+                        .clipShape(Capsule())
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .fixedSize(horizontal: true, vertical: false)
+                .accessibilityLabel("Switch App Language")
+
+                // Global `?` Hint Mode toggle
+                Button {
+                    controller.hintModeActive.toggle()
+                } label: {
+                    Text(controller.hintModeActive ? "? ON" : "?")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(controller.hintModeActive ? suiteAccentColor : Color.secondary.opacity(0.18))
+                        .foregroundStyle(controller.hintModeActive ? .white : (isDarkHeader ? .white : .primary))
+                        .clipShape(Capsule())
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Toggle Icon Hint Inspection Mode")
             }
+            .layoutPriority(3)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 9)
+        .padding(.vertical, 8)
         .background(shellChromeBackground)
+    }
+
+    private func suiteAppSegmentedButtons(compact: Bool) -> some View {
+        HStack(spacing: 3) {
+            suitePillButton(.hub, label: compact ? "S1" : "S1 Hub")
+            suitePillButton(.manga, label: compact ? "S2" : "S2 Manga")
+            suitePillButton(.novel, label: compact ? "S3" : "S3 Novel")
+        }
+        .padding(3)
+        .background(Color.secondary.opacity(0.14))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func suitePillButton(_ app: SuiteAppKind, label: String) -> some View {
+        let selected = controller.activeSuiteApp == app && controller.workspaceMode != .dualNovelManga
+        return Button {
+            controller.switchSuiteApp(app)
+        } label: {
+            Text(label)
+                .font(.caption.weight(selected ? .bold : .medium))
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(selected ? suiteAccentColor : Color.clear)
+                .foregroundStyle(selected ? .white : (isDarkHeader ? Color.white.opacity(0.82) : .primary))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var suiteAppMenuFallback: some View {
+        Menu {
+            Button("S1 Hub") { controller.switchSuiteApp(.hub) }
+            Button("S2 Manga") { controller.switchSuiteApp(.manga) }
+            Button("S3 Novel") { controller.switchSuiteApp(.novel) }
+        } label: {
+            Text("\(suiteBadgeCode) ▾")
+                .font(.caption.bold())
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(suiteAccentColor)
+                .foregroundStyle(.white)
+                .clipShape(Capsule())
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var workspaceModeMenu: some View {
+        Menu {
+            ForEach(StudioWorkspaceMode.allCases) { mode in
+                Button {
+                    controller.workspaceMode = mode
+                } label: {
+                    let title = localizedCore(mode.rawValue)
+                    Text(controller.workspaceMode == mode ? "✓ \(title)" : title)
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "rectangle.split.2x1")
+                    .font(.caption2)
+                Text(localizedCore(controller.workspaceMode.rawValue))
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Color.secondary.opacity(0.16))
+            .foregroundStyle(isDarkHeader ? .white : .primary)
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+            .fixedSize(horizontal: true, vertical: false)
+        }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     // MARK: - Main Adaptive Tri-App Stage
 
     @ViewBuilder
     private func mainContent(layout: WorkspaceLayoutHintKind) -> some View {
-        if state.mode == .dualNovelManga && layout != .singlePaneCompact {
-            HStack(spacing: max(state.hingeAvoidanceWidthPt, 1)) {
+        if controller.workspaceMode == .dualNovelManga && layout != .singlePaneCompact {
+            HStack(spacing: max(controller.hingeAvoidanceWidthPt, 1)) {
                 NovelStudioView(
-                    layout: .singlePaneCompact,
-                    hintModeActive: hintModeActive,
-                    hingeAvoidanceWidthPt: state.hingeAvoidanceWidthPt,
-                    activeProjectDir: activeProjectDir
+                    controller: controller,
+                    layout: .singlePaneCompact
                 )
                 .frame(minWidth: 320, maxWidth: .infinity)
 
                 MangaCanvasStageView(
-                    layout: .singlePaneCompact,
-                    hintModeActive: hintModeActive,
-                    hingeAvoidanceWidthPt: state.hingeAvoidanceWidthPt
+                    controller: controller,
+                    layout: .singlePaneCompact
                 )
-                .frame(minWidth: 380, maxWidth: .infinity)
+                .frame(minWidth: 420, maxWidth: .infinity)
             }
         } else {
-            switch state.activeSuiteApp {
+            switch controller.activeSuiteApp {
             case .hub:
                 HubWorkspaceView(
                     layout: layout,
-                    hintModeActive: hintModeActive,
-                    activeProjectDir: $activeProjectDir
+                    hintModeActive: controller.hintModeActive,
+                    activeProjectDir: $controller.activeProjectDir,
+                    externalSection: $controller.hubSection
                 ) { targetTool in
-                    state.activeSuiteApp = targetTool
+                    controller.switchSuiteApp(targetTool)
                 }
             case .manga:
                 MangaCanvasStageView(
-                    layout: layout,
-                    hintModeActive: hintModeActive,
-                    hingeAvoidanceWidthPt: state.hingeAvoidanceWidthPt
+                    controller: controller,
+                    layout: layout
                 )
             case .novel:
                 NovelStudioView(
-                    layout: layout,
-                    hintModeActive: hintModeActive,
-                    hingeAvoidanceWidthPt: state.hingeAvoidanceWidthPt,
-                    activeProjectDir: activeProjectDir
+                    controller: controller,
+                    layout: layout
                 )
             }
         }
     }
 
-    // MARK: - Bottom Status Bar
+    // MARK: - Non-Overlapping Bottom Status Bar (Replaces Floating Canvas Telemetry)
 
     private func bottomStatusBar(layout: WorkspaceLayoutHintKind) -> some View {
-        HStack {
-            Text("Layout: \(layoutName(layout))")
-            Text("·")
-            Text("Platform: \(platformName(state.platform))")
-            Text("·")
-            Text("Lang: \(activeLocale.bcp47)")
-            Text("·")
-            Text("Budget: \(ramBudgetMb(for: state.activeSuiteApp)) MB")
-            Spacer()
-            Text("CPFF v1.0 · MIT · v1.0.0-rc1 / T1.0-S4")
+        HStack(spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    Text(isRustLinked ? "● Rust FFI" : "● Fallback")
+                        .foregroundStyle(isRustLinked ? Color.green : Color.orange)
+                    Text("·")
+                    Text(layoutName(layout))
+                    Text("·")
+                    Text("Lang: \(controller.activeLocale.bcp47)")
+                    if controller.isMangaContext {
+                        Text("·")
+                        Text("Tool: \(controller.s2Tool.displayName)")
+                        Text("·")
+                        Text("Tiles: \(controller.s2AllocatedTiles)")
+                        Text("·")
+                        Text("Zoom: \(Int(controller.s2ViewportZoom * 100))%")
+                    }
+                    Text("·")
+                    Text("Budget: \(ramBudgetMb(for: controller.activeSuiteApp)) MB")
+                }
+                .lineLimit(1)
+            }
+            .layoutPriority(1)
+
+            Text("CPFF v1.0 · MIT · v1.0.0-rc2")
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(2)
         }
         .font(.caption2.monospaced())
-        .foregroundStyle(isDarkHeader ? Color.white.opacity(0.65) : .secondary)
+        .foregroundStyle(isDarkHeader ? Color.white.opacity(0.72) : .secondary)
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
         .background(shellChromeBackground)
@@ -231,25 +355,16 @@ public struct AppleWorkspaceShellView: View {
 
     // MARK: - Helpers
 
-    private var modePicker: some View {
-        Picker("Workspace", selection: $state.mode) {
-            Text(localizedCore("workspace.focus")).tag(StudioWorkspaceMode.focusIllustration)
-            Text(localizedCore("workspace.manga")).tag(StudioWorkspaceMode.mangaStudio)
-            Text(localizedCore("workspace.dual_studio")).tag(StudioWorkspaceMode.dualNovelManga)
-        }
-        .pickerStyle(.segmented)
-    }
-
     private func localizedCore(_ key: String) -> String {
         #if canImport(MangaCoreFFI)
-        return MangaErgonomicsEngine.translate(key: key, locale: activeLocale)
+        return MangaErgonomicsEngine.translate(key: key, locale: controller.activeLocale)
         #else
         return key
         #endif
     }
 
     private var isDarkHeader: Bool {
-        state.activeSuiteApp == .manga && state.mode != .dualNovelManga
+        controller.activeSuiteApp == .manga && controller.workspaceMode != .dualNovelManga
     }
 
     private var shellChromeBackground: Color {
@@ -265,7 +380,7 @@ public struct AppleWorkspaceShellView: View {
     }
 
     private var suiteBadgeCode: String {
-        switch state.activeSuiteApp {
+        switch controller.activeSuiteApp {
         case .hub: return "S1"
         case .manga: return "S2"
         case .novel: return "S3"
@@ -273,7 +388,7 @@ public struct AppleWorkspaceShellView: View {
     }
 
     private var suiteDisplayTitle: String {
-        switch state.activeSuiteApp {
+        switch controller.activeSuiteApp {
         case .hub: return "创想空间 · NoemaDock"
         case .manga: return "雕龙 · DracoNib"
         case .novel: return "文心 · LitteraCore"
@@ -281,7 +396,7 @@ public struct AppleWorkspaceShellView: View {
     }
 
     private var suiteAccentColor: Color {
-        switch state.activeSuiteApp {
+        switch controller.activeSuiteApp {
         case .hub: return SuiteColorTokens.hubAccent
         case .manga: return SuiteColorTokens.mangaAccent
         case .novel: return SuiteColorTokens.novelAccent
@@ -303,15 +418,15 @@ public struct AppleWorkspaceShellView: View {
     private func resolveLayout(width: Float, height: Float) -> WorkspaceLayoutHintKind {
         #if canImport(MangaCoreFFI)
         return MangaPlatformLayoutEngine.recommendLayout(
-            platform: state.platform,
-            posture: state.posture,
+            platform: controller.platform,
+            posture: controller.posture,
             widthDp: width,
             heightDp: height
         )
         #else
-        if state.posture == .foldedCompact || width < 520 { return .singlePaneCompact }
-        if state.posture == .unfoldedDualPane { return .dualPaneAcrossHinge }
-        if state.platform == .macOsTouch && width >= 960 { return .desktopTouchHybrid }
+        if controller.posture == .foldedCompact || width < 520 { return .singlePaneCompact }
+        if controller.posture == .unfoldedDualPane { return .dualPaneAcrossHinge }
+        if controller.platform == .macOsTouch && width >= 960 { return .desktopTouchHybrid }
         return .tabletTouchStudio
         #endif
     }
@@ -321,19 +436,8 @@ public struct AppleWorkspaceShellView: View {
         case .singlePaneCompact: return "SinglePaneCompact"
         case .tabletTouchStudio: return "TabletTouchStudio"
         case .dualPaneAcrossHinge: return "DualPaneAcrossHinge"
-        case .tabletopCanvasTopControlsBottom: return "TabletopCanvasTopControlsBottom"
+        case .tabletopCanvasTopControlsBottom: return "Tabletop"
         case .desktopTouchHybrid: return "DesktopTouchHybrid"
-        }
-    }
-
-    private func platformName(_ platform: TargetPlatformKind) -> String {
-        switch platform {
-        case .ipadOs: return "iPadOS"
-        case .macOsTouch: return "macOS Touch"
-        case .iphoneDuo: return "iPhone Duo"
-        case .androidPadFoldable: return "Android Foldable"
-        case .windowsTouch: return "Windows Touch"
-        case .linuxTouch: return "Linux Touch"
         }
     }
 }

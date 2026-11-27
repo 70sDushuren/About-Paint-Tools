@@ -48,17 +48,9 @@ private struct NovelChapterItem: Identifiable {
 /// Zen mode + live `< 300ms` disk revision-hash watcher for RO `Story Bible` & `CPFF TOC` +
 /// live Rust `MangaNovelMetrics.countUnits` + dashed read-only AI reference drawer.
 public struct NovelStudioView: View {
+    @ObservedObject public var controller: StudioWorkspaceController
     public let layout: WorkspaceLayoutHintKind
-    public let hintModeActive: Bool
-    public let hingeAvoidanceWidthPt: CGFloat
-    public let activeProjectDir: String
 
-    @State private var theme: PaperThemeKind = .warmPaper
-    @State private var zenMode: Bool = false
-    @State private var showOutline: Bool = true
-    @State private var showAiRefDrawer: Bool = false
-    @State private var selectedChapterId: String = "ch001"
-    @State private var activeProseLocale: String = "zh-Hans"
     @State private var liveBibleCharacters: [StoryBibleCharacterSummary] = []
     @State private var liveTocEntries: [ProjectTocEntrySummary] = []
     @State private var divergenceNotes: [DivergenceNoteSummary] = []
@@ -66,20 +58,39 @@ public struct NovelStudioView: View {
     @State private var newDivergenceSummary: String = ""
     @State private var observedRevisionHash: UInt64 = 0
     @State private var lastHotReloadMs: Double = 0.0
-    @State private var proseText: String = """
-    # 第一话 星辉觉醒 / Episode 1: Starlight Awakening
-
-    夜风掠过屋顶的铁艺栏杆，林晓握紧手中微微发烫的星纹钢笔。
-    The night breeze swept across the rooftop railing as Lin Xiao gripped the warm starlight nib.
-
-    “如果这一页画不下所有的回忆，那就把余下的故事写进小说里吧。”
-    """
     @State private var aiReferenceDraft: String = """
     [AI Reference Draft · role="ai_reference_only"]
     Suggested sensory detail from S2 Manga Panel #3:
     - Rooftop neon glare reflecting off wet rain tiles
     - Starlight crest pulsing softly before the first ink stroke lands
     """
+
+    private var hintModeActive: Bool { controller.hintModeActive }
+    private var activeProjectDir: String { controller.activeProjectDir }
+    private var theme: PaperThemeKind {
+        get { controller.s3PaperTheme }
+        nonmutating set { controller.s3PaperTheme = newValue }
+    }
+    private var zenMode: Bool {
+        get { controller.s3ZenMode }
+        nonmutating set { controller.s3ZenMode = newValue }
+    }
+    private var showOutline: Bool {
+        get { controller.s3ShowOutline }
+        nonmutating set { controller.s3ShowOutline = newValue }
+    }
+    private var showAiRefDrawer: Bool {
+        get { controller.s3ShowAiRefDrawer }
+        nonmutating set { controller.s3ShowAiRefDrawer = newValue }
+    }
+    private var selectedChapterId: String {
+        get { controller.s3SelectedChapterId }
+        nonmutating set { controller.s3SelectedChapterId = newValue }
+    }
+    private var activeProseLocale: String {
+        get { controller.s3ActiveProseLocale }
+        nonmutating set { controller.s3ActiveProseLocale = newValue }
+    }
 
     private let fallbackChapters: [NovelChapterItem] = [
         NovelChapterItem(id: "ch001", title: "Ch.001 星辉觉醒", hasDivergence: true, humanLocked: true),
@@ -88,15 +99,11 @@ public struct NovelStudioView: View {
     ]
 
     public init(
-        layout: WorkspaceLayoutHintKind,
-        hintModeActive: Bool,
-        hingeAvoidanceWidthPt: CGFloat = 0,
-        activeProjectDir: String = SuiteSharedWorkspace.defaultProjectDir
+        controller: StudioWorkspaceController,
+        layout: WorkspaceLayoutHintKind
     ) {
+        self.controller = controller
         self.layout = layout
-        self.hintModeActive = hintModeActive
-        self.hingeAvoidanceWidthPt = hingeAvoidanceWidthPt
-        self.activeProjectDir = activeProjectDir
     }
 
     public var body: some View {
@@ -108,7 +115,7 @@ public struct NovelStudioView: View {
 
             if !zenMode && showOutline && layout != .singlePaneCompact {
                 outlineSidebar
-                    .frame(width: 236)
+                    .frame(width: 240)
                 Divider()
             }
 
@@ -118,12 +125,11 @@ public struct NovelStudioView: View {
             if !zenMode && showAiRefDrawer && layout != .singlePaneCompact {
                 Divider()
                 aiReferenceDrawer
-                    .frame(width: 268)
+                    .frame(width: 272)
             }
         }
         .background(theme.background)
         .task(id: activeProjectDir) {
-            // S3 v0.3.2 Live <300ms SLA disk revision watcher (250ms poll interval; zero cursor disruption)
             await runHotReloadWatcher()
         }
     }
@@ -378,36 +384,42 @@ public struct NovelStudioView: View {
                     .frame(maxWidth: 260)
                 }
 
-                Spacer()
+                Spacer(minLength: 8)
 
-                Picker("Locale", selection: $activeProseLocale) {
+                Picker("Locale", selection: $controller.s3ActiveProseLocale) {
                     Text("zh-Hans").tag("zh-Hans")
                     Text("en").tag("en")
                     Text("zh-Hant").tag("zh-Hant")
                     Text("yue-Hant").tag("yue-Hant")
                     Text("es").tag("es")
                 }
+                .labelsHidden()
                 .pickerStyle(.menu)
                 .tint(SuiteColorTokens.novelAccent)
+                .fixedSize(horizontal: true, vertical: false)
 
                 Button {
                     performAtomicDraftSave()
                 } label: {
-                    Label("Atomic Save", systemImage: "checkmark.circle")
+                    Label("Save", systemImage: "checkmark.circle")
                         .font(.caption.bold())
+                        .lineLimit(1)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
                         .background(SuiteColorTokens.novelAccent.opacity(0.16))
                         .foregroundStyle(SuiteColorTokens.novelAccent)
                         .clipShape(Capsule())
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .buttonStyle(.plain)
 
-                Text("Rust Units: \(rustUnitCount) · ~\(estimatedMinutes) min read")
+                Text("\(rustUnitCount) units · ~\(estimatedMinutes)m")
                     .font(.caption.monospaced().bold())
                     .foregroundStyle(SuiteColorTokens.novelAccent)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 18)
             .padding(.vertical, 10)
 
             #if canImport(MangaCoreFFI)
@@ -423,33 +435,40 @@ public struct NovelStudioView: View {
                             Text("Glossary (\(activeProseLocale)):")
                                 .font(.caption2.monospaced().bold())
                                 .foregroundStyle(theme.textColor.opacity(0.6))
+                                .fixedSize(horizontal: true, vertical: false)
                             ForEach(suggestions) { term in
                                 Button("+ \(term.localizedValue)") {
-                                    proseText.append(term.localizedValue)
+                                    controller.s3ProseText.append(term.localizedValue)
+                                    controller.markDirtyAndScheduleSave()
                                 }
                                 .font(.caption2.bold())
+                                .lineLimit(1)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 3)
                                 .background(SuiteColorTokens.novelAccent.opacity(0.14))
                                 .foregroundStyle(SuiteColorTokens.novelAccent)
                                 .clipShape(Capsule())
                                 .buttonStyle(.plain)
+                                .fixedSize(horizontal: true, vertical: false)
                             }
                         }
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 18)
                         .padding(.bottom, 4)
                     }
                 }
             }
             #endif
 
-            TextEditor(text: $proseText)
+            TextEditor(text: $controller.s3ProseText)
                 .font(.system(size: 16, design: .serif))
                 .foregroundStyle(theme.textColor)
                 .scrollContentBackground(.hidden)
                 .padding(.horizontal, zenMode ? 56 : 24)
                 .padding(.vertical, 10)
                 .frame(maxWidth: 760, maxHeight: .infinity)
+                .onChange(of: controller.s3ProseText) { _, _ in
+                    controller.markDirtyAndScheduleSave()
+                }
 
             if !zenMode {
                 Divider()
@@ -457,6 +476,7 @@ public struct NovelStudioView: View {
                     Text("<DivergenceNote>")
                         .font(.caption2.monospaced().bold())
                         .foregroundStyle(SuiteColorTokens.divergenceAmber)
+                        .fixedSize(horizontal: true, vertical: false)
                     TextField("Scene (sc002)", text: $newDivergenceScene)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 90)
@@ -466,15 +486,18 @@ public struct NovelStudioView: View {
                         appendDivergenceNoteViaRust()
                     }
                     .font(.caption.bold())
+                    .lineLimit(1)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(SuiteColorTokens.divergenceAmber)
                     .foregroundStyle(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .buttonStyle(.plain)
+                    .fixedSize(horizontal: true, vertical: false)
                     Text("(\(divergenceNotes.count))")
                         .font(.caption2.monospaced())
                         .foregroundStyle(theme.textColor.opacity(0.65))
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
@@ -485,16 +508,8 @@ public struct NovelStudioView: View {
     }
 
     private func performAtomicDraftSave() {
-        #if canImport(MangaCoreFFI)
-        try? FileManager.default.createDirectory(atPath: activeProjectDir, withIntermediateDirectories: true)
-        _ = MangaNovelMetrics.saveProseAtomic(
-            projectDir: activeProjectDir,
-            relPath: "chapters/\(selectedChapterId)/novel/prose/\(activeProseLocale).md",
-            markdown: proseText,
-            isLocked: false,
-            explicitHumanEdit: true
-        )
-        #endif
+        _ = controller.saveNovelProseNow(explicitHumanEdit: true)
+        controller.flushAllSync()
     }
 
     private func appendDivergenceNoteViaRust() {
@@ -530,7 +545,31 @@ public struct NovelStudioView: View {
             }
 
             Button {
-                proseText.append("\n\n" + aiReferenceDraft)
+                #if canImport(MangaCoreFFI)
+                if let rel = MangaGemmaAiBridge.generateMangaToNovelRef(
+                    projectDir: activeProjectDir,
+                    chapterId: selectedChapterId,
+                    locale: activeProseLocale,
+                    beatSummary: "Synthesized read-only beat from current chapter panels.",
+                    pack: .gemma4E2b
+                ) {
+                    aiReferenceDraft = "[Generated offline · \(rel)]\n\n" + aiReferenceDraft
+                }
+                #endif
+            } label: {
+                Label("Refresh Gemma 4 Ref (ai_assist/)", systemImage: "sparkles")
+                    .font(.caption.bold())
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 7)
+                    .background(SuiteColorTokens.aiSandboxViolet.opacity(0.18))
+                    .foregroundStyle(SuiteColorTokens.aiSandboxViolet)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                controller.s3ProseText.append("\n\n" + aiReferenceDraft)
+                controller.markDirtyAndScheduleSave()
             } label: {
                 Label("Append Snippet Manually", systemImage: "doc.on.clipboard")
                     .font(.caption.bold())
@@ -550,9 +589,9 @@ public struct NovelStudioView: View {
 
     private var rustUnitCount: Int {
         #if canImport(MangaCoreFFI)
-        return MangaNovelMetrics.countUnits(in: proseText)
+        return MangaNovelMetrics.countUnits(in: controller.s3ProseText)
         #else
-        return proseText.split(whereSeparator: { $0.isWhitespace }).count
+        return controller.s3ProseText.split(whereSeparator: { $0.isWhitespace }).count
         #endif
     }
 
@@ -574,6 +613,7 @@ public struct NovelStudioView: View {
         case "outline": return showOutline
         case "zen": return zenMode
         case "aiRef": return showAiRefDrawer
+        case "lock": return controller.s3HumanLocked
         default: return false
         }
     }
@@ -588,6 +628,7 @@ public struct NovelStudioView: View {
             }
         case "zen": zenMode.toggle()
         case "aiRef": showAiRefDrawer.toggle()
+        case "lock": controller.s3HumanLocked.toggle()
         default: break
         }
     }

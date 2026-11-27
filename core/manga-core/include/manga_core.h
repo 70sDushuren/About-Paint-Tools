@@ -473,6 +473,22 @@ size_t manga_ai_bridge_generate_novel_to_manga(
 
 uint8_t manga_suite_run_t10_s4_gate(const char *project_dir_utf8);
 
+/* --- v1.0.0-rc2 MNGA0002 Full Pixel-Tile Save & Crash-Safe Reload API --- */
+
+size_t manga_project_save_mnga_v2(
+    const MangaProjectHandle *handle,
+    const char *project_dir_utf8,
+    const char *rel_path_utf8,
+    uint16_t dpi,
+    uint32_t timelapse_events
+);
+
+uint8_t manga_project_load_mnga_v2(
+    MangaProjectHandle *handle,
+    const char *project_dir_utf8,
+    const char *rel_path_utf8
+);
+
 #ifdef __cplusplus
 }
 #endif

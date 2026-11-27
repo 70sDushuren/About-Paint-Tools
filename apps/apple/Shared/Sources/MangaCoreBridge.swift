@@ -277,8 +277,11 @@ public enum RulerModeKind: UInt32, CaseIterable, Sendable, Identifiable {
 /// demonstrate live `< 300ms` cross-app hot-reload immediately on launch.
 public enum SuiteSharedWorkspace {
     public static var defaultProjectDir: String {
-        FileManager.default.temporaryDirectory
-            .appendingPathComponent("AboutPaintLiveWorkspace", isDirectory: true)
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return base
+            .appendingPathComponent("AboutPaintTools", isDirectory: true)
+            .appendingPathComponent("DefaultWorkspace", isDirectory: true)
             .appendingPathComponent("StarlightLive", isDirectory: true)
             .path
     }
@@ -1146,6 +1149,31 @@ public final class MangaProjectEngine {
     /// `S2 v0.7` — Exports a standards-compliant Adobe PSD (`8BPS` v1 RGB8) interchange payload and returns byte count.
     public func psdExportByteLength() -> Int {
         Int(manga_psd_export_byte_len(handle))
+    }
+
+    /// `S2 v1.0-rc2` — Atomically saves full `MNGA0002` archive (all layers + RLE-compressed sparse pixel tiles + `.mnga.bak`).
+    @discardableResult
+    public func saveMngaV2(
+        projectDir: String,
+        relPath: String,
+        dpi: UInt16 = 600,
+        timelapseEvents: UInt32 = 0
+    ) -> Int {
+        projectDir.withCString { cDir in
+            relPath.withCString { cRel in
+                Int(manga_project_save_mnga_v2(handle, cDir, cRel, dpi, timelapseEvents))
+            }
+        }
+    }
+
+    /// `S2 v1.0-rc2` — Restores full `MNGA0002` archive (auto-recovering from `.mnga.bak` if primary is corrupted).
+    @discardableResult
+    public func loadMngaV2(projectDir: String, relPath: String) -> Bool {
+        projectDir.withCString { cDir in
+            relPath.withCString { cRel in
+                manga_project_load_mnga_v2(handle, cDir, cRel) != 0
+            }
+        }
     }
 }
 

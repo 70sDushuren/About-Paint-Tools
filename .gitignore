@@ -20,3 +20,8 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+
+# Ephemeral Local Workspace Session & Crash-Safe Backups
+.about-paint-session.json
+.s2_canvas_state.json
+*.mnga.bak

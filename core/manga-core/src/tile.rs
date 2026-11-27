@@ -64,6 +64,17 @@ impl TileData {
     pub fn is_empty(&self) -> bool {
         self.pixels.iter().all(|&b| b == 0)
     }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.pixels
+    }
+
+    pub fn from_bytes(pixels: Vec<u8>) -> Option<Self> {
+        if pixels.len() != TILE_BYTE_LEN {
+            return None;
+        }
+        Some(Self { pixels })
+    }
 }
 
 /// Sparse raster layer backed by `Arc<TileData>` for O(1) Copy-on-Write snapshots.
@@ -91,6 +102,22 @@ impl TileLayer {
     /// Approximate heap memory consumed by allocated tiles in bytes.
     pub fn memory_bytes(&self) -> usize {
         self.tiles.len() * TILE_BYTE_LEN
+    }
+
+    pub fn clear(&mut self) {
+        self.tiles.clear();
+    }
+
+    /// Returns all allocated tiles sorted deterministically by `(ty, tx)` for reproducible `.mnga` v2 encoding.
+    pub fn sorted_tiles(&self) -> Vec<(TileCoord, Arc<TileData>)> {
+        let mut entries: Vec<(TileCoord, Arc<TileData>)> = self
+            .tiles
+            .iter()
+            .filter(|(_, t)| !t.is_empty())
+            .map(|(&c, t)| (c, Arc::clone(t)))
+            .collect();
+        entries.sort_by_key(|(c, _)| (c.ty, c.tx));
+        entries
     }
 
     pub fn get_tile(&self, coord: TileCoord) -> Option<Arc<TileData>> {

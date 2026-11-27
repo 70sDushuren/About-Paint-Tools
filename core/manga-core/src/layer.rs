@@ -26,6 +26,26 @@ pub enum BlendMode {
     Add = 12,
 }
 
+impl BlendMode {
+    pub fn from_u32(code: u32) -> Self {
+        match code {
+            1 => Self::Multiply,
+            2 => Self::Screen,
+            3 => Self::Overlay,
+            4 => Self::GlowDodge,
+            5 => Self::LinearBurn,
+            6 => Self::HardLight,
+            7 => Self::SoftLight,
+            8 => Self::Darken,
+            9 => Self::Lighten,
+            10 => Self::ColorBurn,
+            11 => Self::ColorDodge,
+            12 => Self::Add,
+            _ => Self::Normal,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayerKind {
     Raster,

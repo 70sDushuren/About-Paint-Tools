@@ -1565,6 +1565,64 @@ pub unsafe extern "C" fn manga_suite_run_t10_s4_gate(project_dir_utf8: *const c_
     u8::from(crate::suite::run_t10_s4_release_candidate_gate(std::path::Path::new(&dir)).is_ok())
 }
 
+/// Atomically persists the full `LayerStack` (metadata + RLE-compressed sparse `256×256` RGBA8 tiles)
+/// into `MNGA0002` format with `.mnga.bak` crash-recovery backup (`v1.0.0-rc2`).
+///
+/// # Safety
+/// `handle` must be a valid `MangaProjectHandle`; strings must be valid NUL-terminated UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_save_mnga_v2(
+    handle: *const MangaProjectHandle,
+    project_dir_utf8: *const c_char,
+    rel_path_utf8: *const c_char,
+    dpi: u16,
+    timelapse_events: u32,
+) -> usize {
+    let Some(proj) = (unsafe { handle.as_ref() }) else {
+        return 0;
+    };
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    let rel = unsafe { cstr_to_string(rel_path_utf8, "") };
+    if dir.is_empty() || rel.is_empty() {
+        return 0;
+    }
+    crate::mnga::save_layer_stack_v2_atomic(
+        &proj.doc.layers,
+        std::path::Path::new(&dir),
+        &rel,
+        dpi,
+        timelapse_events,
+    )
+    .map(|(_, len)| len)
+    .unwrap_or(0)
+}
+
+/// Restores a full `MNGA0002` archive (including all sparse RGBA8 pixel tiles, falling back to `.mnga.bak`
+/// if needed) directly into `handle` (`v1.0.0-rc2`). Returns `1` on success, `0` on failure.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`; strings must be valid NUL-terminated UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn manga_project_load_mnga_v2(
+    handle: *mut MangaProjectHandle,
+    project_dir_utf8: *const c_char,
+    rel_path_utf8: *const c_char,
+) -> u8 {
+    let Some(proj) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let dir = unsafe { cstr_to_string(project_dir_utf8, "") };
+    let rel = unsafe { cstr_to_string(rel_path_utf8, "") };
+    if dir.is_empty() || rel.is_empty() {
+        return 0;
+    }
+    let Ok((stack, _, _)) = crate::mnga::load_layer_stack_v2(std::path::Path::new(&dir), &rel) else {
+        return 0;
+    };
+    proj.doc.layers = stack;
+    1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

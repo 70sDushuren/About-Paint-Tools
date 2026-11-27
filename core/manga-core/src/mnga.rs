@@ -9,6 +9,212 @@ use crate::project::NovelIllustrationMode;
 use crate::suite::{can_write_relative_path, SuiteApp};
 
 pub const MNGA_MAGIC: &[u8; 8] = b"MNGA0001";
+pub const MNGA_MAGIC_V2: &[u8; 8] = b"MNGA0002";
+
+/// Encodes an entire `LayerStack` (metadata + all non-empty sparse `256×256` RGBA8 tiles compressed
+/// with fast lossless RGBA8 RLE) into deterministic binary `MNGA0002` format with trailing FNV-1a checksum.
+pub fn encode_layer_stack_v2(stack: &LayerStack, dpi: u16, timelapse_events: u32) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(256 + stack.layers().len() * 128);
+    buf.extend_from_slice(MNGA_MAGIC_V2);
+    buf.extend_from_slice(&stack.width.to_le_bytes());
+    buf.extend_from_slice(&stack.height.to_le_bytes());
+    buf.extend_from_slice(&dpi.to_le_bytes());
+    buf.extend_from_slice(&timelapse_events.to_le_bytes());
+    buf.extend_from_slice(&(stack.layers().len() as u32).to_le_bytes());
+
+    for l in stack.layers() {
+        let mut flags = 0u8;
+        if l.visible { flags |= 1 << 0; }
+        if l.clipping_mask { flags |= 1 << 1; }
+        if l.alpha_lock { flags |= 1 << 2; }
+        if l.is_reference { flags |= 1 << 3; }
+        if l.tint_rgba.is_some() { flags |= 1 << 4; }
+        if l.locked { flags |= 1 << 5; }
+
+        buf.extend_from_slice(&l.id.0.to_le_bytes());
+        buf.extend_from_slice(&(l.blend_mode as u32).to_le_bytes());
+        buf.extend_from_slice(&((l.opacity.clamp(0.0, 1.0) * 1000.0).round() as u16).to_le_bytes());
+        buf.push(flags);
+
+        let nb = l.name.as_bytes();
+        buf.extend_from_slice(&(nb.len() as u16).to_le_bytes());
+        buf.extend_from_slice(nb);
+
+        let tiles = l.raster.as_ref().map(|r| r.sorted_tiles()).unwrap_or_default();
+        buf.extend_from_slice(&(tiles.len() as u32).to_le_bytes());
+        for (coord, tile) in tiles {
+            let compressed = rle_encode_rgba(tile.as_bytes());
+            buf.extend_from_slice(&coord.tx.to_le_bytes());
+            buf.extend_from_slice(&coord.ty.to_le_bytes());
+            buf.extend_from_slice(&(compressed.len() as u32).to_le_bytes());
+            buf.extend_from_slice(&compressed);
+        }
+    }
+
+    let checksum = fnv1a_64(&buf);
+    buf.extend_from_slice(&checksum.to_le_bytes());
+    buf
+}
+
+/// Decodes a `MNGA0002` binary archive back into a pixel-exact `LayerStack`, verifying magic & FNV-1a checksum.
+pub fn decode_layer_stack_v2(bytes: &[u8]) -> Result<(LayerStack, u16, u32), String> {
+    if bytes.len() < 8 + 4 + 4 + 2 + 4 + 4 + 8 {
+        return Err("MNGA v2 payload too short".into());
+    }
+    if &bytes[..8] != MNGA_MAGIC_V2 {
+        return Err("Invalid MNGA0002 magic header".into());
+    }
+    let (body, tail) = bytes.split_at(bytes.len() - 8);
+    let expected_sum = u64::from_le_bytes(tail.try_into().unwrap());
+    if fnv1a_64(body) != expected_sum {
+        return Err("MNGA v2 integrity checksum mismatch".into());
+    }
+
+    let mut cursor = 8usize;
+    let width = read_u32(body, &mut cursor)?;
+    let height = read_u32(body, &mut cursor)?;
+    let dpi = read_u16(body, &mut cursor)?;
+    let timelapse_events = read_u32(body, &mut cursor)?;
+    let layer_count = read_u32(body, &mut cursor)? as usize;
+
+    let mut stack = LayerStack::new(width, height);
+    for _ in 0..layer_count {
+        let _saved_id = read_u64(body, &mut cursor)?;
+        let blend_code = read_u32(body, &mut cursor)?;
+        let opacity_x1000 = read_u16(body, &mut cursor)?;
+        if cursor >= body.len() {
+            return Err("MNGA v2 truncated layer flags".into());
+        }
+        let flags = body[cursor];
+        cursor += 1;
+
+        let name_len = read_u16(body, &mut cursor)? as usize;
+        if cursor + name_len > body.len() {
+            return Err("MNGA v2 truncated layer name".into());
+        }
+        let name = String::from_utf8(body[cursor..cursor + name_len].to_vec())
+            .map_err(|_| "MNGA v2 invalid UTF-8 layer name".to_string())?;
+        cursor += name_len;
+
+        let lid = stack.add_raster_layer(name);
+        if let Some(layer) = stack.get_mut(lid) {
+            layer.blend_mode = crate::layer::BlendMode::from_u32(blend_code);
+            layer.opacity = (f32::from(opacity_x1000) / 1000.0).clamp(0.0, 1.0);
+            layer.visible = (flags & (1 << 0)) != 0;
+            layer.clipping_mask = (flags & (1 << 1)) != 0;
+            layer.alpha_lock = (flags & (1 << 2)) != 0;
+            layer.is_reference = (flags & (1 << 3)) != 0;
+            layer.tint_rgba = if (flags & (1 << 4)) != 0 {
+                Some([77, 166, 255, 255])
+            } else {
+                None
+            };
+            layer.locked = (flags & (1 << 5)) != 0;
+
+            let tile_count = read_u32(body, &mut cursor)? as usize;
+            if let Some(tile_layer) = layer.raster.as_mut() {
+                for _ in 0..tile_count {
+                    let tx = i32::from_le_bytes(read_u32(body, &mut cursor)?.to_le_bytes());
+                    let ty = i32::from_le_bytes(read_u32(body, &mut cursor)?.to_le_bytes());
+                    let comp_len = read_u32(body, &mut cursor)? as usize;
+                    if cursor + comp_len > body.len() {
+                        return Err("MNGA v2 truncated tile payload".into());
+                    }
+                    let raw = rle_decode_rgba(&body[cursor..cursor + comp_len])?;
+                    cursor += comp_len;
+                    let tile = crate::tile::TileData::from_bytes(raw)
+                        .ok_or_else(|| "MNGA v2 decoded tile size mismatch".to_string())?;
+                    tile_layer.set_tile(crate::tile::TileCoord { tx, ty }, Some(std::sync::Arc::new(tile)));
+                }
+            }
+        }
+    }
+
+    Ok((stack, dpi, timelapse_events))
+}
+
+/// Atomically persists full `MNGA0002` pixel-tile archive under `SuiteApp::Manga` ownership,
+/// maintaining a `.bak` copy of the prior committed version for crash-safe recovery.
+pub fn save_layer_stack_v2_atomic(
+    stack: &LayerStack,
+    project_dir: &Path,
+    rel_path: &str,
+    dpi: u16,
+    timelapse_events: u32,
+) -> Result<(PathBuf, usize), String> {
+    can_write_relative_path(SuiteApp::Manga, rel_path)?;
+    let target = project_dir.join(rel_path);
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let bytes = encode_layer_stack_v2(stack, dpi, timelapse_events);
+    let tmp = target.with_file_name(format!(".mnga2.tmp.{}", std::process::id()));
+    fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
+    if target.is_file() {
+        let bak = target.with_extension("mnga.bak");
+        let _ = fs::copy(&target, &bak);
+    }
+    fs::rename(&tmp, &target).map_err(|e| e.to_string())?;
+    Ok((target, bytes.len()))
+}
+
+/// Loads a `MNGA0002` archive from disk (falling back to `.mnga.bak` automatically if primary is corrupt).
+pub fn load_layer_stack_v2(project_dir: &Path, rel_path: &str) -> Result<(LayerStack, u16, u32), String> {
+    let target = project_dir.join(rel_path);
+    if let Ok(bytes) = fs::read(&target) {
+        if let Ok(decoded) = decode_layer_stack_v2(&bytes) {
+            return Ok(decoded);
+        }
+    }
+    let bak = target.with_extension("mnga.bak");
+    if let Ok(bytes) = fs::read(&bak) {
+        return decode_layer_stack_v2(&bytes);
+    }
+    Err(format!("Unable to load valid MNGA0002 archive at '{}'", target.display()))
+}
+
+/// Fast lossless RGBA8 run-length encoder (groups identical 4-byte pixels, up to 65535 run length).
+fn rle_encode_rgba(raw: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(256);
+    let mut i = 0usize;
+    while i + 4 <= raw.len() {
+        let px = &raw[i..i + 4];
+        let mut run = 1u16;
+        while i + (run as usize + 1) * 4 <= raw.len()
+            && run < u16::MAX
+            && &raw[i + (run as usize) * 4..i + (run as usize + 1) * 4] == px
+        {
+            run += 1;
+        }
+        out.extend_from_slice(&run.to_le_bytes());
+        out.extend_from_slice(px);
+        i += (run as usize) * 4;
+    }
+    out
+}
+
+fn rle_decode_rgba(comp: &[u8]) -> Result<Vec<u8>, String> {
+    if comp.len() % 6 != 0 {
+        return Err("Corrupt MNGA v2 RLE tile length".into());
+    }
+    let mut out = Vec::with_capacity(crate::tile::TILE_BYTE_LEN);
+    let mut i = 0usize;
+    while i + 6 <= comp.len() {
+        let run = u16::from_le_bytes([comp[i], comp[i + 1]]) as usize;
+        let px = &comp[i + 2..i + 6];
+        if out.len() + run * 4 > crate::tile::TILE_BYTE_LEN {
+            return Err("MNGA v2 RLE tile overflow".into());
+        }
+        for _ in 0..run {
+            out.extend_from_slice(px);
+        }
+        i += 6;
+    }
+    if out.len() != crate::tile::TILE_BYTE_LEN {
+        return Err("MNGA v2 RLE tile underflow".into());
+    }
+    Ok(out)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MngaLayerHeader {
@@ -321,5 +527,63 @@ mod tests {
             "chapters/ch001/manuscript/p003.mnga"
         )
         .is_err());
+    }
+
+    #[test]
+    fn mnga_v2_full_pixel_tile_roundtrip_and_bak_recovery_works() {
+        let mut stack = LayerStack::new(512, 512);
+        let l1 = stack.add_raster_layer("Ink_Lineart");
+        stack.get_mut(l1).unwrap().is_reference = true;
+        stack.get_mut(l1).unwrap().write_pixel(17, 23, [15, 25, 35, 255]);
+        stack.get_mut(l1).unwrap().write_pixel(300, 410, [255, 107, 74, 255]);
+        let l2 = stack.add_raster_layer("Cel_Shadow");
+        stack.get_mut(l2).unwrap().blend_mode = BlendMode::Multiply;
+        stack.get_mut(l2).unwrap().clipping_mask = true;
+        stack.get_mut(l2).unwrap().opacity = 0.75;
+        stack.get_mut(l2).unwrap().write_pixel(17, 23, [80, 90, 200, 200]);
+
+        let dir = std::env::temp_dir().join(format!("manga_mnga_v2_test_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let (path, byte_len) = save_layer_stack_v2_atomic(
+            &stack,
+            &dir,
+            "chapters/ch001/manuscript/p001.mnga",
+            600,
+            99,
+        )
+        .unwrap();
+        assert!(path.is_file());
+        // RLE compresses 3 tiles (768 KiB raw) down to a few hundred bytes!
+        assert!(byte_len < 4096);
+
+        // Second save generates .mnga.bak crash-recovery backup
+        let _ = save_layer_stack_v2_atomic(
+            &stack,
+            &dir,
+            "chapters/ch001/manuscript/p001.mnga",
+            600,
+            100,
+        )
+        .unwrap();
+
+        let (restored, dpi, events) = load_layer_stack_v2(&dir, "chapters/ch001/manuscript/p001.mnga").unwrap();
+        assert_eq!(dpi, 600);
+        assert_eq!(events, 100);
+        assert_eq!(restored.layers().len(), 2);
+        assert_eq!(restored.layers()[0].raster.as_ref().unwrap().get_pixel(17, 23), [15, 25, 35, 255]);
+        assert_eq!(restored.layers()[0].raster.as_ref().unwrap().get_pixel(300, 410), [255, 107, 74, 255]);
+        assert_eq!(restored.layers()[1].blend_mode, BlendMode::Multiply);
+        assert!(restored.layers()[1].clipping_mask);
+        assert_eq!(restored.layers()[1].raster.as_ref().unwrap().get_pixel(17, 23), [80, 90, 200, 200]);
+
+        // Corrupt primary file -> load_layer_stack_v2 must automatically recover from .mnga.bak!
+        fs::write(&path, b"CORRUPTED_TRUNCATED").unwrap();
+        let (recovered, _, rec_events) = load_layer_stack_v2(&dir, "chapters/ch001/manuscript/p001.mnga").unwrap();
+        assert_eq!(rec_events, 99);
+        assert_eq!(recovered.layers()[0].raster.as_ref().unwrap().get_pixel(300, 410), [255, 107, 74, 255]);
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }

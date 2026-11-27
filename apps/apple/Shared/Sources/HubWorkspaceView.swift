@@ -22,9 +22,9 @@ public struct HubWorkspaceView: View {
     public let layout: WorkspaceLayoutHintKind
     public let hintModeActive: Bool
     @Binding public var activeProjectDir: String
+    @Binding public var externalSection: HubSectionKind
     public let onOpenTool: (SuiteAppKind) -> Void
 
-    @State private var selectedSection: HubSectionKind = .overview
     @State private var projectFolderName: String = "StarlightChronicle"
     @State private var projectAuthor: String = "Studio Creator"
     @State private var bootstrapStatus: String = "Ready to generate canonical CPFF v1.0 .prj workspace."
@@ -43,21 +43,28 @@ public struct HubWorkspaceView: View {
     @State private var newChapterId: String = "ch003"
     @State private var newChapterZh: String = "双生分镜"
     @State private var newChapterEn: String = "Twin Storyboards"
-    @State private var gateStatusLine: String = "T0.4-S4 Gate ready."
+    @State private var gateStatusLine: String = "T1.0-S4 Gate ready."
     @State private var ingestKind: IngestAssetKindBridge = .referenceArt
     @State private var ingestFilename: String = "Character Palette (Draft).txt"
     @State private var ingestPayload: String = "Primary Accent #4F7CFF / Cel Shadow Multiply 75%"
     @State private var ingestStatusLine: String = "Ready to normalize & ingest external assets without clobbering human finals."
 
+    private var selectedSection: HubSectionKind {
+        get { externalSection }
+        nonmutating set { externalSection = newValue }
+    }
+
     public init(
         layout: WorkspaceLayoutHintKind,
         hintModeActive: Bool,
         activeProjectDir: Binding<String>,
+        externalSection: Binding<HubSectionKind> = .constant(.overview),
         onOpenTool: @escaping (SuiteAppKind) -> Void
     ) {
         self.layout = layout
         self.hintModeActive = hintModeActive
         self._activeProjectDir = activeProjectDir
+        self._externalSection = externalSection
         self.onOpenTool = onOpenTool
     }
 
@@ -67,7 +74,7 @@ public struct HubWorkspaceView: View {
             Divider()
             if layout != .singlePaneCompact {
                 projectTreeSidebar
-                    .frame(width: 220)
+                    .frame(width: 224)
                 Divider()
             }
             ScrollView {
