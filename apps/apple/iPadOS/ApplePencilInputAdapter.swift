@@ -108,6 +108,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
     public var onStatusUpdate: ((String) -> Void)?
 
     private var activeTouch: UITouch?
+    private var hasOpenedStrokeUndoCheckpoint: Bool = false
     private var lastCanvasPt: CGPoint?
     private var anchorCanvasPt: CGPoint?
     private var stabilizedPt: CGPoint?
@@ -164,14 +165,16 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
 
         let twoFingerUndo = UITapGestureRecognizer(target: self, action: #selector(handleTwoFingerTapUndo))
         twoFingerUndo.numberOfTouchesRequired = 2
+        twoFingerUndo.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
         twoFingerUndo.delaysTouchesBegan = false
-        twoFingerUndo.cancelsTouchesInView = false
+        twoFingerUndo.cancelsTouchesInView = true
         addGestureRecognizer(twoFingerUndo)
 
         let threeFingerRedo = UITapGestureRecognizer(target: self, action: #selector(handleThreeFingerTapRedo))
         threeFingerRedo.numberOfTouchesRequired = 3
+        threeFingerRedo.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
         threeFingerRedo.delaysTouchesBegan = false
-        threeFingerRedo.cancelsTouchesInView = false
+        threeFingerRedo.cancelsTouchesInView = true
         addGestureRecognizer(threeFingerRedo)
     }
 
@@ -188,7 +191,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         switch recognizer.state {
         case .began:
             twoFingerPanBaseOffset = ctrl.s2PanOffset
-            resetTransientStrokeState()
+            abortTentativeFingerStrokeIfNeeded()
         case .changed:
             let base = twoFingerPanBaseOffset ?? ctrl.s2PanOffset
             ctrl.s2PanOffset = CGSize(
@@ -207,7 +210,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         switch recognizer.state {
         case .began:
             twoFingerRotateBaseDeg = ctrl.s2RotationDeg
-            resetTransientStrokeState()
+            abortTentativeFingerStrokeIfNeeded()
         case .changed:
             let base = twoFingerRotateBaseDeg ?? ctrl.s2RotationDeg
             var rawDeg = base + Double(recognizer.rotation) * (180.0 / Double.pi)
@@ -235,7 +238,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         switch recognizer.state {
         case .began:
             twoFingerPinchBaseZoom = ctrl.s2ViewportZoom
-            resetTransientStrokeState()
+            abortTentativeFingerStrokeIfNeeded()
         case .changed:
             let base = twoFingerPinchBaseZoom ?? ctrl.s2ViewportZoom
             let clamped = min(max(base * Double(recognizer.scale), 0.2), 8.0)
@@ -250,14 +253,16 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
 
     @objc private func handleTwoFingerTapUndo() {
         guard let ctrl = controller else { return }
+        abortTentativeFingerStrokeIfNeeded()
         ctrl.performUndoStroke()
-        onStatusUpdate?("2-Finger Tap → Undo")
+        onStatusUpdate?("双指点按 → 撤销上一步 (Undo)")
     }
 
     @objc private func handleThreeFingerTapRedo() {
         guard let ctrl = controller else { return }
+        abortTentativeFingerStrokeIfNeeded()
         ctrl.performRedoStroke()
-        onStatusUpdate?("3-Finger Tap → Redo")
+        onStatusUpdate?("三指点按 → 重做 (Redo)")
     }
 
     // MARK: - Apple Pencil Pro Hardware Interactions
@@ -294,18 +299,33 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         return (CGPoint(x: nx * cw, y: ny * ch), CGPoint(x: nx, y: ny))
     }
 
+    /// Reverts any tentative single-finger stroke that was interrupted by a 2-finger pan/pinch/rotate/undo gesture.
+    private func abortTentativeFingerStrokeIfNeeded() {
+        if hasOpenedStrokeUndoCheckpoint, activeTouch?.type != .pencil {
+            controller?.performUndoStroke()
+        }
+        hasOpenedStrokeUndoCheckpoint = false
+        resetTransientStrokeState()
+    }
+
     public override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let ctrl = controller else { return }
-        // If two or more finger touches are down, treat as multi-touch pan/zoom
-        let allTouches = event?.allTouches ?? touches
+        // If two or more finger touches are down, treat as multi-touch pan/zoom/undo
+        let allTouches = event?.allTouches?.filter { $0.phase != .ended && $0.phase != .cancelled } ?? touches
         if allTouches.count >= 2 && !allTouches.contains(where: { $0.type == .pencil }) {
-            resetTransientStrokeState()
+            abortTentativeFingerStrokeIfNeeded()
             return
         }
 
         // Prefer Apple Pencil over finger touches when both contact simultaneously
         let candidate = touches.first(where: { $0.type == .pencil }) ?? touches.first
         guard let touch = candidate else { return }
+
+        // If an active finger touch is already tracked and a second finger arrives, abort the tentative finger stroke
+        if let existing = activeTouch, existing != touch, existing.type != .pencil, touch.type != .pencil {
+            abortTentativeFingerStrokeIfNeeded()
+            return
+        }
 
         // Palm rejection: large non-pencil contacts (> 28pt radius) are ignored
         if touch.type != .pencil && touch.majorRadius > 28.0 {
@@ -352,11 +372,18 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
                 onStatusUpdate?("Layer '\(layer.name)' is hidden.")
                 return
             }
-            ctrl.beginRasterUndoCheckpoint()
             anchorCanvasPt = mapped.canvas
             lastCanvasPt = mapped.canvas
             stabilizedPt = mapped.canvas
-            processCoalescedStrokeSamples(touch: touch, event: event, ctrl: ctrl)
+            // Apple Pencil commits immediately on contact; finger touches wait until touchesMoved or 1-finger tap end
+            // so staggered 2-finger tap Undo / pan / pinch / rotate never push bogus undo checkpoints!
+            if touch.type == .pencil {
+                ctrl.beginRasterUndoCheckpoint()
+                hasOpenedStrokeUndoCheckpoint = true
+                processCoalescedStrokeSamples(touch: touch, event: event, ctrl: ctrl)
+            } else {
+                hasOpenedStrokeUndoCheckpoint = false
+            }
         default:
             break
         }
@@ -364,6 +391,12 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
 
     public override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let ctrl = controller else { return }
+
+        let allTouches = event?.allTouches?.filter { $0.phase != .ended && $0.phase != .cancelled } ?? touches
+        if allTouches.count >= 2 && !allTouches.contains(where: { $0.type == .pencil }) {
+            abortTentativeFingerStrokeIfNeeded()
+            return
+        }
 
         if let prevPan = fingerPanPrevLocation,
            let panTouch = activeTouch ?? touches.first
@@ -396,6 +429,10 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
             if ctrl.s2Tool == .brush && ctrl.s2ShapeAssist != .freehand {
                 ctrl.s2LiveMarqueeCurrentNorm = mapped.norm
                 return
+            }
+            if !hasOpenedStrokeUndoCheckpoint {
+                ctrl.beginRasterUndoCheckpoint()
+                hasOpenedStrokeUndoCheckpoint = true
             }
             processCoalescedStrokeSamples(touch: touch, event: event, ctrl: ctrl)
         default:
@@ -483,6 +520,10 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
                 ctrl.s2LiveMarqueeCurrentNorm = nil
                 onStatusUpdate?(ctrl.lastStatusBanner)
             } else {
+                if !hasOpenedStrokeUndoCheckpoint {
+                    ctrl.beginRasterUndoCheckpoint()
+                    hasOpenedStrokeUndoCheckpoint = true
+                }
                 processCoalescedStrokeSamples(touch: touch, event: event, ctrl: ctrl)
                 ctrl.refreshCompositeImage()
                 ctrl.markDirtyAndScheduleSave()
@@ -493,12 +534,13 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
             break
         }
 
+        hasOpenedStrokeUndoCheckpoint = false
         resetTransientStrokeState()
     }
 
     public override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         fingerPanPrevLocation = nil
-        resetTransientStrokeState()
+        abortTentativeFingerStrokeIfNeeded()
     }
 
     private func resetTransientStrokeState() {

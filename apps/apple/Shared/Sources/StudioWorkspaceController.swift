@@ -374,6 +374,12 @@ public struct PersistedSpeechBubble: Codable, Identifiable, Equatable, Sendable 
     }
 }
 
+/// Captures Swift-side layer metadata & active layer selection in 1:1 lockstep with Rust `LayerStack` undo/redo snapshots.
+private struct SwiftLayerUndoState: Equatable, Sendable {
+    let layers: [CelLayerRowItem]
+    let selectedLayerId: UInt64
+}
+
 /// Unified `@MainActor` studio controller acting as Single Source of Truth for:
 /// 1. Context-aware macOS/iPadOS Menu Bar (`StudioMenuCommands`) ↔ UI controls 1:1 synchronization.
 /// 2. State survival when switching between `S1 Hub`, `S2 Manga`, and `S3 Novel`.
@@ -404,7 +410,15 @@ public final class StudioWorkspaceController: ObservableObject {
     @Published public var s2Tool: S2DrawingToolKind = .brush { didSet { scheduleAutoSave() } }
     @Published public var s2PresetIndex: UInt32 = 0 { didSet { scheduleAutoSave() } }
     @Published public var s2CanvasPreset: CanvasPresetKind = .b4PrintManga600Dpi
-    @Published public var s2BrushSize: Double = 8.0 { didSet { scheduleAutoSave() } }
+    @Published public var s2BrushSize: Double = 8.0 {
+        didSet {
+            if !isRestoring && abs(s2BrushSize - oldValue) >= 0.1 {
+                triggerBrushSizePreviewHUD()
+            }
+            scheduleAutoSave()
+        }
+    }
+    @Published public var s2ShowBrushSizePreviewHUD: Bool = false
     @Published public var s2BrushOpacity: Double = 1.0 { didSet { scheduleAutoSave() } }
     @Published public var s2ForceFade: Bool = true { didSet { scheduleAutoSave() } }
     @Published public var s2ApplePencilOnlyDraw: Bool = false { didSet { scheduleAutoSave() } }
@@ -502,7 +516,10 @@ public final class StudioWorkspaceController: ObservableObject {
 
     private let appStateFileUrl: URL
     private var autoSaveTask: Task<Void, Never>?
+    private var brushSizePreviewDismissTask: Task<Void, Never>?
     private var isRestoring: Bool = false
+    private var swiftUndoLayerStack: [SwiftLayerUndoState] = []
+    private var swiftRedoLayerStack: [SwiftLayerUndoState] = []
 
     #if canImport(MangaCoreFFI)
     public var rustCanvas: MangaCanvasEngine?
@@ -576,7 +593,7 @@ public final class StudioWorkspaceController: ObservableObject {
     }
 
     public var canDeleteSelectedLayer: Bool {
-        isMangaContext && s2CelLayers.count > 1 && selectedCelLayerIndex != nil
+        isMangaContext && !s2CelLayers.isEmpty && selectedCelLayerIndex != nil
     }
 
     public var canMergeSelectedLayerDown: Bool {
@@ -598,6 +615,16 @@ public final class StudioWorkspaceController: ObservableObject {
     }
 
     // MARK: - Shared Menu & UI Actions
+
+    public func triggerBrushSizePreviewHUD() {
+        s2ShowBrushSizePreviewHUD = true
+        brushSizePreviewDismissTask?.cancel()
+        brushSizePreviewDismissTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 900_000_000)
+            guard !Task.isCancelled else { return }
+            self?.s2ShowBrushSizePreviewHUD = false
+        }
+    }
 
     public func switchSuiteApp(_ app: SuiteAppKind) {
         flushAllSync()
@@ -704,12 +731,13 @@ public final class StudioWorkspaceController: ObservableObject {
         let name = "Cel_Layer_\(nextNum)"
         #if canImport(MangaCoreFFI)
         if let proj = rustProject {
-            proj.pushUndoSnapshot()
+            beginRasterUndoCheckpoint()
             let newId = proj.addRasterLayer(name: name, blendMode: .normal, clippingMask: false, isReference: false)
             s2CelLayers.append(CelLayerRowItem(id: newId, name: name))
             s2SelectedLayerId = newId
             refreshCompositeImage()
             markDirtyAndScheduleSave()
+            lastStatusBanner = "已新增图层 '\(name)'"
             return
         }
         #endif
@@ -725,7 +753,7 @@ public final class StudioWorkspaceController: ObservableObject {
         var copyId = nextNum
         #if canImport(MangaCoreFFI)
         if let proj = rustProject {
-            proj.pushUndoSnapshot()
+            beginRasterUndoCheckpoint()
             let dup = proj.duplicateLayer(layerId: src.id)
             if dup != 0 {
                 copyId = dup
@@ -751,20 +779,51 @@ public final class StudioWorkspaceController: ObservableObject {
     }
 
     public func deleteSelectedLayer() {
-        guard canDeleteSelectedLayer, let idx = selectedCelLayerIndex else { return }
+        guard let idx = selectedCelLayerIndex else { return }
         let removed = s2CelLayers[idx]
+
+        // If only 1 layer remains, clear its pixel content so the user's drawing on that layer is deleted cleanly
+        if s2CelLayers.count <= 1 {
+            clearCurrentLayer()
+            lastStatusBanner = "已清空并重置当前唯一图层 '\(removed.name)'"
+            return
+        }
+
+        let nextIdx = max(0, idx - 1)
         #if canImport(MangaCoreFFI)
         if let proj = rustProject {
-            proj.pushUndoSnapshot()
-            _ = proj.deleteLayer(layerId: removed.id)
+            beginRasterUndoCheckpoint()
+            // Clear pixel tiles first and remove from Rust LayerStack
+            _ = proj.clearLayer(layerId: removed.id)
+            let didRemoveInRust = proj.deleteLayer(layerId: removed.id)
+            s2CelLayers.remove(at: idx)
+            s2Strokes.removeAll { $0.layerId == removed.id }
+            s2SelectedLayerId = s2CelLayers[nextIdx].id
+            if !didRemoveInRust {
+                // Reconcile any legacy LayerId mismatch by hiding & clearing orphaned Rust layers
+                _ = proj.setLayerFlags(
+                    layerId: removed.id,
+                    visible: false,
+                    alphaLock: false,
+                    clippingMask: false,
+                    isReference: false,
+                    blendMode: .normal,
+                    opacity: 0.0,
+                    blueSketchTint: false
+                )
+            }
+            refreshCompositeImage()
+            markDirtyAndScheduleSave()
+            lastStatusBanner = "已删除图层 '\(removed.name)'"
+            return
         }
         #endif
         s2CelLayers.remove(at: idx)
         s2Strokes.removeAll { $0.layerId == removed.id }
-        let nextIdx = max(0, idx - 1)
         s2SelectedLayerId = s2CelLayers[nextIdx].id
         refreshCompositeImage()
         markDirtyAndScheduleSave()
+        lastStatusBanner = "已删除图层 '\(removed.name)'"
     }
 
     public func mergeSelectedLayerDown() {
@@ -773,7 +832,7 @@ public final class StudioWorkspaceController: ObservableObject {
         let targetId = s2CelLayers[idx - 1].id
         #if canImport(MangaCoreFFI)
         if let proj = rustProject {
-            proj.pushUndoSnapshot()
+            beginRasterUndoCheckpoint()
             _ = proj.mergeLayerDown(layerId: upper.id)
         }
         #endif
@@ -792,7 +851,7 @@ public final class StudioWorkspaceController: ObservableObject {
         guard s2CelLayers.indices.contains(target) else { return }
         #if canImport(MangaCoreFFI)
         if let proj = rustProject {
-            proj.pushUndoSnapshot()
+            beginRasterUndoCheckpoint()
             _ = proj.moveLayer(layerId: id, up: up)
         }
         #endif
@@ -804,19 +863,20 @@ public final class StudioWorkspaceController: ObservableObject {
     public func clearCurrentLayer() {
         #if canImport(MangaCoreFFI)
         if let proj = rustProject {
-            proj.pushUndoSnapshot()
+            beginRasterUndoCheckpoint()
             _ = proj.clearLayer(layerId: s2SelectedLayerId)
         }
         #endif
         s2Strokes.removeAll { $0.layerId == s2SelectedLayerId }
         refreshCompositeImage()
         markDirtyAndScheduleSave()
+        lastStatusBanner = "已清空当前图层内容"
     }
 
     public func flipSelectedLayer(horizontal: Bool) {
         #if canImport(MangaCoreFFI)
         if let proj = rustProject {
-            proj.pushUndoSnapshot()
+            beginRasterUndoCheckpoint()
             _ = proj.flipLayer(layerId: s2SelectedLayerId, horizontal: horizontal)
         }
         #endif
@@ -854,7 +914,7 @@ public final class StudioWorkspaceController: ObservableObject {
     public func fillActiveSelectionWithCurrentColor() -> Int {
         #if canImport(MangaCoreFFI)
         guard let proj = rustProject else { return 0 }
-        proj.pushUndoSnapshot()
+        beginRasterUndoCheckpoint()
         let bounds = activeSelectionBoundsCanvas
         let radius = Float(max(bounds.width, bounds.height) + 16.0)
         let midX = Float(bounds.midX)
@@ -885,7 +945,7 @@ public final class StudioWorkspaceController: ObservableObject {
     public func eraseActiveSelectionPixels() -> Int {
         #if canImport(MangaCoreFFI)
         guard let proj = rustProject else { return 0 }
-        proj.pushUndoSnapshot()
+        beginRasterUndoCheckpoint()
         let bounds = activeSelectionBoundsCanvas
         let radius = Float(max(bounds.width, bounds.height) + 16.0)
         let midX = Float(bounds.midX)
@@ -969,6 +1029,11 @@ public final class StudioWorkspaceController: ObservableObject {
     }
 
     public func beginRasterUndoCheckpoint() {
+        if swiftUndoLayerStack.count >= 40 {
+            swiftUndoLayerStack.removeFirst()
+        }
+        swiftUndoLayerStack.append(SwiftLayerUndoState(layers: s2CelLayers, selectedLayerId: s2SelectedLayerId))
+        swiftRedoLayerStack.removeAll()
         #if canImport(MangaCoreFFI)
         rustProject?.pushUndoSnapshot()
         s2CanUndoRaster = rustProject?.canUndoSnapshot ?? false
@@ -1044,7 +1109,7 @@ public final class StudioWorkspaceController: ObservableObject {
         guard let proj = rustProject else { return 0 }
         let cx = UInt32(max(0, min(Int(proj.width) - 1, canvasX)))
         let cy = UInt32(max(0, min(Int(proj.height) - 1, canvasY)))
-        proj.pushUndoSnapshot()
+        beginRasterUndoCheckpoint()
         let filled = proj.closeGapFill(
             layerId: s2SelectedLayerId,
             seedX: cx,
@@ -1472,7 +1537,7 @@ public final class StudioWorkspaceController: ObservableObject {
     public func applyFilterGaussianBlur(radiusPx: Float) -> Int {
         #if canImport(MangaCoreFFI)
         guard let proj = rustProject else { return 0 }
-        proj.pushUndoSnapshot()
+        beginRasterUndoCheckpoint()
         let count = proj.applyGaussianBlur(layerId: s2SelectedLayerId, radiusPx: radiusPx)
         refreshCompositeImage()
         markDirtyAndScheduleSave()
@@ -1487,7 +1552,7 @@ public final class StudioWorkspaceController: ObservableObject {
     public func applyFilterHsb(hueDeg: Float, satDelta: Float, brightDelta: Float) -> Int {
         #if canImport(MangaCoreFFI)
         guard let proj = rustProject else { return 0 }
-        proj.pushUndoSnapshot()
+        beginRasterUndoCheckpoint()
         let count = proj.applyHsb(layerId: s2SelectedLayerId, hueDeg: hueDeg, satDelta: satDelta, brightDelta: brightDelta)
         refreshCompositeImage()
         markDirtyAndScheduleSave()
@@ -1502,7 +1567,7 @@ public final class StudioWorkspaceController: ObservableObject {
     public func applyFilterBrightnessContrast(brightness: Float, contrast: Float) -> Int {
         #if canImport(MangaCoreFFI)
         guard let proj = rustProject else { return 0 }
-        proj.pushUndoSnapshot()
+        beginRasterUndoCheckpoint()
         let count = proj.applyBrightnessContrast(layerId: s2SelectedLayerId, brightness: brightness, contrast: contrast)
         refreshCompositeImage()
         markDirtyAndScheduleSave()
@@ -1517,7 +1582,7 @@ public final class StudioWorkspaceController: ObservableObject {
     public func applyFilterExtractLineDrawing(blackThreshold: Float = 0.25, whiteThreshold: Float = 0.80) -> Int {
         #if canImport(MangaCoreFFI)
         guard let proj = rustProject else { return 0 }
-        proj.pushUndoSnapshot()
+        beginRasterUndoCheckpoint()
         let count = proj.applyExtractLineDrawing(layerId: s2SelectedLayerId, blackThreshold: blackThreshold, whiteThreshold: whiteThreshold)
         refreshCompositeImage()
         markDirtyAndScheduleSave()
@@ -1532,7 +1597,7 @@ public final class StudioWorkspaceController: ObservableObject {
     public func applyFilterOuterStroke(widthPx: UInt32, color: PersistedRGBA) -> Int {
         #if canImport(MangaCoreFFI)
         guard let proj = rustProject else { return 0 }
-        proj.pushUndoSnapshot()
+        beginRasterUndoCheckpoint()
         let count = proj.applyOuterStroke(layerId: s2SelectedLayerId, widthPx: widthPx, rgba: (color.r, color.g, color.b, color.a))
         refreshCompositeImage()
         markDirtyAndScheduleSave()
@@ -1547,7 +1612,7 @@ public final class StudioWorkspaceController: ObservableObject {
     public func applyFilterDropShadow(dx: Int32, dy: Int32, blurPx: Float, color: PersistedRGBA) -> Int {
         #if canImport(MangaCoreFFI)
         guard let proj = rustProject else { return 0 }
-        proj.pushUndoSnapshot()
+        beginRasterUndoCheckpoint()
         let count = proj.applyDropShadow(layerId: s2SelectedLayerId, dx: dx, dy: dy, blurPx: blurPx, rgba: (color.r, color.g, color.b, color.a))
         refreshCompositeImage()
         markDirtyAndScheduleSave()
@@ -1572,7 +1637,7 @@ public final class StudioWorkspaceController: ObservableObject {
         guard let proj = rustProject else { return 0 }
         let useSelectionOnly = (selectionOnly ?? s2TransformSelectionOnly) && s2HasActiveSelection
         let useClearSource = clearSource ?? !s2TransformKeepOriginal
-        proj.pushUndoSnapshot()
+        beginRasterUndoCheckpoint()
         let count: Int
         if useSelectionOnly {
             count = proj.transformSelectedPixelsAffine(
@@ -1768,6 +1833,8 @@ public final class StudioWorkspaceController: ObservableObject {
         s2CelLayers = []
         s2Strokes = []
         s2UndoneStrokes = []
+        swiftUndoLayerStack.removeAll()
+        swiftRedoLayerStack.removeAll()
         s2SpeechBubbles = []
         s2HasActiveSelection = false
         s2SelectionPixelCount = 0
@@ -1811,6 +1878,8 @@ public final class StudioWorkspaceController: ObservableObject {
         s2CelLayers = []
         s2Strokes = []
         s2UndoneStrokes = []
+        swiftUndoLayerStack.removeAll()
+        swiftRedoLayerStack.removeAll()
         s2SpeechBubbles = []
         s2HasActiveSelection = false
         s2SelectionPixelCount = 0
@@ -1931,7 +2000,7 @@ public final class StudioWorkspaceController: ObservableObject {
 
         #if canImport(MangaCoreFFI)
         guard let proj = rustProject else { return false }
-        proj.pushUndoSnapshot()
+        beginRasterUndoCheckpoint()
         let nextNum = (s2CelLayers.map(\.id).max() ?? 0) + 1
         let finalName = "\(layerName)_\(nextNum)"
         let newId = proj.addRasterLayer(name: finalName, blendMode: .normal, clippingMask: false, isReference: false)
@@ -2051,7 +2120,7 @@ public final class StudioWorkspaceController: ObservableObject {
         guard let proj = rustProject else { return 0 }
         let useLpi = lpi ?? Float(s2ScreentoneLpi)
         let useDensity = density ?? Float(s2ScreentoneDensity)
-        proj.pushUndoSnapshot()
+        beginRasterUndoCheckpoint()
         let count = proj.applyScreentone(
             layerId: s2SelectedLayerId,
             lpi: useLpi,
@@ -2075,7 +2144,7 @@ public final class StudioWorkspaceController: ObservableObject {
         #if canImport(MangaCoreFFI)
         guard let proj = rustProject else { return 0 }
         let useGutter = gutterPx ?? Float(s2PanelGutterPx)
-        proj.pushUndoSnapshot()
+        beginRasterUndoCheckpoint()
         let count = proj.sliceAndRasterizePanel(
             layerId: s2SelectedLayerId,
             x0: Float(p0.x),
@@ -2153,6 +2222,11 @@ public final class StudioWorkspaceController: ObservableObject {
         #if canImport(MangaCoreFFI)
         if let proj = rustProject, proj.undoSnapshot() {
             didUndo = true
+            if let prevLayerState = swiftUndoLayerStack.popLast() {
+                swiftRedoLayerStack.append(SwiftLayerUndoState(layers: s2CelLayers, selectedLayerId: s2SelectedLayerId))
+                s2CelLayers = prevLayerState.layers
+                s2SelectedLayerId = prevLayerState.selectedLayerId
+            }
         }
         if let engine = rustCanvas {
             _ = engine.undo()
@@ -2165,6 +2239,7 @@ public final class StudioWorkspaceController: ObservableObject {
         if didUndo {
             refreshCompositeImage()
             markDirtyAndScheduleSave()
+            lastStatusBanner = "已撤销上一步 (Undo)"
         }
     }
 
@@ -2173,6 +2248,11 @@ public final class StudioWorkspaceController: ObservableObject {
         #if canImport(MangaCoreFFI)
         if let proj = rustProject, proj.redoSnapshot() {
             didRedo = true
+            if let nextLayerState = swiftRedoLayerStack.popLast() {
+                swiftUndoLayerStack.append(SwiftLayerUndoState(layers: s2CelLayers, selectedLayerId: s2SelectedLayerId))
+                s2CelLayers = nextLayerState.layers
+                s2SelectedLayerId = nextLayerState.selectedLayerId
+            }
         }
         if let engine = rustCanvas {
             _ = engine.redo()
@@ -2185,6 +2265,7 @@ public final class StudioWorkspaceController: ObservableObject {
         if didRedo {
             refreshCompositeImage()
             markDirtyAndScheduleSave()
+            lastStatusBanner = "已重做 (Redo)"
         }
     }
 
@@ -2534,16 +2615,19 @@ public final class StudioWorkspaceController: ObservableObject {
             if !loadedMnga && s2CelLayers.isEmpty {
                 let sketchId = proj.addRasterLayer(name: "Sketch_Rough", blendMode: .normal, clippingMask: false, isReference: false)
                 let inkId = proj.addRasterLayer(name: "Ink_Lineart", blendMode: .normal, clippingMask: false, isReference: true)
-                let shadowId = proj.addRasterLayer(name: "Cel_Shadow", blendMode: .multiply, clippingMask: true, isReference: false)
+                let shadowId = proj.addRasterLayer(name: "Cel_Shadow", blendMode: .multiply, clippingMask: false, isReference: false)
                 _ = proj.setLayerFlags(layerId: sketchId, visible: true, alphaLock: false, clippingMask: false, isReference: false, blendMode: .normal, opacity: 0.35, blueSketchTint: true)
                 s2CelLayers = [
                     CelLayerRowItem(id: sketchId, name: "Sketch_Rough", blueSketchTint: true, blendMode: .normal, opacity: 0.35),
                     CelLayerRowItem(id: inkId, name: "Ink_Lineart", isReference: true, blendMode: .normal, opacity: 1.0),
-                    CelLayerRowItem(id: shadowId, name: "Cel_Shadow", clippingMask: true, blendMode: .multiply, opacity: 0.85),
+                    CelLayerRowItem(id: shadowId, name: "Cel_Shadow", clippingMask: false, blendMode: .multiply, opacity: 0.85),
                 ]
                 s2SelectedLayerId = inkId
             } else if !s2CelLayers.isEmpty && proj.layerCount == 0 {
-                for item in s2CelLayers {
+                let oldSelected = s2SelectedLayerId
+                var newSelected: UInt64?
+                for i in s2CelLayers.indices {
+                    let item = s2CelLayers[i]
                     let lid = proj.addRasterLayer(
                         name: item.name,
                         blendMode: item.blendMode,
@@ -2560,6 +2644,79 @@ public final class StudioWorkspaceController: ObservableObject {
                         opacity: Float(item.opacity),
                         blueSketchTint: item.blueSketchTint
                     )
+                    if item.id == oldSelected {
+                        newSelected = lid
+                    }
+                    s2CelLayers[i].id = lid
+                }
+                s2SelectedLayerId = newSelected ?? s2CelLayers.last?.id ?? 1
+            } else if loadedMnga {
+                // Reconcile Swift layer metadata against actual Rust LayerStack loaded from p001.mnga
+                if s2CelLayers.isEmpty {
+                    let count = max(1, proj.layerCount)
+                    s2CelLayers = (1...count).map { i in
+                        CelLayerRowItem(id: UInt64(i), name: "Cel_Layer_\(i)")
+                    }
+                }
+                var validCount = 0
+                for item in s2CelLayers {
+                    if proj.setLayerFlags(
+                        layerId: item.id,
+                        visible: item.visible,
+                        alphaLock: item.alphaLock,
+                        clippingMask: item.clippingMask,
+                        isReference: item.isReference,
+                        blendMode: item.blendMode,
+                        opacity: Float(item.opacity),
+                        blueSketchTint: item.blueSketchTint
+                    ) {
+                        validCount += 1
+                    }
+                }
+                // If session JSON LayerIds drifted from p001.mnga LayerIds, probe active Rust IDs in order
+                if validCount != s2CelLayers.count {
+                    var activeRustIds: [UInt64] = []
+                    for candidate in 1...UInt64(max(64, proj.layerCount * 4)) {
+                        if proj.setLayerFlags(
+                            layerId: candidate,
+                            visible: true,
+                            alphaLock: false,
+                            clippingMask: false,
+                            isReference: false,
+                            blendMode: .normal,
+                            opacity: 1.0,
+                            blueSketchTint: false
+                        ) {
+                            activeRustIds.append(candidate)
+                            if activeRustIds.count == proj.layerCount {
+                                break
+                            }
+                        }
+                    }
+                    if !activeRustIds.isEmpty {
+                        var remapped: [CelLayerRowItem] = []
+                        for (idx, rustId) in activeRustIds.enumerated() {
+                            var row = idx < s2CelLayers.count
+                                ? s2CelLayers[idx]
+                                : CelLayerRowItem(id: rustId, name: "Cel_Layer_\(rustId)")
+                            row.id = rustId
+                            _ = proj.setLayerFlags(
+                                layerId: rustId,
+                                visible: row.visible,
+                                alphaLock: row.alphaLock,
+                                clippingMask: row.clippingMask,
+                                isReference: row.isReference,
+                                blendMode: row.blendMode,
+                                opacity: Float(row.opacity),
+                                blueSketchTint: row.blueSketchTint
+                            )
+                            remapped.append(row)
+                        }
+                        s2CelLayers = remapped
+                    }
+                }
+                if !s2CelLayers.contains(where: { $0.id == s2SelectedLayerId }) {
+                    s2SelectedLayerId = s2CelLayers.last?.id ?? 1
                 }
             }
             rustProject = proj

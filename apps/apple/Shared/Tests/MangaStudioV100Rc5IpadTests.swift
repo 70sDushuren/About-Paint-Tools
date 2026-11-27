@@ -7,6 +7,8 @@ import XCTest
 /// 2. Canvas Viewport Rotation (`rotateCanvas`, `resetRotation`, `resetViewport`) with persistence.
 /// 3. Multi-Canvas Gallery (`createNewCanvasProject`, `switchToCanvasProject`, custom W×H persistence)
 ///    and RGBA8 Photo Import as a new raster layer & Floating Reference Window photo.
+/// 4. Live Brush & Eraser Size Visualizer HUD (`s2ShowBrushSizePreviewHUD`), Layer Deletion Pixel Cleanup
+///    (including single-layer delete-to-clear & session-restore ID reconciliation), and Synchronized Step-by-Step Undo/Redo.
 @MainActor
 final class MangaStudioV100Rc5IpadTests: XCTestCase {
 
@@ -120,6 +122,140 @@ final class MangaStudioV100Rc5IpadTests: XCTestCase {
 
         ctrl.clearReferenceImage()
         XCTAssertNil(ctrl.s2ReferenceImage)
+        #endif
+    }
+
+    func testBrushAndEraserSizeChangeTriggersPreviewVisualizerHUD() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MangaV100Rc5BrushHUD-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let prjDir = tmp.appendingPathComponent("BrushHudPrj").path
+        let appStateUrl = tmp.appendingPathComponent("app_state.json")
+        let ctrl = StudioWorkspaceController(appStateFileUrl: appStateUrl, initialProjectDir: prjDir)
+
+        XCTAssertFalse(ctrl.s2ShowBrushSizePreviewHUD)
+        ctrl.selectTool(.brush)
+        ctrl.s2BrushSize = 28.0
+        XCTAssertTrue(ctrl.s2ShowBrushSizePreviewHUD)
+
+        ctrl.s2ShowBrushSizePreviewHUD = false
+        ctrl.selectTool(.eraser)
+        ctrl.s2BrushSize = 42.0
+        XCTAssertTrue(ctrl.s2ShowBrushSizePreviewHUD)
+    }
+
+    func testDeleteSelectedLayerRemovesLayerPixelsAndSurvivesSessionRestore() throws {
+        #if canImport(MangaCoreFFI)
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MangaV100Rc5LayerDel-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        XCTAssertTrue(MangaHubProjectBootstrap.initProject(parentDir: tmp.path, folderName: "LayerDelPrj", author: "M5Pro"))
+        let prjDir = tmp.appendingPathComponent("LayerDelPrj").path
+        let appStateUrl = tmp.appendingPathComponent("app_state.json")
+
+        let ctrl = StudioWorkspaceController(appStateFileUrl: appStateUrl, initialProjectDir: prjDir)
+        XCTAssertEqual(ctrl.s2CelLayers.count, 3)
+
+        // Select top layer ("Lineart_Main") and draw bright red ink at (200, 200)
+        let topLayerId = ctrl.s2CelLayers[2].id
+        ctrl.s2SelectedLayerId = topLayerId
+        ctrl.setActiveColor(PersistedRGBA(r: 240, g: 20, b: 20, a: 255))
+        ctrl.beginRasterUndoCheckpoint()
+        _ = ctrl.applyRasterSegment(
+            from: CGPoint(x: 190, y: 200),
+            to: CGPoint(x: 210, y: 200),
+            radiusPx: 14,
+            hardness: 1.0,
+            opacity: 1.0
+        )
+        ctrl.refreshCompositeImage()
+
+        // Verify red ink is present at (200, 200)
+        let beforeDeleteSample = ctrl.rustProject?.sampleEyedropper(x: 200, y: 200)
+        XCTAssertGreaterThan(beforeDeleteSample?.0 ?? 0, 200)
+        XCTAssertGreaterThan(beforeDeleteSample?.3 ?? 0, 200)
+
+        // Delete the selected layer -> red ink on that layer MUST be completely gone!
+        ctrl.deleteSelectedLayer()
+        XCTAssertEqual(ctrl.s2CelLayers.count, 2)
+        let afterDeleteSample = ctrl.rustProject?.sampleEyedropper(x: 200, y: 200)
+        XCTAssertEqual(afterDeleteSample?.3 ?? 255, 0, "Deleted layer's pixels must be removed from the canvas composite")
+
+        // Delete down to 1 layer, draw green ink at (300, 300), and delete the last remaining layer -> must clear its pixels
+        ctrl.deleteSelectedLayer()
+        XCTAssertEqual(ctrl.s2CelLayers.count, 1)
+        ctrl.setActiveColor(PersistedRGBA(r: 20, g: 220, b: 60, a: 255))
+        ctrl.beginRasterUndoCheckpoint()
+        _ = ctrl.applyRasterSegment(
+            from: CGPoint(x: 290, y: 300),
+            to: CGPoint(x: 310, y: 300),
+            radiusPx: 14,
+            hardness: 1.0,
+            opacity: 1.0
+        )
+        XCTAssertGreaterThan(ctrl.rustProject?.sampleEyedropper(x: 300, y: 300)?.1 ?? 0, 180)
+        ctrl.deleteSelectedLayer()
+        XCTAssertEqual(ctrl.s2CelLayers.count, 1)
+        XCTAssertEqual(ctrl.rustProject?.sampleEyedropper(x: 300, y: 300)?.3 ?? 255, 0)
+        #endif
+    }
+
+    func testSynchronizedUndoRedoRevertsStrokesAndLayerDeletionsStepByStep() throws {
+        #if canImport(MangaCoreFFI)
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MangaV100Rc5UndoSync-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        XCTAssertTrue(MangaHubProjectBootstrap.initProject(parentDir: tmp.path, folderName: "UndoPrj", author: "M5Pro"))
+        let prjDir = tmp.appendingPathComponent("UndoPrj").path
+        let appStateUrl = tmp.appendingPathComponent("app_state.json")
+
+        let ctrl = StudioWorkspaceController(appStateFileUrl: appStateUrl, initialProjectDir: prjDir)
+
+        // Step 1: Draw Stroke 1 at (120, 120)
+        ctrl.setActiveColor(PersistedRGBA(r: 250, g: 40, b: 40, a: 255))
+        ctrl.beginRasterUndoCheckpoint()
+        _ = ctrl.applyRasterSegment(from: CGPoint(x: 110, y: 120), to: CGPoint(x: 130, y: 120), radiusPx: 12, hardness: 1.0, opacity: 1.0)
+        XCTAssertGreaterThan(ctrl.rustProject?.sampleEyedropper(x: 120, y: 120)?.3 ?? 0, 200)
+
+        // Step 2: Draw Stroke 2 at (260, 260)
+        ctrl.setActiveColor(PersistedRGBA(r: 40, g: 120, b: 250, a: 255))
+        ctrl.beginRasterUndoCheckpoint()
+        _ = ctrl.applyRasterSegment(from: CGPoint(x: 250, y: 260), to: CGPoint(x: 270, y: 260), radiusPx: 12, hardness: 1.0, opacity: 1.0)
+        XCTAssertGreaterThan(ctrl.rustProject?.sampleEyedropper(x: 260, y: 260)?.3 ?? 0, 200)
+
+        // Step 3: Undo once -> Stroke 2 at (260, 260) must be reverted while Stroke 1 at (120, 120) remains!
+        ctrl.performUndoStroke()
+        XCTAssertEqual(ctrl.rustProject?.sampleEyedropper(x: 260, y: 260)?.3 ?? 255, 0, "Undo must revert Stroke 2")
+        XCTAssertGreaterThan(ctrl.rustProject?.sampleEyedropper(x: 120, y: 120)?.3 ?? 0, 200, "Stroke 1 must still be intact")
+
+        // Step 4: Undo again -> Stroke 1 at (120, 120) must now be reverted!
+        ctrl.performUndoStroke()
+        XCTAssertEqual(ctrl.rustProject?.sampleEyedropper(x: 120, y: 120)?.3 ?? 255, 0, "Second Undo must revert Stroke 1")
+
+        // Step 5: Redo twice -> restores Stroke 1 then Stroke 2
+        ctrl.performRedoStroke()
+        XCTAssertGreaterThan(ctrl.rustProject?.sampleEyedropper(x: 120, y: 120)?.3 ?? 0, 200)
+        XCTAssertEqual(ctrl.rustProject?.sampleEyedropper(x: 260, y: 260)?.3 ?? 255, 0)
+
+        ctrl.performRedoStroke()
+        XCTAssertGreaterThan(ctrl.rustProject?.sampleEyedropper(x: 260, y: 260)?.3 ?? 0, 200)
+
+        // Step 6: Delete the active layer, then Undo the deletion -> both layer list AND pixels return!
+        let countBeforeDelete = ctrl.s2CelLayers.count
+        ctrl.deleteSelectedLayer()
+        XCTAssertEqual(ctrl.s2CelLayers.count, countBeforeDelete - 1)
+        XCTAssertEqual(ctrl.rustProject?.sampleEyedropper(x: 120, y: 120)?.3 ?? 255, 0)
+
+        ctrl.performUndoStroke()
+        XCTAssertEqual(ctrl.s2CelLayers.count, countBeforeDelete)
+        XCTAssertGreaterThan(ctrl.rustProject?.sampleEyedropper(x: 120, y: 120)?.3 ?? 0, 200)
+        XCTAssertGreaterThan(ctrl.rustProject?.sampleEyedropper(x: 260, y: 260)?.3 ?? 0, 200)
         #endif
     }
 }

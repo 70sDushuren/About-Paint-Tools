@@ -76,7 +76,7 @@ extension LayerBlendMode {
 /// - Real Rust `LayerStack` RGBA8 pixel compositing (`CGImage`) with 22 blend modes & clipping masks.
 /// - 16 ibisPaint brushes + Force Fade + Rope Stabilizer + real transparent Eraser / Smudge / Blur.
 /// - Focused Per-Tool Tuning Bar, Interactive Lasso/Marquee Selection Action Bar, 2-Finger/Hand Canvas Panning,
-///   High-Contrast Eyedropper Loupe, and 1-Tap Dual Novel+Manga Split View.
+///   High-Contrast Eyedropper Loupe, Live Brush/Eraser Size Visualizer HUD, and 1-Tap Dual Novel+Manga Split View.
 public struct MangaCanvasStageView: View {
     @ObservedObject public var controller: StudioWorkspaceController
     public let layout: WorkspaceLayoutHintKind
@@ -337,10 +337,10 @@ public struct MangaCanvasStageView: View {
         }
     }
 
-    // MARK: - ibisPaint Signature Left Quick Caliper (Color + Size + Opacity, Non-Overlapping)
+    // MARK: - ibisPaint Signature Left Quick Caliper (Color + Live Size Visualizer + Opacity)
 
     private var leftQuickCaliperStrip: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             // Active Color Swatch + Native HSB Color Picker
             VStack(spacing: 3) {
                 ColorPicker("", selection: activeColorBinding, supportsOpacity: false)
@@ -354,14 +354,22 @@ public struct MangaCanvasStageView: View {
             }
 
             VStack(spacing: 4) {
+                // Live Brush / Eraser Size Visualizer Icon
+                brushSizeVisualizerBadge(
+                    diameterPx: controller.s2BrushSize,
+                    isEraser: controller.s2Tool == .eraser,
+                    wellSize: 30
+                )
+                .help("笔刷/橡皮尺寸预览 (\(Int(controller.s2BrushSize)) px)")
+
                 Text("\(Int(controller.s2BrushSize))")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 Slider(value: $controller.s2BrushSize, in: 1...100)
                     .rotationEffect(.degrees(-90))
-                    .frame(width: 100, height: 24)
-                    .frame(width: 24, height: 100)
+                    .frame(width: 96, height: 24)
+                    .frame(width: 24, height: 96)
                     .tint(SuiteColorTokens.mangaAccent)
                 Text("PX")
                     .font(.system(size: 9, weight: .semibold, design: .monospaced))
@@ -375,8 +383,8 @@ public struct MangaCanvasStageView: View {
                     .lineLimit(1)
                 Slider(value: $controller.s2BrushOpacity, in: 0.05...1.0)
                     .rotationEffect(.degrees(-90))
-                    .frame(width: 100, height: 24)
-                    .frame(width: 24, height: 100)
+                    .frame(width: 92, height: 24)
+                    .frame(width: 24, height: 92)
                     .tint(SuiteColorTokens.hubAccent)
                 Text("OP")
                     .font(.system(size: 9, weight: .semibold, design: .monospaced))
@@ -413,6 +421,143 @@ public struct MangaCanvasStageView: View {
         .overlay(alignment: .trailing) {
             Rectangle().fill(SuiteColorTokens.mangaBorder).frame(width: 1)
         }
+    }
+
+    // MARK: - Live Brush & Eraser Size Visualizer Icon & On-Canvas Preview HUD
+
+    /// Inline circular visualizer badge showing the relative diameter and tool style (Brush fill vs Eraser dashed ring).
+    private func brushSizeVisualizerBadge(
+        diameterPx: Double,
+        isEraser: Bool,
+        wellSize: CGFloat = 24
+    ) -> some View {
+        let maxVisualDot = wellSize - 4.0
+        let normalized = min(max(diameterPx / 100.0, 0.02), 1.0)
+        let visualDiameter = max(2.5, min(maxVisualDot, CGFloat(pow(normalized, 0.72)) * maxVisualDot))
+
+        return ZStack {
+            Circle()
+                .fill(Color.black.opacity(0.42))
+                .frame(width: wellSize, height: wellSize)
+                .overlay(
+                    Circle()
+                        .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+                )
+
+            if isEraser {
+                Circle()
+                    .fill(Color.white.opacity(0.22))
+                    .frame(width: visualDiameter, height: visualDiameter)
+                Circle()
+                    .strokeBorder(
+                        Color.white,
+                        style: StrokeStyle(lineWidth: 1.4, dash: visualDiameter > 8 ? [3, 2] : [])
+                    )
+                    .frame(width: visualDiameter, height: visualDiameter)
+            } else {
+                Circle()
+                    .fill(controller.s2ActiveColor.swiftUIColor.opacity(max(0.35, controller.s2BrushOpacity)))
+                    .frame(width: visualDiameter, height: visualDiameter)
+                Circle()
+                    .strokeBorder(Color.white.opacity(0.9), lineWidth: 1.0)
+                    .frame(width: visualDiameter, height: visualDiameter)
+            }
+        }
+        .frame(width: wellSize, height: wellSize)
+    }
+
+    /// Centered on-canvas live size visualizer HUD shown automatically when adjusting brush or eraser size.
+    private var brushSizeCanvasPreviewHUD: some View {
+        let isEraser = controller.s2Tool == .eraser
+        let isSmudgeOrBlur = controller.s2Tool == .smudge || controller.s2Tool == .blur
+        let rawScaledDiameter = CGFloat(controller.s2BrushSize) * CGFloat(controller.s2ViewportZoom)
+        let clampedRingDiameter = min(max(rawScaledDiameter, 3.0), 220.0)
+        let toolTitle: String = {
+            if isEraser { return "橡皮擦尺寸" }
+            if isSmudgeOrBlur { return "\(controller.s2Tool.displayName)直径" }
+            return "笔刷尺寸 · \(activePresetName)"
+        }()
+        let toolIcon: String = isEraser ? "eraser.fill" : controller.s2Tool.systemSymbol
+
+        return VStack(spacing: 10) {
+            ZStack {
+                // Backdrop glass plate so the size ring is clearly visible over both white paper and dark ink
+                Circle()
+                    .fill(Color.black.opacity(0.52))
+                    .frame(width: max(84, clampedRingDiameter + 28), height: max(84, clampedRingDiameter + 28))
+                    .overlay(
+                        Circle()
+                            .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+                    )
+
+                // Subtle crosshair lines
+                Path { path in
+                    let r = max(32, clampedRingDiameter * 0.5 + 8)
+                    path.move(to: CGPoint(x: -r, y: 0))
+                    path.addLine(to: CGPoint(x: r, y: 0))
+                    path.move(to: CGPoint(x: 0, y: -r))
+                    path.addLine(to: CGPoint(x: 0, y: r))
+                }
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                .frame(width: 1, height: 1)
+
+                // Actual Brush / Eraser Tip Diameter Circle
+                if isEraser {
+                    Circle()
+                        .fill(Color.white.opacity(0.24))
+                        .frame(width: clampedRingDiameter, height: clampedRingDiameter)
+                    Circle()
+                        .strokeBorder(
+                            Color.white,
+                            style: StrokeStyle(lineWidth: 2.0, dash: clampedRingDiameter > 10 ? [5, 3] : [])
+                        )
+                        .frame(width: clampedRingDiameter, height: clampedRingDiameter)
+                } else if isSmudgeOrBlur {
+                    Circle()
+                        .fill(SuiteColorTokens.hubAccent.opacity(0.22))
+                        .frame(width: clampedRingDiameter, height: clampedRingDiameter)
+                    Circle()
+                        .strokeBorder(
+                            SuiteColorTokens.hubAccent,
+                            style: StrokeStyle(lineWidth: 2.0, dash: [4, 3])
+                        )
+                        .frame(width: clampedRingDiameter, height: clampedRingDiameter)
+                } else {
+                    Circle()
+                        .fill(controller.s2ActiveColor.swiftUIColor.opacity(max(0.30, controller.s2BrushOpacity)))
+                        .frame(width: clampedRingDiameter, height: clampedRingDiameter)
+                    Circle()
+                        .strokeBorder(Color.white, lineWidth: 1.8)
+                        .frame(width: clampedRingDiameter, height: clampedRingDiameter)
+                }
+
+                // Center 2pt pinpoint
+                Circle()
+                    .fill(Color.white.opacity(0.85))
+                    .frame(width: 3, height: 3)
+            }
+
+            HStack(spacing: 6) {
+                Image(systemName: toolIcon)
+                    .font(.caption.bold())
+                    .foregroundStyle(isEraser ? SuiteColorTokens.hubAccent : SuiteColorTokens.mangaAccent)
+                Text("\(toolTitle) · \(Int(controller.s2BrushSize.rounded())) px")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color.black.opacity(0.82))
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(Color.white.opacity(0.22), lineWidth: 1)
+            )
+        }
+        .shadow(color: .black.opacity(0.55), radius: 12, y: 4)
+        .allowsHitTesting(false)
+        .transition(.opacity.combined(with: .scale(scale: 0.94)))
+        .animation(.easeOut(duration: 0.14), value: controller.s2BrushSize)
     }
 
     // MARK: - Fix #2: Dedicated Per-Tool Focused Tuning Bar (Shows ONLY Controls for the Active Tool)
@@ -577,7 +722,7 @@ public struct MangaCanvasStageView: View {
     private var focusedControlsForCurrentTool: some View {
         switch controller.s2Tool {
         case .brush:
-            // Focused Brush Controls: Preset, Size, Opacity, Stabilizer, Force Fade, Shape
+            // Focused Brush Controls: Preset, Size with Live Visual Icon, Opacity, Stabilizer, Force Fade, Shape
             Menu {
                 ForEach(starterPresets.filter { !$0.isEraser }) { preset in
                     Button("\(preset.name) [\(preset.trackBadge)]") {
@@ -591,11 +736,12 @@ public struct MangaCanvasStageView: View {
             }
             .fixedSize(horizontal: true, vertical: false)
 
-            focusedSliderCluster(
+            focusedSizeSliderCluster(
                 label: "粗细 \(Int(controller.s2BrushSize))px",
                 value: $controller.s2BrushSize,
                 range: 1...100,
-                width: 84
+                width: 88,
+                isEraser: false
             )
 
             focusedSliderCluster(
@@ -628,12 +774,13 @@ public struct MangaCanvasStageView: View {
             .fixedSize(horizontal: true, vertical: false)
 
         case .eraser:
-            // Focused Eraser Controls: Size, Strength/Opacity, Stabilizer, Clear Layer
-            focusedSliderCluster(
+            // Focused Eraser Controls: Size with Live Visual Icon, Strength/Opacity, Stabilizer, Clear Layer
+            focusedSizeSliderCluster(
                 label: "橡皮大小 \(Int(controller.s2BrushSize))px",
                 value: $controller.s2BrushSize,
                 range: 1...100,
-                width: 96
+                width: 96,
+                isEraser: true
             )
 
             focusedSliderCluster(
@@ -659,12 +806,13 @@ public struct MangaCanvasStageView: View {
             .buttonStyle(.plain)
 
         case .smudge, .blur:
-            // Focused Smudge / Blur Controls: Radius, Strength, Stabilizer
-            focusedSliderCluster(
+            // Focused Smudge / Blur Controls: Radius with Live Visual Icon, Strength, Stabilizer
+            focusedSizeSliderCluster(
                 label: "作用半径 \(Int(controller.s2BrushSize))px",
                 value: $controller.s2BrushSize,
                 range: 2...80,
-                width: 96
+                width: 96,
+                isEraser: false
             )
 
             focusedSliderCluster(
@@ -976,6 +1124,36 @@ public struct MangaCanvasStageView: View {
         .fixedSize(horizontal: true, vertical: false)
     }
 
+    /// Size slider cluster with an inline live visual diameter circle icon for Brush / Eraser / Smudge.
+    private func focusedSizeSliderCluster(
+        label: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        width: CGFloat,
+        isEraser: Bool
+    ) -> some View {
+        HStack(spacing: 6) {
+            brushSizeVisualizerBadge(
+                diameterPx: value.wrappedValue,
+                isEraser: isEraser,
+                wellSize: 22
+            )
+            Text(label)
+                .font(.caption2.monospaced().bold())
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: true, vertical: false)
+            Slider(value: value, in: range)
+                .frame(width: width)
+                .tint(SuiteColorTokens.mangaAccent)
+        }
+        .padding(.leading, 5)
+        .padding(.trailing, 8)
+        .padding(.vertical, 3)
+        .background(Color.white.opacity(0.09))
+        .clipShape(Capsule())
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
     private func focusedSliderCluster(
         label: String,
         value: Binding<Double>,
@@ -1110,7 +1288,7 @@ public struct MangaCanvasStageView: View {
                         .fixedSize(horizontal: true, vertical: false)
                     }
                 } else {
-                    Text("整层自由变形")
+                    Text("整层自由变换")
                         .font(.caption2.bold())
                         .foregroundStyle(SuiteColorTokens.mangaAccent)
                         .fixedSize(horizontal: true, vertical: false)
@@ -1295,6 +1473,11 @@ public struct MangaCanvasStageView: View {
                     .offset(controller.s2PanOffset)
                     .padding(18)
                     .frame(maxWidth: outerGeo.size.width, maxHeight: outerGeo.size.height)
+
+                    // Live Brush / Eraser Size Visualizer HUD centered on canvas when resizing
+                    if controller.s2ShowBrushSizePreviewHUD {
+                        brushSizeCanvasPreviewHUD
+                    }
                 }
 
                 if controller.s2ShowReferenceWindow {

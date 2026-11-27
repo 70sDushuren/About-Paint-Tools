@@ -3,8 +3,8 @@ import Foundation
 #if canImport(SwiftUI)
 import SwiftUI
 
-public struct CelLayerRowItem: Identifiable, Sendable {
-    public let id: UInt64
+public struct CelLayerRowItem: Identifiable, Equatable, Sendable {
+    public var id: UInt64
     public var name: String
     public var visible: Bool
     public var isReference: Bool
@@ -92,7 +92,7 @@ public struct CelLayerDrawerView: View {
                     iconActionButton(symbol: "square.stack.3d.down.right", help: "Merge Down (⌘E)", action: onMergeDown)
                         .disabled((selectedIndex ?? 0) <= 0)
                     iconActionButton(symbol: "trash", help: "Delete Layer", action: onDeleteLayer)
-                        .disabled(layers.count <= 1 || selectedIndex == nil)
+                        .disabled(layers.isEmpty || selectedIndex == nil)
                 }
 
                 if let idx = selectedIndex {

@@ -1,5 +1,30 @@
 # iPad Pro & Mac Local Device Dev Log
 
+## 2026-11-27 14:30 CST — v1.0.0-rc5+ iPadOS 笔刷/橡皮尺寸可视化、图层删除像素清理与 Undo/Redo 同步修订 (Physical iPad Pro 13" M5)
+
+- **测试设备**：iPad Pro 13" (M5) (`iPad (103)` via USB-C 真机部署启动 `pid: 1207`)
+- **修复问题清单**：
+  1. **笔刷与橡皮尺寸实时可视化 (`Brush & Eraser Size Visualizer Icon & On-Canvas HUD`)**：
+     - 在左侧快捷滑条 (`leftQuickCaliperStrip`) 及顶部聚焦调参栏 (`focusedSizeSliderCluster`) 中新增实时尺寸预览圆标 (`brushSizeVisualizerBadge`)，随滑杆动态呈现笔刷当前颜色圆点直径或橡皮虚线圆环尺寸。
+     - 当调节笔刷/橡皮/涂抹半径滑杆时，画布中央自动浮现 1:1 缩放比例的半透明准星圆环预览 HUD (`brushSizeCanvasPreviewHUD`, `s2ShowBrushSizePreviewHUD`)，直观可视化真实落笔直径并在停止调节 0.9 秒后自动渐隐（`allowsHitTesting(false)` 不遮挡绘画）。
+  2. **删除图层时彻底清除该图层画布像素 (`Delete Layer Pixel Cleanup & ID Reconciliation`)**：
+     - 修复 `deleteSelectedLayer()` 与 `CelLayerDrawerView`：删除图层时同步执行 Rust `clearLayer(layerId:)` + `deleteLayer(layerId:)` 并立即刷新合成图；当仅剩 1 个图层点击删除按钮时自动清空并重置该图层像素；在会话恢复 (`ensureRustCanvasAndLayersInitialized`) 时严格对齐 Swift `s2CelLayers[i].id` 与 Rust `LayerStack` 的真实 `LayerId`，并将默认 `Cel_Shadow` 的初始 `clippingMask` 设为 `false`，避免图层 ID 漂移导致删层后笔迹残留。
+  3. **Undo / Redo 精准回退每一步操作 (`Synchronized Step-by-Step Undo / Redo`)**：
+     - 在 `ApplePencilTouchCanvasUIView` 中区分 Apple Pencil 与手指触控：手指 `.direct` 触控延迟至确认单指滑动 (`touchesMoved`) 或单指轻点落笔时才开启 `beginRasterUndoCheckpoint()`，并在双指点按撤销 (`twoFingerUndo`)、双指平移/缩放/旋转触发时自动回滚未完成的试探单指状态 (`abortTentativeFingerStrokeIfNeeded()`)，彻底杜绝双指手势落指时间差向 Undo 栈压入空快照导致“Undo 无法回到上一步”的问题。
+     - 在 `StudioWorkspaceController` 中引入与 Rust `pushUndoSnapshot` / `undoSnapshot` / `redoSnapshot` 1:1 同步的 `swiftUndoLayerStack` / `swiftRedoLayerStack`，使新增/复制/删除/合并/清空图层与笔刷绘画、填色、变形、滤镜全部支持精准单步 Undo / Redo。
+- **验证结果**：
+  - `MangaStudio-macOS-Tests` 全量 **51 项单元测试 100% 通过 (`0 failures`)**，含新增的 `testBrushAndEraserSizeChangeTriggersPreviewVisualizerHUD`、`testDeleteSelectedLayerRemovesLayerPixelsAndSurvivesSessionRestore` 与 `testSynchronizedUndoRedoRevertsStrokesAndLayerDeletionsStepByStep`。
+  - 已通过 Xcode `RunProject` 真机安装并启动至物理 `iPad (103)`。
+- **涉及修改的文件清单**：
+  - `apps/apple/Shared/Sources/MangaCanvasStageView.swift`
+  - `apps/apple/Shared/Sources/StudioWorkspaceController.swift`
+  - `apps/apple/Shared/Sources/CelLayerDrawerView.swift`
+  - `apps/apple/iPadOS/ApplePencilInputAdapter.swift`
+  - `apps/apple/Shared/Tests/MangaStudioV100Rc5IpadTests.swift`
+  - `ops/local-dev-log/IPAD_MAC_DEV_LOG.md`
+
+---
+
 ## 2026-11-27 13:30 CST — v1.0.0-rc5 云端三项升级接力验证与真机部署 (Physical iPad Pro 13" M5)
 
 - **基线提交**：接力云端 `01d93c2` (`ops/cloud-dev-log/CLOUD_DEV_LOG.md` `v1.0.0-rc5`)
