@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "order_id": "20261127-063417_v100-rc4-fx-transform-manga-tools",
+  "created_at_utc": "2026-11-27T06:34:17Z",
+  "milestone": "v1.0.0-rc4",
+  "title": "Verify Phase 3 v1.0.0-rc4 (6 Pulled-Forward FX Filters + Affine Transform + Live Rulers/Shapes + Panels/Screentone/Bubbles + Reference Window + 45 XCTests)",
+  "summary": "Phase 3 completes full ibisPaint daily drawing parity in v1.0 with 6 Rust FX filters, affine transform, live rulers/shapes, panel knife, screentone, persisted speech bubbles & floating reference window",
+  "steps": [
+    {
+      "action": "env-info"
+    },
+    {
+      "action": "build-rust"
+    },
+    {
+      "action": "xcode-gen"
+    },
+    {
+      "action": "build-mac"
+    },
+    {
+      "action": "test-mac"
+    },
+    {
+      "action": "build-ipad"
+    },
+    {
+      "action": "build-duo"
+    },
+    {
+      "action": "check"
+    }
+  ],
+  "notify": true
+}
