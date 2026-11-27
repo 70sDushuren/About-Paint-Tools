@@ -64,7 +64,8 @@ pub use fill::{close_gap_expand_fill, FillOptions, FillResult};
 pub use filters::{
     apply_screentone_fill, filter_brightness_contrast, filter_drop_shadow,
     filter_extract_line_drawing, filter_gaussian_blur, filter_hsb_adjust, filter_outer_stroke,
-    rasterize_panel_borders, transform_layer_affine,
+    import_rgba_to_layer, rasterize_panel_borders, transform_layer_affine,
+    transform_selected_pixels_affine,
 };
 pub use gesture::{
     audit_five_locale_truncation, compute_foldable_pane_geometry, resolve_touch_gesture,

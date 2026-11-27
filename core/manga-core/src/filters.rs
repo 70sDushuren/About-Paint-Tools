@@ -588,6 +588,202 @@ pub fn transform_layer_affine(
     written
 }
 
+/// Independent Floating Selection Pixel Transform (`dx`, `dy`, `scale_x`, `scale_y`, `rot_deg`).
+///
+/// Extracts ONLY pixels inside `selection` from `layer`, optionally clears their original
+/// footprint (`clear_source == true`, or keeps it when `false` for Copy-Stamp), resamples
+/// them bilinearly onto `layer` while leaving unselected pixels untouched, and updates
+/// `selection` in place so follow-up transforms/fills stay aligned with the moved pixels.
+#[allow(clippy::too_many_arguments)]
+pub fn transform_selected_pixels_affine(
+    layer: &mut LayerNode,
+    selection: &mut SelectionMask,
+    dx: f32,
+    dy: f32,
+    scale_x: f32,
+    scale_y: f32,
+    rot_deg: f32,
+    clear_source: bool,
+) -> usize {
+    if layer.locked {
+        return 0;
+    }
+    let Some((bx0, by0, bx1, by1)) = selection.bounds() else {
+        return 0;
+    };
+    let Some(raster) = layer.raster.as_mut() else {
+        return 0;
+    };
+    let w = raster.width;
+    let h = raster.height;
+    if w == 0 || h == 0 || bx1 <= bx0 || by1 <= by0 {
+        return 0;
+    }
+
+    // 1. Extract ONLY selected pixels into a floating buffer and optionally clear their source footprint.
+    let mut floating = TileLayer::new(w, h);
+    let mut extracted = 0usize;
+    for y in by0..by1.min(h) {
+        for x in bx0..bx1.min(w) {
+            if !selection.contains(x, y) {
+                continue;
+            }
+            let px = raster.get_pixel(x, y);
+            if px[3] > 0 {
+                floating.set_pixel(x, y, px);
+                extracted += 1;
+            }
+            if clear_source {
+                raster.set_pixel(x, y, [0, 0, 0, 0]);
+            }
+        }
+    }
+
+    let sx = scale_x.clamp(0.1, 8.0);
+    let sy = scale_y.clamp(0.1, 8.0);
+    let cx = (bx0 + bx1) as f32 * 0.5;
+    let cy = (by0 + by1) as f32 * 0.5;
+    let rad = (-rot_deg).to_radians();
+    let (sin_r, cos_r) = rad.sin_cos();
+
+    let half_w = ((bx1 - bx0) as f32 * 0.5 * sx.max(sy) * 1.55).ceil() as i32 + 4;
+    let half_h = ((by1 - by0) as f32 * 0.5 * sx.max(sy) * 1.55).ceil() as i32 + 4;
+    let ncx = (cx + dx).round() as i32;
+    let ncy = (cy + dy).round() as i32;
+    let min_x = (ncx - half_w).clamp(0, w as i32) as u32;
+    let max_x = (ncx + half_w).clamp(0, w as i32) as u32;
+    let min_y = (ncy - half_h).clamp(0, h as i32) as u32;
+    let max_y = (ncy + half_h).clamp(0, h as i32) as u32;
+
+    // 2. Bilinearly composite floating pixels back onto `raster` and transform the selection mask itself.
+    let mut next_sel = SelectionMask::empty(w, h);
+    let mut written = 0usize;
+
+    for y in min_y..max_y {
+        let ty = y as f32 - (cy + dy);
+        for x in min_x..max_x {
+            let tx = x as f32 - (cx + dx);
+            let rx = (tx * cos_r - ty * sin_r) / sx + cx;
+            let ry = (tx * sin_r + ty * cos_r) / sy + cy;
+            if rx < 0.0 || ry < 0.0 || rx >= w as f32 || ry >= h as f32 {
+                continue;
+            }
+            let sx_nn = rx.round().clamp(0.0, (w - 1) as f32) as u32;
+            let sy_nn = ry.round().clamp(0.0, (h - 1) as f32) as u32;
+            if selection.contains(sx_nn, sy_nn) {
+                next_sel.set(x, y, true);
+            }
+            if extracted == 0 {
+                continue;
+            }
+            let x0 = (rx.floor() as u32).min(w - 1);
+            let y0 = (ry.floor() as u32).min(h - 1);
+            let x1 = (x0 + 1).min(w - 1);
+            let y1 = (y0 + 1).min(h - 1);
+            let fx = rx - x0 as f32;
+            let fy = ry - y0 as f32;
+            let p00 = floating.get_pixel(x0, y0);
+            let p10 = floating.get_pixel(x1, y0);
+            let p01 = floating.get_pixel(x0, y1);
+            let p11 = floating.get_pixel(x1, y1);
+            if p00[3] == 0 && p10[3] == 0 && p01[3] == 0 && p11[3] == 0 {
+                continue;
+            }
+            let bilerp = |c: usize| -> u8 {
+                let top = p00[c] as f32 * (1.0 - fx) + p10[c] as f32 * fx;
+                let bot = p01[c] as f32 * (1.0 - fx) + p11[c] as f32 * fx;
+                (top * (1.0 - fy) + bot * fy).round().clamp(0.0, 255.0) as u8
+            };
+            let src = [bilerp(0), bilerp(1), bilerp(2), bilerp(3)];
+            if src[3] > 0 {
+                let dst = raster.get_pixel(x, y);
+                let out = crate::layer::blend_rgba(dst, src, crate::layer::BlendMode::Normal);
+                raster.set_pixel(x, y, out);
+                written += 1;
+            }
+        }
+    }
+
+    *selection = next_sel;
+    written
+}
+
+/// Bilinearly blits an imported RGBA8 image buffer (`img_w × img_h`) into `layer`
+/// at destination rectangle `(dst_x, dst_y, dst_w, dst_h)` for photo/sketch import.
+#[allow(clippy::too_many_arguments)]
+pub fn import_rgba_to_layer(
+    layer: &mut LayerNode,
+    rgba: &[u8],
+    img_w: u32,
+    img_h: u32,
+    dst_x: i32,
+    dst_y: i32,
+    dst_w: u32,
+    dst_h: u32,
+) -> usize {
+    if layer.locked || img_w == 0 || img_h == 0 || dst_w == 0 || dst_h == 0 {
+        return 0;
+    }
+    let expected = (img_w as usize).saturating_mul(img_h as usize).saturating_mul(4);
+    if rgba.len() < expected {
+        return 0;
+    }
+    let Some(raster) = layer.raster.as_mut() else {
+        return 0;
+    };
+    let cw = raster.width as i32;
+    let ch = raster.height as i32;
+    let x_start = dst_x.max(0);
+    let y_start = dst_y.max(0);
+    let x_end = (dst_x + dst_w as i32).min(cw);
+    let y_end = (dst_y + dst_h as i32).min(ch);
+    if x_start >= x_end || y_start >= y_end {
+        return 0;
+    }
+
+    let sample_img = |ix: u32, iy: u32| -> [u8; 4] {
+        let idx = ((iy as usize) * (img_w as usize) + (ix as usize)) * 4;
+        [rgba[idx], rgba[idx + 1], rgba[idx + 2], rgba[idx + 3]]
+    };
+
+    let mut written = 0usize;
+    let scale_x = img_w as f32 / dst_w as f32;
+    let scale_y = img_h as f32 / dst_h as f32;
+
+    for cy in y_start..y_end {
+        let sy = ((cy - dst_y) as f32 + 0.5) * scale_y - 0.5;
+        let sy_clamped = sy.clamp(0.0, (img_h - 1) as f32);
+        let y0 = sy_clamped.floor() as u32;
+        let y1 = (y0 + 1).min(img_h - 1);
+        let fy = sy_clamped - y0 as f32;
+        for cx in x_start..x_end {
+            let sx = ((cx - dst_x) as f32 + 0.5) * scale_x - 0.5;
+            let sx_clamped = sx.clamp(0.0, (img_w - 1) as f32);
+            let x0 = sx_clamped.floor() as u32;
+            let x1 = (x0 + 1).min(img_w - 1);
+            let fx = sx_clamped - x0 as f32;
+
+            let p00 = sample_img(x0, y0);
+            let p10 = sample_img(x1, y0);
+            let p01 = sample_img(x0, y1);
+            let p11 = sample_img(x1, y1);
+            let bilerp = |c: usize| -> u8 {
+                let top = p00[c] as f32 * (1.0 - fx) + p10[c] as f32 * fx;
+                let bot = p01[c] as f32 * (1.0 - fx) + p11[c] as f32 * fx;
+                (top * (1.0 - fy) + bot * fy).round().clamp(0.0, 255.0) as u8
+            };
+            let px = [bilerp(0), bilerp(1), bilerp(2), bilerp(3)];
+            if px[3] > 0 {
+                let existing = raster.get_pixel(cx as u32, cy as u32);
+                let out = crate::layer::blend_rgba(existing, px, crate::layer::BlendMode::Normal);
+                raster.set_pixel(cx as u32, cy as u32, out);
+                written += 1;
+            }
+        }
+    }
+    written
+}
+
 /// Fills `layer` (clipped to `selection` if active) with a procedural manga halftone screentone.
 pub fn apply_screentone_fill(
     layer: &mut LayerNode,
@@ -730,5 +926,88 @@ mod tests {
             Some(&sel),
         );
         assert!(inked > 300 && inked < 1000);
+    }
+
+    #[test]
+    fn floating_selection_transform_preserves_unselected_and_moves_mask() {
+        let mut stack = LayerStack::new(128, 128);
+        let l1 = stack.add_raster_layer("Character");
+        {
+            let layer = stack.get_mut(l1).unwrap();
+            // Paint red square at [10..30, 10..30] (will be selected & moved)
+            for y in 10..30 {
+                for x in 10..30 {
+                    layer.write_pixel(x, y, [220, 30, 30, 255]);
+                }
+            }
+            // Paint blue anchor square at [90..110, 90..110] (unselected — must stay untouched!)
+            for y in 90..110 {
+                for x in 90..110 {
+                    layer.write_pixel(x, y, [20, 80, 240, 255]);
+                }
+            }
+        }
+
+        let mut sel = SelectionMask::from_rect(128, 128, 10, 10, 30, 30);
+        // Cut-move selection by (+30, +20)
+        let moved = transform_selected_pixels_affine(
+            stack.get_mut(l1).unwrap(),
+            &mut sel,
+            30.0,
+            20.0,
+            1.0,
+            1.0,
+            0.0,
+            true,
+        );
+        assert!(moved >= 350);
+        // Source region cleared
+        assert_eq!(stack.composite_pixel(15, 15)[3], 0);
+        // Destination region received red pixels
+        assert_eq!(stack.composite_pixel(45, 35), [220, 30, 30, 255]);
+        // Unselected blue square is 100% untouched
+        assert_eq!(stack.composite_pixel(100, 100), [20, 80, 240, 255]);
+        // Selection mask moved along with pixels
+        assert!(sel.contains(45, 35));
+        assert!(!sel.contains(15, 15));
+
+        // Copy-stamp (clear_source = false) by (+20, 0) keeps previous pixels AND stamps new copy
+        let copied = transform_selected_pixels_affine(
+            stack.get_mut(l1).unwrap(),
+            &mut sel,
+            20.0,
+            0.0,
+            1.0,
+            1.0,
+            0.0,
+            false,
+        );
+        assert!(copied >= 350);
+        assert_eq!(stack.composite_pixel(45, 35), [220, 30, 30, 255]);
+        assert_eq!(stack.composite_pixel(65, 35), [220, 30, 30, 255]);
+    }
+
+    #[test]
+    fn import_rgba_to_layer_scales_and_blits_cleanly() {
+        let mut stack = LayerStack::new(128, 128);
+        let l1 = stack.add_raster_layer("ImportedPhoto");
+        // 2x2 synthetic RGBA image: solid cyan-gold
+        let img: Vec<u8> = vec![
+            10, 200, 240, 255, 10, 200, 240, 255,
+            10, 200, 240, 255, 10, 200, 240, 255,
+        ];
+        let written = import_rgba_to_layer(
+            stack.get_mut(l1).unwrap(),
+            &img,
+            2,
+            2,
+            16,
+            24,
+            40,
+            30,
+        );
+        assert_eq!(written, 40 * 30);
+        assert_eq!(stack.composite_pixel(30, 35), [10, 200, 240, 255]);
+        assert_eq!(stack.composite_pixel(5, 5)[3], 0);
     }
 }

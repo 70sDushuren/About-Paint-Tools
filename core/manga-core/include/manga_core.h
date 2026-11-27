@@ -671,6 +671,29 @@ size_t manga_project_transform_layer_affine(
     float rot_deg
 );
 
+size_t manga_project_transform_selected_pixels_affine(
+    MangaProjectHandle *handle,
+    uint64_t layer_id,
+    float dx,
+    float dy,
+    float scale_x,
+    float scale_y,
+    float rot_deg,
+    uint8_t clear_source
+);
+
+size_t manga_project_import_rgba_to_layer(
+    MangaProjectHandle *handle,
+    uint64_t layer_id,
+    const uint8_t *rgba_ptr,
+    uint32_t img_w,
+    uint32_t img_h,
+    int32_t dst_x,
+    int32_t dst_y,
+    uint32_t dst_w,
+    uint32_t dst_h
+);
+
 size_t manga_project_apply_screentone(
     MangaProjectHandle *handle,
     uint64_t layer_id,

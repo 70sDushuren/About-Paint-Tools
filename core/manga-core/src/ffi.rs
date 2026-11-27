@@ -2357,6 +2357,79 @@ pub unsafe extern "C" fn manga_project_transform_layer_affine(
     crate::filters::transform_layer_affine(layer, dx, dy, scale_x, scale_y, rot_deg)
 }
 
+/// Independent Floating Selection Pixel Transform (`dx`, `dy`, `scale_x`, `scale_y`, `rot_deg`).
+/// Moves/scales/rotates ONLY pixels inside the active selection mask on `layer_id` while leaving
+/// unselected pixels untouched, and transforms the selection mask along with the pixels.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn manga_project_transform_selected_pixels_affine(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    dx: f32,
+    dy: f32,
+    scale_x: f32,
+    scale_y: f32,
+    rot_deg: f32,
+    clear_source: u8,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    let Some(sel) = h.active_selection.as_mut() else {
+        return 0;
+    };
+    let Some(layer) = h.doc.layers.get_mut(LayerId(layer_id)) else {
+        return 0;
+    };
+    crate::filters::transform_selected_pixels_affine(
+        layer,
+        sel,
+        dx,
+        dy,
+        scale_x,
+        scale_y,
+        rot_deg,
+        clear_source != 0,
+    )
+}
+
+/// Bilinearly imports an RGBA8 image buffer into `layer_id` at `(dst_x, dst_y, dst_w, dst_h)`.
+///
+/// # Safety
+/// `handle` must be a valid mutable `MangaProjectHandle`, and `rgba_ptr` must point to at least
+/// `img_w * img_h * 4` valid readable bytes.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn manga_project_import_rgba_to_layer(
+    handle: *mut MangaProjectHandle,
+    layer_id: u64,
+    rgba_ptr: *const u8,
+    img_w: u32,
+    img_h: u32,
+    dst_x: i32,
+    dst_y: i32,
+    dst_w: u32,
+    dst_h: u32,
+) -> usize {
+    let Some(h) = (unsafe { handle.as_mut() }) else {
+        return 0;
+    };
+    if rgba_ptr.is_null() || img_w == 0 || img_h == 0 || dst_w == 0 || dst_h == 0 {
+        return 0;
+    }
+    let byte_len = (img_w as usize)
+        .saturating_mul(img_h as usize)
+        .saturating_mul(4);
+    let rgba = unsafe { std::slice::from_raw_parts(rgba_ptr, byte_len) };
+    let Some(layer) = h.doc.layers.get_mut(LayerId(layer_id)) else {
+        return 0;
+    };
+    crate::filters::import_rgba_to_layer(layer, rgba, img_w, img_h, dst_x, dst_y, dst_w, dst_h)
+}
+
 /// Applies procedural manga halftone screentone fill onto `layer_id` (clipped to active selection if set).
 ///
 /// # Safety

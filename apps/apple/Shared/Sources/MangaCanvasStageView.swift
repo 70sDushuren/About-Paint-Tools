@@ -2,6 +2,12 @@ import Foundation
 
 #if canImport(SwiftUI)
 import SwiftUI
+#if canImport(PhotosUI)
+import PhotosUI
+#endif
+#if canImport(ImageIO)
+import ImageIO
+#endif
 #if canImport(AppKit)
 import AppKit
 #elseif canImport(UIKit)
@@ -109,6 +115,16 @@ public struct MangaCanvasStageView: View {
     @State private var fxShadowDy: Double = 8.0
     @State private var fxShadowBlur: Double = 4.0
 
+    // Multi-Canvas Gallery & Native Photo Import State
+    @State private var newCanvasTitle: String = "MangaPage"
+    @State private var newCanvasWidthText: String = "1200"
+    @State private var newCanvasHeightText: String = "1698"
+    @State private var selectedSizePresetId: String = "b4"
+    #if canImport(PhotosUI)
+    @State private var photoLayerPickerItem: PhotosPickerItem? = nil
+    @State private var photoRefPickerItem: PhotosPickerItem? = nil
+    #endif
+
     private let starterPresets: [BrushPresetDescriptor] = [
         BrushPresetDescriptor(id: 0, name: "G-Pen (Hard)", trackBadge: "Ink", defaultSize: 6.0, baseOpacity: 1.0, hardness: 0.96),
         BrushPresetDescriptor(id: 1, name: "Maru-Pen (Fine)", trackBadge: "Fine", defaultSize: 3.5, baseOpacity: 1.0, hardness: 0.98),
@@ -187,8 +203,38 @@ public struct MangaCanvasStageView: View {
         .sheet(item: $controller.s2PendingFilter) { fx in
             fxFilterSheetView(fx: fx)
         }
+        .sheet(isPresented: $controller.s2ShowCanvasGallery) {
+            canvasGallerySheetView
+        }
+        #if canImport(PhotosUI)
+        .onChange(of: photoLayerPickerItem) { _, newItem in
+            guard let item = newItem else { return }
+            Task { @MainActor in
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    if controller.importImageDataAsNewLayer(data, layerName: "Photo_Layer") {
+                        controller.s2ShowCanvasGallery = false
+                    }
+                    statusLine = controller.lastStatusBanner
+                }
+                photoLayerPickerItem = nil
+            }
+        }
+        .onChange(of: photoRefPickerItem) { _, newItem in
+            guard let item = newItem else { return }
+            Task { @MainActor in
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    if controller.importReferenceImageData(data) {
+                        controller.s2ShowCanvasGallery = false
+                    }
+                    statusLine = controller.lastStatusBanner
+                }
+                photoRefPickerItem = nil
+            }
+        }
+        #endif
         .onAppear {
             controller.ensureRustCanvasAndLayersInitialized()
+            controller.refreshCanvasGallery()
             refreshCanvasDimsLabel()
         }
     }
@@ -198,6 +244,27 @@ public struct MangaCanvasStageView: View {
     private var ibisToolRail: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 6) {
+                // 1-Tap Multi-Canvas Gallery & New Canvas Presets
+                Button {
+                    controller.refreshCanvasGallery()
+                    controller.s2ShowCanvasGallery = true
+                } label: {
+                    Image(systemName: "square.grid.2x2.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 40, height: 34)
+                        .background(SuiteColorTokens.hubAccent.opacity(0.26))
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .strokeBorder(SuiteColorTokens.hubAccent.opacity(0.65), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .help("多画布画廊 / 新建画布 / 导入图片 (Gallery)")
+
+                Divider().background(SuiteColorTokens.mangaBorder).padding(.horizontal, 8)
+
                 ForEach(S2DrawingToolKind.allCases) { tool in
                     let selected = controller.s2Tool == tool
                     Button {
@@ -386,6 +453,10 @@ public struct MangaCanvasStageView: View {
                 // Studio Extras Menu (keeps FX, Screentone, Reference, Export organized & out of the way)
                 Menu {
                     Section("Studio Actions") {
+                        Button("画廊 / 新建画布 / 导入图片 (Gallery)") {
+                            controller.refreshCanvasGallery()
+                            controller.s2ShowCanvasGallery = true
+                        }
                         Button("Apply 60 LPI Screentone") {
                             _ = controller.applyScreentoneFill()
                             statusLine = controller.lastStatusBanner
@@ -395,6 +466,10 @@ public struct MangaCanvasStageView: View {
                         }
                         Button(controller.s2MirrorHorizontal ? "Disable Mirror Preview" : "Mirror Canvas Horizontally (H)") {
                             controller.s2MirrorHorizontal.toggle()
+                        }
+                        Button("重置画布旋转 (0°)") {
+                            controller.resetRotation()
+                            statusLine = "画布角度已重置 0°"
                         }
                     }
                     Section("Layer FX Filters") {
@@ -999,11 +1074,47 @@ public struct MangaCanvasStageView: View {
 
     private var transformInteractiveBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                Text("Transform Layer")
-                    .font(.caption2.bold())
-                    .foregroundStyle(SuiteColorTokens.mangaAccent)
+            HStack(spacing: 10) {
+                if controller.s2HasActiveSelection {
+                    Button {
+                        controller.s2TransformSelectionOnly.toggle()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: controller.s2TransformSelectionOnly ? "lasso.badge.sparkles" : "square.stack.3d.up")
+                                .font(.caption2)
+                            Text(controller.s2TransformSelectionOnly ? "选区局部变形" : "整层变形")
+                                .font(.caption2.bold())
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(controller.s2TransformSelectionOnly ? SuiteColorTokens.hubAccent : Color.white.opacity(0.14))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
                     .fixedSize(horizontal: true, vertical: false)
+
+                    if controller.s2TransformSelectionOnly {
+                        Button {
+                            controller.s2TransformKeepOriginal.toggle()
+                        } label: {
+                            Text(controller.s2TransformKeepOriginal ? "✓ 保留原图(复制)" : "剪切移动")
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(controller.s2TransformKeepOriginal ? SuiteColorTokens.novelAccent : Color.white.opacity(0.10))
+                                .foregroundStyle(.white)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .fixedSize(horizontal: true, vertical: false)
+                    }
+                } else {
+                    Text("整层自由变形")
+                        .font(.caption2.bold())
+                        .foregroundStyle(SuiteColorTokens.mangaAccent)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
 
                 HStack(spacing: 4) {
                     Text("dX \(Int(transformDx))")
@@ -1048,13 +1159,15 @@ public struct MangaCanvasStageView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 5)).buttonStyle(.plain)
                     .fixedSize(horizontal: true, vertical: false)
 
-                Button("Apply") {
+                Button(controller.s2HasActiveSelection && controller.s2TransformSelectionOnly ? "应用局部变形" : "Apply") {
                     _ = controller.applyAffineTransform(
                         dx: Float(transformDx),
                         dy: Float(transformDy),
                         scaleX: Float(transformScale),
                         scaleY: Float(transformScale),
-                        rotDeg: Float(transformRotDeg)
+                        rotDeg: Float(transformRotDeg),
+                        selectionOnly: controller.s2TransformSelectionOnly,
+                        clearSource: !controller.s2TransformKeepOriginal
                     )
                     transformDx = 0; transformDy = 0; transformScale = 1.0; transformRotDeg = 0
                     statusLine = controller.lastStatusBanner
@@ -1217,6 +1330,7 @@ public struct MangaCanvasStageView: View {
                     .padding(12)
                 }
             }
+            #if !os(iOS)
             .simultaneousGesture(
                 MagnificationGesture()
                     .onChanged { scale in
@@ -1228,6 +1342,7 @@ public struct MangaCanvasStageView: View {
                         pinchBaseZoom = nil
                     }
             )
+            #endif
         }
         .clipped()
     }
@@ -1261,77 +1376,125 @@ public struct MangaCanvasStageView: View {
         .shadow(color: .black.opacity(0.55), radius: 6, y: 3)
     }
 
-    // MARK: - Fix #3: Floating On-Canvas Pan & Center Control Pad
+    // MARK: - Fix #3 + #2: Floating On-Canvas Pan, Rotation & Center Control Pad
 
     private var floatingCanvasPanControlPad: some View {
-        HStack(spacing: 4) {
-            Button {
-                controller.panCanvas(by: CGSize(width: -70, height: 0))
-            } label: {
-                Image(systemName: "arrow.left")
-                    .font(.caption.bold())
-                    .frame(width: 28, height: 28)
-                    .background(Color.white.opacity(0.12))
-                    .foregroundStyle(.white)
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .help("画布左移")
-
-            VStack(spacing: 4) {
+        VStack(spacing: 5) {
+            // Compact Canvas Rotation Strip (-15° / Live Angle Reset / +15°)
+            HStack(spacing: 4) {
                 Button {
-                    controller.panCanvas(by: CGSize(width: 0, height: -70))
+                    controller.rotateCanvas(by: -15.0)
+                    statusLine = "画布旋转 \(Int(controller.s2RotationDeg.rounded()))°"
                 } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.caption.bold())
-                        .frame(width: 28, height: 26)
+                    Image(systemName: "rotate.left")
+                        .font(.system(size: 10, weight: .bold))
+                        .frame(width: 24, height: 22)
                         .background(Color.white.opacity(0.12))
                         .foregroundStyle(.white)
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .help("画布上移")
+                .help("画布逆时针旋转 15°")
 
                 Button {
-                    controller.resetViewport()
-                    statusLine = "画布已居中归位 (100%)"
+                    controller.resetRotation()
+                    statusLine = "画布角度已归零 (0°)"
                 } label: {
-                    Text("居中")
-                        .font(.system(size: 9, weight: .bold))
-                        .frame(width: 32, height: 22)
-                        .background(SuiteColorTokens.mangaAccent)
+                    Text("\(Int(controller.s2RotationDeg.rounded()))°")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .frame(minWidth: 36, minHeight: 22)
+                        .padding(.horizontal, 4)
+                        .background(abs(controller.s2RotationDeg) > 0.5 ? SuiteColorTokens.hubAccent : Color.white.opacity(0.10))
                         .foregroundStyle(.white)
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .help("重置画布位移与缩放")
+                .help("点击恢复画布 0° 旋转（支持双指自由旋转）")
 
                 Button {
-                    controller.panCanvas(by: CGSize(width: 0, height: 70))
+                    controller.rotateCanvas(by: 15.0)
+                    statusLine = "画布旋转 \(Int(controller.s2RotationDeg.rounded()))°"
                 } label: {
-                    Image(systemName: "arrow.down")
-                        .font(.caption.bold())
-                        .frame(width: 28, height: 26)
+                    Image(systemName: "rotate.right")
+                        .font(.system(size: 10, weight: .bold))
+                        .frame(width: 24, height: 22)
                         .background(Color.white.opacity(0.12))
                         .foregroundStyle(.white)
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .help("画布下移")
+                .help("画布顺时针旋转 15°")
             }
 
-            Button {
-                controller.panCanvas(by: CGSize(width: 70, height: 0))
-            } label: {
-                Image(systemName: "arrow.right")
-                    .font(.caption.bold())
-                    .frame(width: 28, height: 28)
-                    .background(Color.white.opacity(0.12))
-                    .foregroundStyle(.white)
-                    .clipShape(Circle())
+            HStack(spacing: 4) {
+                Button {
+                    controller.panCanvas(by: CGSize(width: -70, height: 0))
+                } label: {
+                    Image(systemName: "arrow.left")
+                        .font(.caption.bold())
+                        .frame(width: 28, height: 28)
+                        .background(Color.white.opacity(0.12))
+                        .foregroundStyle(.white)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("画布左移")
+
+                VStack(spacing: 4) {
+                    Button {
+                        controller.panCanvas(by: CGSize(width: 0, height: -70))
+                    } label: {
+                        Image(systemName: "arrow.up")
+                            .font(.caption.bold())
+                            .frame(width: 28, height: 26)
+                            .background(Color.white.opacity(0.12))
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help("画布上移")
+
+                    Button {
+                        controller.resetViewport()
+                        statusLine = "画布已居中归位 (100% · 0°)"
+                    } label: {
+                        Text("居中")
+                            .font(.system(size: 9, weight: .bold))
+                            .frame(width: 32, height: 22)
+                            .background(SuiteColorTokens.mangaAccent)
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help("重置画布位移、缩放与旋转")
+
+                    Button {
+                        controller.panCanvas(by: CGSize(width: 0, height: 70))
+                    } label: {
+                        Image(systemName: "arrow.down")
+                            .font(.caption.bold())
+                            .frame(width: 28, height: 26)
+                            .background(Color.white.opacity(0.12))
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help("画布下移")
+                }
+
+                Button {
+                    controller.panCanvas(by: CGSize(width: 70, height: 0))
+                } label: {
+                    Image(systemName: "arrow.right")
+                        .font(.caption.bold())
+                        .frame(width: 28, height: 28)
+                        .background(Color.white.opacity(0.12))
+                        .foregroundStyle(.white)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("画布右移")
             }
-            .buttonStyle(.plain)
-            .help("画布右移")
         }
         .padding(6)
         .background(SuiteColorTokens.mangaPanel.opacity(0.90))
@@ -1996,11 +2159,34 @@ public struct MangaCanvasStageView: View {
                 Image(systemName: "photo.on.rectangle")
                     .font(.caption2)
                     .foregroundStyle(SuiteColorTokens.hubAccent)
-                Text("Reference Window")
+                Text(controller.s2ReferenceImage != nil ? "参考图片" : "Reference")
                     .font(.caption2.bold())
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 Spacer()
+                #if canImport(PhotosUI)
+                PhotosPicker(selection: $photoRefPickerItem, matching: .images) {
+                    Image(systemName: "photo.badge.plus")
+                        .font(.caption2.bold())
+                        .foregroundStyle(SuiteColorTokens.hubAccent)
+                }
+                .buttonStyle(.plain)
+                .help("从相册载入参考图")
+                #endif
+                #if canImport(CoreGraphics)
+                if controller.s2ReferenceImage != nil {
+                    Button {
+                        controller.clearReferenceImage()
+                        statusLine = controller.lastStatusBanner
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.caption2.bold())
+                            .foregroundStyle(Color.white.opacity(0.75))
+                    }
+                    .buttonStyle(.plain)
+                    .help("清除参考图，恢复画布总览")
+                }
+                #endif
                 Button {
                     controller.s2ShowReferenceWindow = false
                 } label: {
@@ -2012,11 +2198,11 @@ public struct MangaCanvasStageView: View {
             }
 
             #if canImport(CoreGraphics)
-            if let cg = controller.s2CompositeImage {
+            if let cg = controller.s2ReferenceImage ?? controller.s2CompositeImage {
                 Image(decorative: cg, scale: 1.0)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 140, height: 160)
+                    .frame(width: 156, height: 176)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.white.opacity(0.2)))
             }
@@ -2039,7 +2225,7 @@ public struct MangaCanvasStageView: View {
             }
         }
         .padding(10)
-        .frame(width: 164)
+        .frame(width: 180)
         .background(SuiteColorTokens.mangaPanel.opacity(0.95))
         .overlay(
             RoundedRectangle(cornerRadius: 10)
@@ -2056,6 +2242,234 @@ public struct MangaCanvasStageView: View {
                     )
                 }
         )
+    }
+
+    // MARK: - Multi-Canvas Gallery, New Canvas Presets & Photo Import Sheet
+
+    #if canImport(CoreGraphics) && canImport(ImageIO)
+    private func loadGalleryThumbCGImage(path: String?) -> CGImage? {
+        guard let path else { return nil }
+        let url = URL(fileURLWithPath: path)
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(src, 0, nil)
+    }
+    #endif
+
+    private var canvasGallerySheetView: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("多画布画廊 · 新建画布与导入图片", systemImage: "square.grid.2x2.fill")
+                    .font(.headline)
+                Spacer()
+                Button("完成") {
+                    controller.s2ShowCanvasGallery = false
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(SuiteColorTokens.mangaAccent)
+            }
+
+            // Quick Photo Import Bar (Direct PhotosPicker — works natively on iPad Pro & Mac)
+            HStack(spacing: 10) {
+                #if canImport(PhotosUI)
+                PhotosPicker(selection: $photoLayerPickerItem, matching: .images) {
+                    Label("导入相册图片为新图层", systemImage: "photo.badge.plus")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(SuiteColorTokens.hubAccent)
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                PhotosPicker(selection: $photoRefPickerItem, matching: .images) {
+                    Label("导入相册到参考浮窗", systemImage: "photo.on.rectangle.angled")
+                        .font(.caption.bold())
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(SuiteColorTokens.novelAccent)
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                #endif
+
+                Spacer()
+                Text("当前画布: \(controller.s2CanvasPixelWidth) × \(controller.s2CanvasPixelHeight)")
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+            }
+
+            Divider()
+
+            // Create New Canvas with Pro Manga / 4K / Webtoon Presets
+            VStack(alignment: .leading, spacing: 8) {
+                Text("新建画布预设 (B4 / A4 / 4K / 条漫 / 自定义)")
+                    .font(.subheadline.bold())
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(CanvasSizePresetOption.allPresets) { opt in
+                            let selected = selectedSizePresetId == opt.id
+                            Button {
+                                selectedSizePresetId = opt.id
+                                newCanvasWidthText = "\(opt.width)"
+                                newCanvasHeightText = "\(opt.height)"
+                            } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(opt.title)
+                                        .font(.caption.bold())
+                                    Text(opt.subtitle)
+                                        .font(.caption2)
+                                        .opacity(0.8)
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(selected ? SuiteColorTokens.mangaAccent : Color.secondary.opacity(0.14))
+                                .foregroundStyle(selected ? .white : .primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    TextField("画布名称", text: $newCanvasTitle)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 200)
+                    HStack(spacing: 4) {
+                        Text("宽")
+                            .font(.caption)
+                        TextField("宽", text: $newCanvasWidthText)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 72)
+                        Text("× 高")
+                            .font(.caption)
+                        TextField("高", text: $newCanvasHeightText)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 72)
+                    }
+                    Button {
+                        let w = Int(newCanvasWidthText) ?? 1200
+                        let h = Int(newCanvasHeightText) ?? 1698
+                        let preset = CanvasSizePresetOption.allPresets.first(where: { $0.id == selectedSizePresetId })?.preset ?? .b4PrintManga600Dpi
+                        if controller.createNewCanvasProject(title: newCanvasTitle, width: w, height: h, preset: preset) {
+                            refreshCanvasDimsLabel()
+                            statusLine = controller.lastStatusBanner
+                            controller.s2ShowCanvasGallery = false
+                        }
+                    } label: {
+                        Label("新建并打开", systemImage: "plus.circle.fill")
+                            .font(.caption.bold())
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(SuiteColorTokens.mangaAccent)
+                }
+            }
+
+            Divider()
+
+            // Existing Multi-Canvas Gallery Grid
+            Text("我的画布作品 (\(controller.s2GalleryItems.count))")
+                .font(.subheadline.bold())
+
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 168), spacing: 12)], spacing: 12) {
+                    ForEach(controller.s2GalleryItems) { item in
+                        VStack(alignment: .leading, spacing: 6) {
+                            ZStack(alignment: .topTrailing) {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.secondary.opacity(0.12))
+                                    .frame(height: 112)
+                                    .overlay {
+                                        #if canImport(CoreGraphics) && canImport(ImageIO)
+                                        if let cg = loadGalleryThumbCGImage(path: item.thumbnailPath) {
+                                            Image(decorative: cg, scale: 1.0)
+                                                .resizable()
+                                                .scaledToFit()
+                                                .clipShape(RoundedRectangle(cornerRadius: 6))
+                                                .padding(4)
+                                        } else {
+                                            Image(systemName: "paintbrush.pointed")
+                                                .font(.title2)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        #else
+                                        Image(systemName: "paintbrush.pointed")
+                                            .font(.title2)
+                                            .foregroundStyle(.secondary)
+                                        #endif
+                                    }
+
+                                if item.isActive {
+                                    Text("当前")
+                                        .font(.caption2.bold())
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(SuiteColorTokens.mangaAccent)
+                                        .foregroundStyle(.white)
+                                        .clipShape(Capsule())
+                                        .padding(6)
+                                }
+                            }
+
+                            Text(item.title)
+                                .font(.caption.bold())
+                                .lineLimit(1)
+                            Text("\(item.width) × \(item.height) · \(item.layerCount) 图层")
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.secondary)
+
+                            HStack(spacing: 6) {
+                                Button(item.isActive ? "继续画" : "打开") {
+                                    if !item.isActive {
+                                        controller.switchToCanvasProject(dir: item.id)
+                                        refreshCanvasDimsLabel()
+                                        statusLine = controller.lastStatusBanner
+                                    }
+                                    controller.s2ShowCanvasGallery = false
+                                }
+                                .font(.caption2.bold())
+                                .buttonStyle(.borderedProminent)
+                                .tint(item.isActive ? SuiteColorTokens.novelAccent : SuiteColorTokens.hubAccent)
+
+                                Button {
+                                    _ = controller.duplicateCanvasProject(dir: item.id)
+                                    statusLine = controller.lastStatusBanner
+                                } label: {
+                                    Image(systemName: "doc.on.doc")
+                                        .font(.caption2)
+                                }
+                                .buttonStyle(.bordered)
+                                .help("复制作品")
+
+                                if controller.s2GalleryItems.count > 1 {
+                                    Button(role: .destructive) {
+                                        _ = controller.deleteCanvasProject(dir: item.id)
+                                        statusLine = controller.lastStatusBanner
+                                    } label: {
+                                        Image(systemName: "trash")
+                                            .font(.caption2)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .help("删除作品")
+                                }
+                            }
+                        }
+                        .padding(10)
+                        .background(Color.secondary.opacity(0.08))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(item.isActive ? SuiteColorTokens.mangaAccent : Color.secondary.opacity(0.25), lineWidth: item.isActive ? 2 : 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                }
+            }
+        }
+        .padding(18)
+        .frame(minWidth: 560, minHeight: 520)
     }
 
     private func fxFilterSheetView(fx: S2FilterActionKind) -> some View {

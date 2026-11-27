@@ -1516,6 +1516,62 @@ public final class MangaProjectEngine {
         Int(manga_project_transform_layer_affine(handle, layerId, dx, dy, scaleX, scaleY, rotDeg))
     }
 
+    /// Independent Floating Selection Pixel Transform (`clearSource = true` for cut-move, `false` for copy-stamp).
+    @discardableResult
+    public func transformSelectedPixelsAffine(
+        layerId: UInt64,
+        dx: Float,
+        dy: Float,
+        scaleX: Float,
+        scaleY: Float,
+        rotDeg: Float,
+        clearSource: Bool = true
+    ) -> Int {
+        Int(
+            manga_project_transform_selected_pixels_affine(
+                handle,
+                layerId,
+                dx,
+                dy,
+                scaleX,
+                scaleY,
+                rotDeg,
+                clearSource ? 1 : 0
+            )
+        )
+    }
+
+    /// Bilinearly imports an RGBA8 image buffer into `layerId` at `(dstX, dstY, dstW, dstH)`.
+    @discardableResult
+    public func importRgbaToLayer(
+        layerId: UInt64,
+        rgba: [UInt8],
+        imgWidth: UInt32,
+        imgHeight: UInt32,
+        dstX: Int32,
+        dstY: Int32,
+        dstWidth: UInt32,
+        dstHeight: UInt32
+    ) -> Int {
+        guard !rgba.isEmpty else { return 0 }
+        return rgba.withUnsafeBufferPointer { buf in
+            guard let base = buf.baseAddress else { return 0 }
+            return Int(
+                manga_project_import_rgba_to_layer(
+                    handle,
+                    layerId,
+                    base,
+                    imgWidth,
+                    imgHeight,
+                    dstX,
+                    dstY,
+                    dstWidth,
+                    dstHeight
+                )
+            )
+        }
+    }
+
     @discardableResult
     public func applyScreentone(
         layerId: UInt64,

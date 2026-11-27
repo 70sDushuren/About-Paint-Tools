@@ -5,6 +5,12 @@ import SwiftUI
 #if canImport(CoreGraphics)
 import CoreGraphics
 #endif
+#if canImport(ImageIO)
+import ImageIO
+#endif
+#if canImport(UniformTypeIdentifiers)
+import UniformTypeIdentifiers
+#endif
 #if canImport(AppKit)
 import AppKit
 #endif
@@ -310,6 +316,8 @@ public struct ProjectWorkspaceSessionState: Codable, Equatable, Sendable {
     public var s2Strokes: [PersistedCanvasStroke]
     public var s2SpeechBubbles: [PersistedSpeechBubble]?
     public var s2ApplePencilOnlyDraw: Bool?
+    public var s2CanvasPixelWidth: Int?
+    public var s2CanvasPixelHeight: Int?
     // S3 Novel
     public var s3SelectedChapterId: String
     public var s3ActiveProseLocale: String
@@ -319,6 +327,35 @@ public struct ProjectWorkspaceSessionState: Codable, Equatable, Sendable {
     public var s3ShowAiRefDrawer: Bool
     public var s3HumanLocked: Bool
     public var savedAtEpochSec: Double
+}
+
+public struct CanvasSizePresetOption: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let title: String
+    public let subtitle: String
+    public let width: Int
+    public let height: Int
+    public let preset: CanvasPresetKind
+
+    public static let allPresets: [CanvasSizePresetOption] = [
+        CanvasSizePresetOption(id: "b5", title: "B5 漫画标准", subtitle: "800 × 1132 · 轻快连载", width: 800, height: 1132, preset: .b4PrintManga600Dpi),
+        CanvasSizePresetOption(id: "a4", title: "A4 日漫原稿", subtitle: "1000 × 1414 · 同人本", width: 1000, height: 1414, preset: .a4PrintManga600Dpi),
+        CanvasSizePresetOption(id: "b4", title: "B4 商业漫画 HD", subtitle: "1200 × 1698 · 印刷比例", width: 1200, height: 1698, preset: .b4PrintManga600Dpi),
+        CanvasSizePresetOption(id: "4k", title: "宽屏插画 16:9", subtitle: "1920 × 1080 · 彩插/封面", width: 1920, height: 1080, preset: .illustration4K),
+        CanvasSizePresetOption(id: "sq", title: "角色人设 1:1", subtitle: "1200 × 1200 · 头像/立绘", width: 1200, height: 1200, preset: .illustration4K),
+        CanvasSizePresetOption(id: "webtoon", title: "条漫长卷 Webtoon", subtitle: "800 × 2400 · 竖屏滚动", width: 800, height: 2400, preset: .webtoonStrip),
+    ]
+}
+
+public struct CanvasGalleryItem: Identifiable, Equatable, Sendable {
+    public let id: String
+    public let title: String
+    public let width: Int
+    public let height: Int
+    public let layerCount: Int
+    public let modifiedAt: Date
+    public let thumbnailPath: String?
+    public let isActive: Bool
 }
 
 public struct PersistedSpeechBubble: Codable, Identifiable, Equatable, Sendable {
@@ -418,8 +455,13 @@ public final class StudioWorkspaceController: ObservableObject {
     @Published public var s2EyedropperPreview: PersistedRGBA? = nil
     @Published public var s2EyedropperLoupeNorm: CGPoint? = nil
     @Published public var s2PanelCount: Int = 1
+    @Published public var s2TransformSelectionOnly: Bool = true
+    @Published public var s2TransformKeepOriginal: Bool = false
+    @Published public var s2ShowCanvasGallery: Bool = false
+    @Published public var s2GalleryItems: [CanvasGalleryItem] = []
     #if canImport(CoreGraphics)
     @Published public var s2CompositeImage: CGImage? = nil
+    @Published public var s2ReferenceImage: CGImage? = nil
     #endif
     @Published public var s2PendingFilter: S2FilterActionKind? = nil
     @Published public var s2CanvasActionRevision: Int = 0
@@ -620,6 +662,17 @@ public final class StudioWorkspaceController: ObservableObject {
             width: s2PanOffset.width + delta.width,
             height: s2PanOffset.height + delta.height
         )
+    }
+
+    public func rotateCanvas(by deltaDeg: Double) {
+        var next = s2RotationDeg + deltaDeg
+        while next > 180.0 { next -= 360.0 }
+        while next < -180.0 { next += 360.0 }
+        s2RotationDeg = next
+    }
+
+    public func resetRotation() {
+        s2RotationDeg = 0.0
     }
 
     public func resetViewport() {
@@ -1506,22 +1559,491 @@ public final class StudioWorkspaceController: ObservableObject {
     }
 
     @discardableResult
-    public func applyAffineTransform(dx: Float, dy: Float, scaleX: Float, scaleY: Float, rotDeg: Float) -> Int {
+    public func applyAffineTransform(
+        dx: Float,
+        dy: Float,
+        scaleX: Float,
+        scaleY: Float,
+        rotDeg: Float,
+        selectionOnly: Bool? = nil,
+        clearSource: Bool? = nil
+    ) -> Int {
         #if canImport(MangaCoreFFI)
         guard let proj = rustProject else { return 0 }
+        let useSelectionOnly = (selectionOnly ?? s2TransformSelectionOnly) && s2HasActiveSelection
+        let useClearSource = clearSource ?? !s2TransformKeepOriginal
         proj.pushUndoSnapshot()
-        let count = proj.transformLayerAffine(
-            layerId: s2SelectedLayerId,
-            dx: dx, dy: dy, scaleX: scaleX, scaleY: scaleY, rotDeg: rotDeg
-        )
+        let count: Int
+        if useSelectionOnly {
+            count = proj.transformSelectedPixelsAffine(
+                layerId: s2SelectedLayerId,
+                dx: dx,
+                dy: dy,
+                scaleX: scaleX,
+                scaleY: scaleY,
+                rotDeg: rotDeg,
+                clearSource: useClearSource
+            )
+            transformSelectionOverlayNorm(dx: dx, dy: dy, scaleX: scaleX, scaleY: scaleY, rotDeg: rotDeg)
+            let modeLabel = useClearSource ? "选区局部浮动变形" : "选区局部复制盖章"
+            lastStatusBanner = "\(modeLabel) (\(count) px)"
+        } else {
+            count = proj.transformLayerAffine(
+                layerId: s2SelectedLayerId,
+                dx: dx, dy: dy, scaleX: scaleX, scaleY: scaleY, rotDeg: rotDeg
+            )
+            lastStatusBanner = "整层变形已应用 (\(count) px)"
+        }
         refreshCompositeImage()
         markDirtyAndScheduleSave()
-        lastStatusBanner = "Transform applied (\(count) px)"
         return count
         #else
         return 0
         #endif
     }
+
+    /// Keeps the SwiftUI normalized marching-ants selection overlay synced with Rust floating selection transforms.
+    private func transformSelectionOverlayNorm(dx: Float, dy: Float, scaleX: Float, scaleY: Float, rotDeg: Float) {
+        let cw = max(1.0, Double(s2CanvasPixelWidth))
+        let ch = max(1.0, Double(s2CanvasPixelHeight))
+        let ndx = Double(dx) / cw
+        let ndy = Double(dy) / ch
+        let sx = Double(max(0.1, min(8.0, scaleX)))
+        let sy = Double(max(0.1, min(8.0, scaleY)))
+        let rad = Double(rotDeg) * Double.pi / 180.0
+        let cosR = cos(rad)
+        let sinR = sin(rad)
+
+        if !s2SelectionLassoNorm.isEmpty {
+            let xs = s2SelectionLassoNorm.map { Double($0.x) * cw }
+            let ys = s2SelectionLassoNorm.map { Double($0.y) * ch }
+            let cx = ((xs.min() ?? 0) + (xs.max() ?? cw)) * 0.5
+            let cy = ((ys.min() ?? 0) + (ys.max() ?? ch)) * 0.5
+            s2SelectionLassoNorm = s2SelectionLassoNorm.map { pt in
+                let lx = (Double(pt.x) * cw - cx) * sx
+                let ly = (Double(pt.y) * ch - cy) * sy
+                let rx = lx * cosR - ly * sinR + cx + Double(dx)
+                let ry = lx * sinR + ly * cosR + cy + Double(dy)
+                return CGPoint(
+                    x: min(max(rx / cw, 0.0), 1.0),
+                    y: min(max(ry / ch, 0.0), 1.0)
+                )
+            }
+        }
+        if let rect = s2SelectionRectNorm {
+            let newW = min(1.0, max(0.01, rect.width * sx))
+            let newH = min(1.0, max(0.01, rect.height * sy))
+            let newMidX = min(max(rect.midX + ndx, newW * 0.5), 1.0 - newW * 0.5)
+            let newMidY = min(max(rect.midY + ndy, newH * 0.5), 1.0 - newH * 0.5)
+            s2SelectionRectNorm = CGRect(
+                x: newMidX - newW * 0.5,
+                y: newMidY - newH * 0.5,
+                width: newW,
+                height: newH
+            )
+        }
+    }
+
+    // MARK: - Multi-Canvas Gallery, New Canvas Presets & Photo Import
+
+    public var workspaceGalleryRootDir: URL {
+        URL(fileURLWithPath: SuiteSharedWorkspace.defaultProjectDir, isDirectory: true)
+            .deletingLastPathComponent()
+    }
+
+    public func refreshCanvasGallery() {
+        let fm = FileManager.default
+        let root = workspaceGalleryRootDir
+        try? fm.createDirectory(at: root, withIntermediateDirectories: true)
+
+        var candidateDirs: [URL] = []
+        if let entries = try? fm.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: [.isDirectoryKey, .contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) {
+            for url in entries {
+                let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) ?? false
+                if isDir {
+                    candidateDirs.append(url)
+                }
+            }
+        }
+
+        let activeUrl = URL(fileURLWithPath: activeProjectDir, isDirectory: true).standardizedFileURL
+        if !candidateDirs.contains(where: { $0.standardizedFileURL == activeUrl }) {
+            candidateDirs.append(activeUrl)
+        }
+
+        var items: [CanvasGalleryItem] = []
+        for dirUrl in candidateDirs {
+            let stdPath = dirUrl.standardizedFileURL.path
+            let sessionUrl = dirUrl.appendingPathComponent(".about-paint-session.json")
+            let thumbUrl = dirUrl.appendingPathComponent(".about-paint-thumb.png")
+            var width = 800
+            var height = 1132
+            var layerCount = 3
+            var modifiedAt = (try? dirUrl.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
+
+            if let data = try? Data(contentsOf: sessionUrl),
+               let session = try? JSONDecoder().decode(ProjectWorkspaceSessionState.self, from: data)
+            {
+                width = session.s2CanvasPixelWidth ?? 800
+                height = session.s2CanvasPixelHeight ?? 1132
+                layerCount = max(1, session.s2Layers.count)
+                modifiedAt = Date(timeIntervalSince1970: session.savedAtEpochSec)
+            }
+            let thumbPath = fm.fileExists(atPath: thumbUrl.path) ? thumbUrl.path : nil
+            items.append(
+                CanvasGalleryItem(
+                    id: stdPath,
+                    title: dirUrl.lastPathComponent,
+                    width: width,
+                    height: height,
+                    layerCount: layerCount,
+                    modifiedAt: modifiedAt,
+                    thumbnailPath: thumbPath,
+                    isActive: stdPath == activeUrl.path
+                )
+            )
+        }
+        items.sort { lhs, rhs in
+            if lhs.isActive != rhs.isActive { return lhs.isActive }
+            return lhs.modifiedAt > rhs.modifiedAt
+        }
+        s2GalleryItems = items
+    }
+
+    @discardableResult
+    public func createNewCanvasProject(
+        title: String,
+        width: Int,
+        height: Int,
+        preset: CanvasPresetKind = .b4PrintManga600Dpi
+    ) -> Bool {
+        flushAllSync()
+
+        let clampedW = min(max(width, 256), 4096)
+        let clampedH = min(max(height, 256), 4096)
+        let rawClean = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let safeBase = rawClean.isEmpty ? "Canvas" : rawClean.replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+        let root = workspaceGalleryRootDir
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+
+        var folderName = safeBase
+        var targetUrl = root.appendingPathComponent(folderName, isDirectory: true)
+        if FileManager.default.fileExists(atPath: targetUrl.path) {
+            let stamp = Int(Date().timeIntervalSince1970) % 100_000
+            folderName = "\(safeBase)_\(stamp)"
+            targetUrl = root.appendingPathComponent(folderName, isDirectory: true)
+        }
+
+        #if canImport(MangaCoreFFI)
+        _ = MangaHubProjectBootstrap.initProject(
+            parentDir: root.path,
+            folderName: folderName,
+            author: "Studio Creator"
+        )
+        #else
+        try? FileManager.default.createDirectory(at: targetUrl, withIntermediateDirectories: true)
+        #endif
+
+        isRestoring = true
+        activeProjectDir = targetUrl.path
+        if !recentProjectDirs.contains(targetUrl.path) {
+            recentProjectDirs.insert(targetUrl.path, at: 0)
+        }
+        #if canImport(MangaCoreFFI)
+        rustProject = nil
+        rustCanvas = nil
+        #endif
+        #if canImport(CoreGraphics)
+        s2ReferenceImage = nil
+        s2CompositeImage = nil
+        #endif
+        s2CanvasPreset = preset
+        s2CanvasPixelWidth = clampedW
+        s2CanvasPixelHeight = clampedH
+        s2CelLayers = []
+        s2Strokes = []
+        s2UndoneStrokes = []
+        s2SpeechBubbles = []
+        s2HasActiveSelection = false
+        s2SelectionPixelCount = 0
+        s2SelectionRectNorm = nil
+        s2SelectionLassoNorm = []
+        s2ViewportZoom = 1.0
+        s2PanOffset = .zero
+        s2RotationDeg = 0.0
+        s2MirrorHorizontal = false
+        s2ShowReferenceWindow = false
+        isRestoring = false
+
+        ensureRustCanvasAndLayersInitialized()
+        loadNovelProseFromDisk()
+        flushAllSync()
+        refreshCanvasGallery()
+        lastStatusBanner = "已新建画布 '\(folderName)' (\(clampedW) × \(clampedH))"
+        return true
+    }
+
+    public func switchToCanvasProject(dir: String) {
+        let stdTarget = URL(fileURLWithPath: dir, isDirectory: true).standardizedFileURL.path
+        let stdCurrent = URL(fileURLWithPath: activeProjectDir, isDirectory: true).standardizedFileURL.path
+        guard stdTarget != stdCurrent else { return }
+
+        flushAllSync()
+
+        isRestoring = true
+        activeProjectDir = stdTarget
+        if !recentProjectDirs.contains(stdTarget) {
+            recentProjectDirs.insert(stdTarget, at: 0)
+        }
+        #if canImport(MangaCoreFFI)
+        rustProject = nil
+        rustCanvas = nil
+        #endif
+        #if canImport(CoreGraphics)
+        s2ReferenceImage = nil
+        s2CompositeImage = nil
+        #endif
+        s2CelLayers = []
+        s2Strokes = []
+        s2UndoneStrokes = []
+        s2SpeechBubbles = []
+        s2HasActiveSelection = false
+        s2SelectionPixelCount = 0
+        s2SelectionRectNorm = nil
+        s2SelectionLassoNorm = []
+        s2CanvasPixelWidth = 800
+        s2CanvasPixelHeight = 1132
+        isRestoring = false
+
+        restoreProjectSession(from: stdTarget)
+        saveGlobalAppStateSync()
+        refreshCanvasGallery()
+        lastStatusBanner = "已切换画布: \(URL(fileURLWithPath: stdTarget).lastPathComponent) (\(s2CanvasPixelWidth) × \(s2CanvasPixelHeight))"
+    }
+
+    @discardableResult
+    public func duplicateCanvasProject(dir: String) -> Bool {
+        flushAllSync()
+        let srcUrl = URL(fileURLWithPath: dir, isDirectory: true)
+        let root = workspaceGalleryRootDir
+        let stamp = Int(Date().timeIntervalSince1970) % 100_000
+        let dstName = "\(srcUrl.lastPathComponent)_Copy_\(stamp)"
+        let dstUrl = root.appendingPathComponent(dstName, isDirectory: true)
+        do {
+            try FileManager.default.copyItem(at: srcUrl, to: dstUrl)
+            refreshCanvasGallery()
+            lastStatusBanner = "已复制作品 '\(dstName)'"
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    @discardableResult
+    public func deleteCanvasProject(dir: String) -> Bool {
+        refreshCanvasGallery()
+        guard s2GalleryItems.count > 1 else {
+            lastStatusBanner = "至少保留 1 个活跃画布"
+            return false
+        }
+        let stdTarget = URL(fileURLWithPath: dir, isDirectory: true).standardizedFileURL.path
+        let stdCurrent = URL(fileURLWithPath: activeProjectDir, isDirectory: true).standardizedFileURL.path
+        if stdTarget == stdCurrent {
+            if let fallback = s2GalleryItems.first(where: { $0.id != stdCurrent }) {
+                switchToCanvasProject(dir: fallback.id)
+            }
+        }
+        do {
+            try FileManager.default.removeItem(atPath: stdTarget)
+            recentProjectDirs.removeAll { URL(fileURLWithPath: $0).standardizedFileURL.path == stdTarget }
+            refreshCanvasGallery()
+            lastStatusBanner = "已删除画布 '\(URL(fileURLWithPath: stdTarget).lastPathComponent)'"
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Decodes an imported PNG/JPEG photo via ImageIO into an RGBA8 bitmap and blits it aspect-fit onto a new Rust layer.
+    @discardableResult
+    public func importImageDataAsNewLayer(_ data: Data, layerName: String = "Imported_Photo") -> Bool {
+        #if canImport(CoreGraphics) && canImport(ImageIO)
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
+        else {
+            lastStatusBanner = "无法解码导入的图片文件"
+            return false
+        }
+        let srcW = cgImage.width
+        let srcH = cgImage.height
+        guard srcW > 0, srcH > 0 else { return false }
+
+        // Cap imported bitmap decode size to 2048px on longest edge for instant iPad/Mac blit performance
+        let maxDecode = 2048.0
+        let scaleDown = min(1.0, maxDecode / Double(max(srcW, srcH)))
+        let decW = max(1, Int((Double(srcW) * scaleDown).rounded()))
+        let decH = max(1, Int((Double(srcH) * scaleDown).rounded()))
+
+        var rgba = [UInt8](repeating: 0, count: decW * decH * 4)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+        let drew = rgba.withUnsafeMutableBytes { rawBuf -> Bool in
+            guard let ptr = rawBuf.baseAddress,
+                  let ctx = CGContext(
+                    data: ptr,
+                    width: decW,
+                    height: decH,
+                    bitsPerComponent: 8,
+                    bytesPerRow: decW * 4,
+                    space: colorSpace,
+                    bitmapInfo: bitmapInfo
+                  )
+            else { return false }
+            ctx.interpolationQuality = .high
+            ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: decW, height: decH))
+            return true
+        }
+        guard drew else { return false }
+
+        // Un-premultiply RGB so Rust straight-RGBA8 compositing preserves exact colors
+        for i in stride(from: 0, to: rgba.count, by: 4) {
+            let a = Int(rgba[i + 3])
+            if a > 0 && a < 255 {
+                rgba[i] = UInt8(min(255, Int(rgba[i]) * 255 / a))
+                rgba[i + 1] = UInt8(min(255, Int(rgba[i + 1]) * 255 / a))
+                rgba[i + 2] = UInt8(min(255, Int(rgba[i + 2]) * 255 / a))
+            }
+        }
+
+        // Aspect-fit centered inside current canvas
+        let cw = Double(max(1, s2CanvasPixelWidth))
+        let ch = Double(max(1, s2CanvasPixelHeight))
+        let fitScale = min(cw / Double(decW), ch / Double(decH))
+        let dstW = max(1, Int((Double(decW) * fitScale).rounded()))
+        let dstH = max(1, Int((Double(decH) * fitScale).rounded()))
+        let dstX = Int(((cw - Double(dstW)) * 0.5).rounded())
+        let dstY = Int(((ch - Double(dstH)) * 0.5).rounded())
+
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return false }
+        proj.pushUndoSnapshot()
+        let nextNum = (s2CelLayers.map(\.id).max() ?? 0) + 1
+        let finalName = "\(layerName)_\(nextNum)"
+        let newId = proj.addRasterLayer(name: finalName, blendMode: .normal, clippingMask: false, isReference: false)
+        let written = proj.importRgbaToLayer(
+            layerId: newId,
+            rgba: rgba,
+            imgWidth: UInt32(decW),
+            imgHeight: UInt32(decH),
+            dstX: Int32(dstX),
+            dstY: Int32(dstY),
+            dstWidth: UInt32(dstW),
+            dstHeight: UInt32(dstH)
+        )
+        s2CelLayers.append(CelLayerRowItem(id: newId, name: finalName, blendMode: .normal, opacity: 1.0))
+        s2SelectedLayerId = newId
+        refreshCompositeImage()
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "已导入图片至新图层 '\(finalName)' (\(dstW)×\(dstH), \(written) px)"
+        return written > 0
+        #else
+        return false
+        #endif
+        #else
+        return false
+        #endif
+    }
+
+    /// Loads an imported photo directly into the Floating Reference Window and persists it as `reference_image.png`.
+    @discardableResult
+    public func importReferenceImageData(_ data: Data) -> Bool {
+        #if canImport(CoreGraphics) && canImport(ImageIO)
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
+        else {
+            lastStatusBanner = "无法解码参考图片"
+            return false
+        }
+        s2ReferenceImage = cgImage
+        s2ShowReferenceWindow = true
+        let refUrl = URL(fileURLWithPath: activeProjectDir).appendingPathComponent("reference_image.png")
+        if let png = encodePngData(from: cgImage) {
+            try? png.write(to: refUrl, options: .atomic)
+        }
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "已载入参考图 (\(cgImage.width) × \(cgImage.height))"
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    public func clearReferenceImage() {
+        #if canImport(CoreGraphics)
+        s2ReferenceImage = nil
+        #endif
+        let refUrl = URL(fileURLWithPath: activeProjectDir).appendingPathComponent("reference_image.png")
+        try? FileManager.default.removeItem(at: refUrl)
+        lastStatusBanner = "已恢复参考浮窗为当前画布总览"
+    }
+
+    public func loadReferenceImageFromDisk() {
+        #if canImport(CoreGraphics) && canImport(ImageIO)
+        let refUrl = URL(fileURLWithPath: activeProjectDir).appendingPathComponent("reference_image.png")
+        guard let data = try? Data(contentsOf: refUrl),
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cg = CGImageSourceCreateImageAtIndex(source, 0, nil)
+        else {
+            s2ReferenceImage = nil
+            return
+        }
+        s2ReferenceImage = cg
+        #endif
+    }
+
+    #if canImport(CoreGraphics) && canImport(ImageIO) && canImport(UniformTypeIdentifiers)
+    private func encodePngData(from cgImage: CGImage) -> Data? {
+        let out = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(
+            out as CFMutableData,
+            UTType.png.identifier as CFString,
+            1,
+            nil
+        ) else { return nil }
+        CGImageDestinationAddImage(dest, cgImage, nil)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return out as Data
+    }
+
+    private func writeGalleryThumbnailIfPossible(to dir: String) {
+        guard let cg = s2CompositeImage else { return }
+        let maxSide = 256.0
+        let scale = min(1.0, maxSide / Double(max(cg.width, cg.height)))
+        let tw = max(1, Int((Double(cg.width) * scale).rounded()))
+        let th = max(1, Int((Double(cg.height) * scale).rounded()))
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+        guard let ctx = CGContext(
+            data: nil,
+            width: tw,
+            height: th,
+            bitsPerComponent: 8,
+            bytesPerRow: tw * 4,
+            space: colorSpace,
+            bitmapInfo: bitmapInfo
+        ) else { return }
+        ctx.interpolationQuality = .medium
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: tw, height: th))
+        guard let thumbCg = ctx.makeImage(), let png = encodePngData(from: thumbCg) else { return }
+        let thumbUrl = URL(fileURLWithPath: dir).appendingPathComponent(".about-paint-thumb.png")
+        try? png.write(to: thumbUrl, options: .atomic)
+    }
+    #endif
 
     @discardableResult
     public func applyScreentoneFill(lpi: Float? = nil, density: Float? = nil, patternCode: UInt32 = 0) -> Int {
@@ -1817,8 +2339,11 @@ public final class StudioWorkspaceController: ObservableObject {
             _ = saveNovelProseNow(explicitHumanEdit: true)
         }
 
-        // Layer B: Per-project full workspace session snapshot
+        // Layer B: Per-project full workspace session snapshot + lightweight Gallery thumbnail
         saveProjectSessionSync(to: activeProjectDir)
+        #if canImport(CoreGraphics) && canImport(ImageIO) && canImport(UniformTypeIdentifiers)
+        writeGalleryThumbnailIfPossible(to: activeProjectDir)
+        #endif
 
         // Layer C: Global app state (last opened project + locale + active app)
         saveGlobalAppStateSync()
@@ -1885,6 +2410,8 @@ public final class StudioWorkspaceController: ObservableObject {
             s2Strokes: s2Strokes,
             s2SpeechBubbles: s2SpeechBubbles,
             s2ApplePencilOnlyDraw: s2ApplePencilOnlyDraw,
+            s2CanvasPixelWidth: s2CanvasPixelWidth,
+            s2CanvasPixelHeight: s2CanvasPixelHeight,
             s3SelectedChapterId: s3SelectedChapterId,
             s3ActiveProseLocale: s3ActiveProseLocale,
             s3PaperThemeRaw: s3PaperTheme.rawValue,
@@ -1972,6 +2499,12 @@ public final class StudioWorkspaceController: ObservableObject {
             s2Strokes = session.s2Strokes
             s2SpeechBubbles = session.s2SpeechBubbles ?? []
             s2ApplePencilOnlyDraw = session.s2ApplePencilOnlyDraw ?? false
+            if let savedW = session.s2CanvasPixelWidth, savedW >= 256 {
+                s2CanvasPixelWidth = savedW
+            }
+            if let savedH = session.s2CanvasPixelHeight, savedH >= 256 {
+                s2CanvasPixelHeight = savedH
+            }
             s3SelectedChapterId = session.s3SelectedChapterId
             s3ActiveProseLocale = session.s3ActiveProseLocale
             s3PaperTheme = PaperThemeKind(rawValue: session.s3PaperThemeRaw) ?? .warmPaper
@@ -1983,7 +2516,9 @@ public final class StudioWorkspaceController: ObservableObject {
         }
 
         ensureRustCanvasAndLayersInitialized()
+        loadReferenceImageFromDisk()
         loadNovelProseFromDisk()
+        refreshCanvasGallery()
     }
 
     public func ensureRustCanvasAndLayersInitialized() {

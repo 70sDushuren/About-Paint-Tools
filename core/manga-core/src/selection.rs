@@ -191,6 +191,13 @@ impl SelectionMask {
         self.mask[y as usize * self.width as usize + x as usize]
     }
 
+    #[inline]
+    pub fn set(&mut self, x: u32, y: u32, selected: bool) {
+        if x < self.width && y < self.height {
+            self.mask[y as usize * self.width as usize + x as usize] = selected;
+        }
+    }
+
     pub fn selected_pixel_count(&self) -> usize {
         self.mask.iter().filter(|&&v| v).count()
     }

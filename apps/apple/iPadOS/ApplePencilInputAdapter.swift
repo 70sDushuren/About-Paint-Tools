@@ -117,6 +117,8 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
     private var lassoNormPts: [CGPoint] = []
     private var fingerPanPrevLocation: CGPoint?
     private var twoFingerPanBaseOffset: CGSize?
+    private var twoFingerPinchBaseZoom: Double?
+    private var twoFingerRotateBaseDeg: Double?
     private var lastToolBeforeEraser: S2DrawingToolKind = .brush
 
     public override init(frame: CGRect) {
@@ -143,6 +145,22 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         twoFingerPan.cancelsTouchesInView = true
         twoFingerPan.delegate = self
         addGestureRecognizer(twoFingerPan)
+
+        // Two-finger free canvas rotation (with subtle magnetic snap at 0° / ±90° / ±180°)
+        let twoFingerRotate = UIRotationGestureRecognizer(target: self, action: #selector(handleTwoFingerRotate(_:)))
+        twoFingerRotate.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        twoFingerRotate.delaysTouchesBegan = false
+        twoFingerRotate.cancelsTouchesInView = true
+        twoFingerRotate.delegate = self
+        addGestureRecognizer(twoFingerRotate)
+
+        // Two-finger smooth pinch zoom coordinated directly with pan & rotation inside UIKit
+        let twoFingerPinch = UIPinchGestureRecognizer(target: self, action: #selector(handleTwoFingerPinch(_:)))
+        twoFingerPinch.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        twoFingerPinch.delaysTouchesBegan = false
+        twoFingerPinch.cancelsTouchesInView = true
+        twoFingerPinch.delegate = self
+        addGestureRecognizer(twoFingerPinch)
 
         let twoFingerUndo = UITapGestureRecognizer(target: self, action: #selector(handleTwoFingerTapUndo))
         twoFingerUndo.numberOfTouchesRequired = 2
@@ -179,6 +197,52 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
             )
         case .ended, .cancelled, .failed:
             twoFingerPanBaseOffset = nil
+        default:
+            break
+        }
+    }
+
+    @objc private func handleTwoFingerRotate(_ recognizer: UIRotationGestureRecognizer) {
+        guard let ctrl = controller else { return }
+        switch recognizer.state {
+        case .began:
+            twoFingerRotateBaseDeg = ctrl.s2RotationDeg
+            resetTransientStrokeState()
+        case .changed:
+            let base = twoFingerRotateBaseDeg ?? ctrl.s2RotationDeg
+            var rawDeg = base + Double(recognizer.rotation) * (180.0 / Double.pi)
+            // Normalize to [-180, 180]
+            while rawDeg > 180.0 { rawDeg -= 360.0 }
+            while rawDeg < -180.0 { rawDeg += 360.0 }
+            // Magnetic detent within ±4° of cardinal angles (0°, ±90°, ±180°)
+            let snapTargets: [Double] = [0.0, 90.0, -90.0, 180.0, -180.0]
+            var finalDeg = rawDeg
+            for target in snapTargets where abs(rawDeg - target) <= 4.0 {
+                finalDeg = target == -180.0 ? 180.0 : target
+                break
+            }
+            ctrl.s2RotationDeg = finalDeg
+            onStatusUpdate?("画布旋转 \(Int(finalDeg.rounded()))°")
+        case .ended, .cancelled, .failed:
+            twoFingerRotateBaseDeg = nil
+        default:
+            break
+        }
+    }
+
+    @objc private func handleTwoFingerPinch(_ recognizer: UIPinchGestureRecognizer) {
+        guard let ctrl = controller else { return }
+        switch recognizer.state {
+        case .began:
+            twoFingerPinchBaseZoom = ctrl.s2ViewportZoom
+            resetTransientStrokeState()
+        case .changed:
+            let base = twoFingerPinchBaseZoom ?? ctrl.s2ViewportZoom
+            let clamped = min(max(base * Double(recognizer.scale), 0.2), 8.0)
+            ctrl.s2ViewportZoom = clamped
+            onStatusUpdate?("画布缩放 \(Int((clamped * 100.0).rounded()))%")
+        case .ended, .cancelled, .failed:
+            twoFingerPinchBaseZoom = nil
         default:
             break
         }
