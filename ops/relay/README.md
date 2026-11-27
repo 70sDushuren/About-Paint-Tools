@@ -23,6 +23,8 @@ Only these pre-audited actions may appear in `orders/*.json` (enforced by both `
 | `xcode-gen` | Regenerates `apps/apple/MangaStudioApple.xcodeproj` from `apps/apple/project.yml` |
 | `build-mac` | Headless `xcodebuild` for `MangaStudio-macOS-Touch` (`arm64`, `CODE_SIGNING_ALLOWED=NO`) |
 | `build-ipad` | Headless `xcodebuild` for `MangaStudio-iPadOS` (`iOS Simulator`, `CODE_SIGNING_ALLOWED=NO`) |
+| `build-ipad-device` | Headless `xcodebuild` for physical `MangaStudio-iPadOS` (`generic/platform=iOS`, `arm64`, `CODE_SIGNING_ALLOWED=NO`) |
+| `deploy-ipad-device` | Signed build + `devicectl` install & launch onto connected physical iPad Pro (`scripts/dev.sh run-ipad-device`) |
 | `build-duo` | Headless `xcodebuild` for `MangaStudio-iPhoneDuo` (`iOS Simulator`, `CODE_SIGNING_ALLOWED=NO`) |
 | `test-mac` | Runs macOS XCTest suite if test targets exist (cleanly skips otherwise) |
 | `test-ipad` | Runs iPadOS Simulator XCTest suite if test targets exist (cleanly skips otherwise) |

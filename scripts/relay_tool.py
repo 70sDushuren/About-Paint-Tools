@@ -39,6 +39,8 @@ ALLOWED_ACTIONS = (
     "xcode-gen",
     "build-mac",
     "build-ipad",
+    "build-ipad-device",
+    "deploy-ipad-device",
     "build-duo",
     "test-mac",
     "test-ipad",

@@ -299,6 +299,7 @@ public struct ProjectWorkspaceSessionState: Codable, Equatable, Sendable {
     public var s2Layers: [PersistedLayerRecord]
     public var s2Strokes: [PersistedCanvasStroke]
     public var s2SpeechBubbles: [PersistedSpeechBubble]?
+    public var s2ApplePencilOnlyDraw: Bool?
     // S3 Novel
     public var s3SelectedChapterId: String
     public var s3ActiveProseLocale: String
@@ -359,6 +360,7 @@ public final class StudioWorkspaceController: ObservableObject {
     @Published public var s2BrushSize: Double = 8.0 { didSet { scheduleAutoSave() } }
     @Published public var s2BrushOpacity: Double = 1.0 { didSet { scheduleAutoSave() } }
     @Published public var s2ForceFade: Bool = true { didSet { scheduleAutoSave() } }
+    @Published public var s2ApplePencilOnlyDraw: Bool = false { didSet { scheduleAutoSave() } }
     @Published public var s2StabilizerPx: Double = 6.0 { didSet { scheduleAutoSave() } }
     @Published public var s2BucketCloseGapPx: Int = 3 { didSet { scheduleAutoSave() } }
     @Published public var s2BucketExpandPx: Int = 1 { didSet { scheduleAutoSave() } }
@@ -991,6 +993,20 @@ public final class StudioWorkspaceController: ObservableObject {
                 return false
             }
         }
+        #elseif os(iOS)
+        if let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let exportsDir = docs.appendingPathComponent("Exports", isDirectory: true)
+            let stamp = Int(Date().timeIntervalSince1970)
+            let fileUrl = exportsDir.appendingPathComponent("\(s3SelectedChapterId)_p001_\(stamp).png")
+            do {
+                try FileManager.default.createDirectory(at: exportsDir, withIntermediateDirectories: true)
+                try data.write(to: fileUrl, options: .atomic)
+                lastStatusBanner = "Saved PNG to Files → Exports/\(fileUrl.lastPathComponent)"
+                return true
+            } catch {
+                return false
+            }
+        }
         #endif
         #endif
         return false
@@ -1024,9 +1040,51 @@ public final class StudioWorkspaceController: ObservableObject {
                 return false
             }
         }
+        #elseif os(iOS)
+        if let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let exportsDir = docs.appendingPathComponent("Exports", isDirectory: true)
+            let stamp = Int(Date().timeIntervalSince1970)
+            let fileUrl = exportsDir.appendingPathComponent("\(s3SelectedChapterId)_p001_\(stamp).psd")
+            do {
+                try FileManager.default.createDirectory(at: exportsDir, withIntermediateDirectories: true)
+                try data.write(to: fileUrl, options: .atomic)
+                lastStatusBanner = "Saved PSD to Files → Exports/\(fileUrl.lastPathComponent)"
+                return true
+            } catch {
+                return false
+            }
+        }
         #endif
         #endif
         return false
+    }
+
+    /// Applies a real Apple Pencil Pro hardware-pressure & tilt modulated stroke segment onto the Rust RGBA8 canvas.
+    @discardableResult
+    public func applyPencilPressureSegment(
+        from p0: CGPoint,
+        to p1: CGPoint,
+        anchor: CGPoint,
+        pressure: Float,
+        altitude: Float,
+        baseRadiusPx: Float,
+        hardness: Float,
+        opacity: Float
+    ) -> Int {
+        let clampedP = min(max(pressure, 0.08), 1.0)
+        // G-Pen nonlinear pressure response + subtle chisel widening at low tilt altitude
+        let shapedP = powf(clampedP, 0.82)
+        let tiltFactor: Float = 1.0 + max(0.0, (1.5708 - min(max(altitude, 0.25), 1.5708)) / 1.5708) * 0.35
+        let effectiveRadius = max(0.6, baseRadiusPx * (0.18 + 0.82 * shapedP) * tiltFactor)
+        let effectiveOpacity = min(max(opacity * (0.45 + 0.55 * shapedP), 0.05), 1.0)
+        return applyRulerAwareRasterSegment(
+            from: p0,
+            to: p1,
+            anchor: anchor,
+            radiusPx: effectiveRadius,
+            hardness: hardness,
+            opacity: effectiveOpacity
+        )
     }
 
     // MARK: - v1.0.0-rc4 Phase 3: 6 FX Filters, Affine Transform, Rulers, Shapes, Screentone, Panels & Bubbles
@@ -1632,6 +1690,7 @@ public final class StudioWorkspaceController: ObservableObject {
             s2Layers: s2CelLayers.map(PersistedLayerRecord.init(from:)),
             s2Strokes: s2Strokes,
             s2SpeechBubbles: s2SpeechBubbles,
+            s2ApplePencilOnlyDraw: s2ApplePencilOnlyDraw,
             s3SelectedChapterId: s3SelectedChapterId,
             s3ActiveProseLocale: s3ActiveProseLocale,
             s3PaperThemeRaw: s3PaperTheme.rawValue,
@@ -1718,6 +1777,7 @@ public final class StudioWorkspaceController: ObservableObject {
             s2SelectedLayerId = session.s2SelectedLayerId
             s2Strokes = session.s2Strokes
             s2SpeechBubbles = session.s2SpeechBubbles ?? []
+            s2ApplePencilOnlyDraw = session.s2ApplePencilOnlyDraw ?? false
             s3SelectedChapterId = session.s3SelectedChapterId
             s3ActiveProseLocale = session.s3ActiveProseLocale
             s3PaperTheme = PaperThemeKind(rawValue: session.s3PaperThemeRaw) ?? .warmPaper

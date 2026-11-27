@@ -1,6 +1,7 @@
 .DEFAULT_GOAL := help
 
 .PHONY: help sync sync-force build-rust xcode run-mac run-ipad run-duo check push status \
+        ipad-setup-signing ipad-devices build-ipad-device run-ipad-device archive-ipad-testflight \
         gonext relay-watch relay-status relay-install-agent relay-uninstall-agent relay-stop relay-resume
 
 # Default safety budgets for automated GoNext watch / background LaunchAgent
@@ -8,11 +9,21 @@ INTERVAL   ?= 30
 MAX_MIN    ?= 60
 MAX_ORDERS ?= 10
 MAX_FAILS  ?= 3
+DEVICE     ?= iPad
 
 help:
 	@./scripts/dev.sh help
 	@echo ""
-	@echo "Make shortcuts:"
+	@echo "Primary iPad Pro 13\" (M5) Physical Device & TestFlight Shortcuts:"
+	@echo "  make ipad-setup-signing TEAM_ID=XXXXXXXXXX [BUNDLE_PREFIX=com.yourname.aboutpaint]"
+	@echo "                                 Save persistent local Apple Team ID (survives make sync)"
+	@echo "  make ipad-devices              List connected physical iPad Pro devices (USB/Wi-Fi)"
+	@echo "  make build-ipad-device         Verify real arm64 iPadOS device build (aarch64-apple-ios)"
+	@echo "  make run-ipad-device [DEVICE=iPad]"
+	@echo "                                 Build, sign, install & launch directly on physical iPad Pro!"
+	@echo "  make archive-ipad-testflight   Build Release .xcarchive & open Xcode Organizer for TestFlight"
+	@echo ""
+	@echo "General Apple & CI Shortcuts:"
 	@echo "  make sync                      Pull + incremental Rust XCFramework + XcodeGen + open Xcode"
 	@echo "  make sync-force                Same as 'make sync', forcing a full Rust XCFramework rebuild"
 	@echo "  make build-rust                Incremental 3-slice Rust XCFramework build (or cargo build on Linux)"
@@ -22,7 +33,7 @@ help:
 	@echo "  make run-duo                   Build MangaStudio-iPhoneDuo for iOS Simulator"
 	@echo "  make check                     Run full CI & S4 Tri-App integration gates locally"
 	@echo "  make push MSG=\"feat: ...\"      Run 'make check', commit, pull --rebase, and push to origin"
-	@echo "  make status                    Show git status and XCFramework freshness"
+	@echo "  make status                    Show git status, iPad signing & XCFramework freshness"
 	@echo ""
 	@echo "Cloud <-> Local Mac GoNext Relay (Guarded Auto-Mode):"
 	@echo "  make gonext                    Fixed command: pull & run pending GoNext orders, push paired results"
@@ -34,6 +45,21 @@ help:
 	@echo "  make relay-stop                Emergency stop: halt watch/agent & lock local relay until resumed"
 	@echo "  make relay-resume              Clear local pause/circuit-breaker lock to re-enable GoNext"
 	@echo "  make relay-uninstall-agent     Remove macOS launchd background LaunchAgent"
+
+ipad-setup-signing:
+	@./scripts/dev.sh ipad-setup-signing "$(TEAM_ID)" "$(BUNDLE_PREFIX)"
+
+ipad-devices:
+	@./scripts/dev.sh ipad-devices
+
+build-ipad-device:
+	@./scripts/dev.sh build-ipad-device
+
+run-ipad-device:
+	@./scripts/dev.sh run-ipad-device "$(DEVICE)"
+
+archive-ipad-testflight:
+	@./scripts/dev.sh archive-ipad-testflight
 
 sync:
 	@./scripts/dev.sh sync

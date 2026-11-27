@@ -118,10 +118,40 @@ To keep local MacBook Pro Xcode iteration and cloud Linux VM development complet
 ## 5. `GoNext` Cloud ↔ Local Mac Async Relay (GitOps Loop)
 
 [`ops/relay/`](../../ops/relay/README.md) provides an **append-only, zero-conflict, allowlisted GitOps relay** between the Cloud VM and local MacBook Pro:
-- **Cloud Dispatch**: After each cloud milestone, run `python3 scripts/relay_tool.py new ...` to append a timestamped declarative order (`ops/relay/orders/<YYYYMMDD-HHMMSS>_<slug>.json`) containing only pre-audited allowlisted actions (`env-info`, `build-rust`, `xcode-gen`, `build-mac`, `build-ipad`, `build-duo`, `test-mac`, `test-ipad`, `launch-mac`, `open-xcode`, `check`) — never arbitrary shell scripts.
+- **Cloud Dispatch**: After each cloud milestone, run `python3 scripts/relay_tool.py new ...` to append a timestamped declarative order (`ops/relay/orders/<YYYYMMDD-HHMMSS>_<slug>.json`) containing only pre-audited allowlisted actions (`env-info`, `build-rust`, `xcode-gen`, `build-mac`, `build-ipad`, `build-ipad-device`, `deploy-ipad-device`, `build-duo`, `test-mac`, `test-ipad`, `launch-mac`, `open-xcode`, `check`) — never arbitrary shell scripts.
 - **Local Mac Execution & Paired Receipt**: On Mac, either run the single fixed command **`make gonext`** or enable automated polling (`make relay-watch` / macOS `launchd` via `make relay-install-agent`). Pending orders execute chronologically and push a paired receipt `ops/relay/results/<YYYYMMDD-HHMMSS>_<slug>.result.md` containing status, durations, exit codes, and trimmed logs.
 - **Chronological Audit Log & Closed Loop**: Paired `orders/` and `results/` remain in Git as a chronological development log; Cloud pulls receipts to advance on `PASS` or diagnose/fix and issue the next `GoNext` order on `FAIL`.
 - **Loop-Detection Circuit Breakers & Time/Count Budgets**: Both sides enforce independent budgets — launching `make relay-watch MAX_MIN=60 MAX_ORDERS=10 MAX_FAILS=3` (or `make relay-install-agent`) guarantees graceful completion of any in-flight order before auto-stopping and notifying at time/order expiry; consecutive failure streaks or 2 consecutive identical error fingerprints (`DUPLICATE_ERROR_LOOP`) immediately trip a lock requiring `make relay-resume`; instant two-way kill switches exist via local `make relay-stop` or repository `ops/relay/PAUSE`.
 
+---
 
+## 6. Physical iPad Pro 13-inch (M5) Deployment, Apple Pencil Pro & TestFlight Release
 
+The repository treats the physical **iPad Pro 13-inch (M5)** drawing workflow (`MangaStudio-iPadOS`) as its first-class primary device target:
+
+### 6.1 Persistent Signing That Survives `xcodegen`
+- The repository tracks [`apps/apple/BaseSigning.xcconfig`](../../apps/apple/BaseSigning.xcconfig), which conditionally includes the gitignored local override `LocalSigning.xcconfig` via `#include? "LocalSigning.xcconfig"` (template: [`apps/apple/LocalSigning.xcconfig.example`](../../apps/apple/LocalSigning.xcconfig.example)).
+- One-time setup command:
+  ```bash
+  make ipad-setup-signing TEAM_ID=YOUR10CHARID BUNDLE_PREFIX=com.yourhandle.aboutpaint
+  ```
+  Subsequent `make sync` or `xcodegen generate` runs automatically preserve your `DEVELOPMENT_TEAM` and unique bundle identifier prefix without committing personal credentials to Git.
+
+### 6.2 Two Beta Distribution Paths
+
+| Path | Cost & Account | Expiry & Install Flow | Best For |
+| :--- | :--- | :--- | :--- |
+| **Path A: Free Apple ID Direct Device Install (Personal Team)** | Free (any Apple ID) | USB-C or local Wi-Fi direct install; re-sign every **7 days** via `make run-ipad-device` or Xcode `⌘R` | Rapid daily drawing iteration and Apple Pencil Pro tuning |
+| **Path B: Apple Developer Program + TestFlight** | \$99/year | **90-day** wireless OTA installs for up to 100 internal / 10,000 external testers, plus optional `increased-memory-limit` entitlement | Long-term untethered iPad Pro beta testing and team sharing |
+
+### 6.3 Device Commands & iPad Pro Hardware Capabilities
+- **Local Device Shortcuts**:
+  - `make ipad-devices`: Lists paired/connected physical iPads via `xcrun devicectl list devices`.
+  - `make build-ipad-device`: Verifies unsigned `generic/platform=iOS` (`arm64`) compilation and `aarch64-apple-ios` Rust static linking (also supported in `GoNext`).
+  - `make run-ipad-device` (optional `DEVICE="iPad"`): Incremental Rust build → signed device build → install & launch directly on the physical iPad Pro.
+  - `make archive-ipad-testflight`: Produces a Release `.xcarchive` and opens Xcode Organizer for one-click TestFlight upload.
+- **Native iPad Pro 13" (M5) Drawing & Files App Runtime**:
+  - 240Hz `coalescedTouches` hardware pressure & tilt dynamics ([`ApplePencilInputAdapter.swift`](../../apps/apple/iPadOS/ApplePencilInputAdapter.swift));
+  - **Apple Pencil Pro** Squeeze (toggle Layer/Brush drawer) and Double-Tap (toggle Brush ↔ Eraser);
+  - Palm rejection + `Pencil Only` top-bar toggle (fingers pan the canvas while only Apple Pencil inks), plus 2-finger tap Undo / 3-finger tap Redo;
+  - `UIFileSharingEnabled` and `LSSupportsOpeningDocumentsInPlace` expose both `DefaultWorkspace/` and exported PNG/PSD (8BPS) files under `Exports/` directly inside the iPadOS **Files** app (`On My iPad → AboutPaint iPad`).

@@ -7,6 +7,8 @@
 /apps/apple/Frameworks/
 /apps/apple/*.xcodeproj/
 /apps/apple/.xcframework.stamp
+/apps/apple/LocalSigning.xcconfig
+/apps/apple/build/
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
 

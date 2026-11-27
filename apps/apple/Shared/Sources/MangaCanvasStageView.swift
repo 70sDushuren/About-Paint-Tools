@@ -422,6 +422,38 @@ public struct MangaCanvasStageView: View {
                     .fixedSize(horizontal: true, vertical: false)
                     .help("Toggle Floating Reference Window")
 
+                    #if os(iOS)
+                    Button {
+                        controller.s2ApplePencilOnlyDraw.toggle()
+                        statusLine = controller.s2ApplePencilOnlyDraw
+                            ? "Apple Pencil Only: Finger pans canvas, Pencil draws"
+                            : "Touch & Pencil Draw enabled"
+                    } label: {
+                        Label("Pencil Only", systemImage: "pencil.tip")
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(controller.s2ApplePencilOnlyDraw ? SuiteColorTokens.novelAccent : Color.white.opacity(0.10))
+                            .foregroundStyle(.white)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .fixedSize(horizontal: true, vertical: false)
+
+                    Menu("Export") {
+                        Button("Save PNG to Files") {
+                            _ = controller.exportCanvasPng(to: nil, transparentBackground: controller.s2Backdrop != .whitePaper)
+                            statusLine = controller.lastStatusBanner
+                        }
+                        Button("Save PSD (8BPS) to Files") {
+                            _ = controller.exportCanvasPsd(to: nil)
+                            statusLine = controller.lastStatusBanner
+                        }
+                    }
+                    .font(.caption2.bold())
+                    .fixedSize(horizontal: true, vertical: false)
+                    #endif
+
                     if let activeLayer = controller.selectedCelLayer {
                         Text("Layer: \(activeLayer.name) [\(activeLayer.blendMode.displayName)]")
                             .font(.caption2.monospaced())
@@ -633,6 +665,15 @@ public struct MangaCanvasStageView: View {
                     }
                     .aspectRatio(canvasAspectRatio, contentMode: .fit)
                     .overlay {
+                        #if os(iOS)
+                        ApplePencilCanvasOverlayView(
+                            controller: controller,
+                            presetHardness: activePresetHardness
+                        ) { msg in
+                            statusLine = msg
+                        }
+                        .allowsHitTesting(controller.s2Tool != .textBubble || controller.s2SpeechBubbles.isEmpty)
+                        #else
                         GeometryReader { canvasGeo in
                             Color.clear
                                 .contentShape(Rectangle())
@@ -653,6 +694,7 @@ public struct MangaCanvasStageView: View {
                                 )
                         }
                         .allowsHitTesting(controller.s2Tool != .textBubble || controller.s2SpeechBubbles.isEmpty)
+                        #endif
                     }
                     .scaleEffect(
                         x: controller.s2ViewportZoom * (controller.s2MirrorHorizontal ? -1.0 : 1.0),

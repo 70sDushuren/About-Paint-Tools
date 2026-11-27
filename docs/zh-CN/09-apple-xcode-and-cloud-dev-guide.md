@@ -118,10 +118,40 @@ flowchart LR
 ## 5. `GoNext` 云-端异步协同执行器（GitOps Relay）
 
 在 [`ops/relay/`](../../ops/relay/README.md) 中内置了一套**只增不改、零合并冲突、带白名单安全锁**的云-端协同执行器：
-- **云端发单**：每完成一个云端开发节点，通过 `python3 scripts/relay_tool.py new ...` 在 `ops/relay/orders/` 生成带时间戳的 JSON 声明式任务单（`<YYYYMMDD-HHMMSS>_<slug>.json`），仅允许声明预审白名单内的安全动作（`env-info`、`build-rust`、`xcode-gen`、`build-mac`、`build-ipad`、`build-duo`、`test-mac`、`test-ipad`、`launch-mac`、`open-xcode`、`check`），严禁任意 Shell 注入。
+- **云端发单**：每完成一个云端开发节点，通过 `python3 scripts/relay_tool.py new ...` 在 `ops/relay/orders/` 生成带时间戳的 JSON 声明式任务单（`<YYYYMMDD-HHMMSS>_<slug>.json`），仅允许声明预审白名单内的安全动作（`env-info`、`build-rust`、`xcode-gen`、`build-mac`、`build-ipad`、`build-ipad-device`、`deploy-ipad-device`、`build-duo`、`test-mac`、`test-ipad`、`launch-mac`、`open-xcode`、`check`），严禁任意 Shell 注入。
 - **MacBook 固定执行与回执**：在本地只需执行固定命令 **`make gonext`**（或开启前台轮询 `make relay-watch` / macOS 后台定时服务 `make relay-install-agent`），自动按时间顺序执行未完成任务单，并将退出码、耗时与精简日志写入同名配对回执 `ops/relay/results/<YYYYMMDD-HHMMSS>_<slug>.result.md` 后自动推回 `origin/main`。
 - **完整审计日志与闭环修复**：`orders/` 与 `results/` 按时间戳一一配对永久保留在 Git 历史中；云端拉取回执后若见 `PASS` 则推进下一阶段，若见 `FAIL` 则直接读取裁剪日志修复并派发下一张 `GoNext` 任务单。
 - **防死循环熔断与时限/次数护栏**：两端均支持独立预算——Mac 端启动 `make relay-watch MAX_MIN=60 MAX_ORDERS=10 MAX_FAILS=3`（或 `make relay-install-agent`）后，若到达总时长/总单数上限，会**优雅完成当前正在执行的最后 1 单并推回回执**后自动退出并弹出系统通知；若出现连续 `MAX_FAILS` 次失败或连续 2 次相同错误指纹（`DUPLICATE_ERROR_LOOP`），立刻自动熔断锁定，需人工核查并执行 `make relay-resume` 恢复；任何时刻可本地 `make relay-stop` 或云端写入 `ops/relay/PAUSE` 一键双向急停。
 
+---
 
+## 6. iPad Pro 13 英寸 (M5) 真机部署、Apple Pencil Pro 与 TestFlight 发布流程
 
+仓库已将 **iPad Pro 13 英寸 (M5) 真机绘画场景**设为首要端侧目标（`MangaStudio-iPadOS`）：
+
+### 6.1 不被 `xcodegen` 覆盖的持久化签名配置
+- 仓库追踪 [`apps/apple/BaseSigning.xcconfig`](../../apps/apple/BaseSigning.xcconfig)，并通过 `#include? "LocalSigning.xcconfig"` 自动加载本地 `.gitignore` 忽略的个人/团队签名配置（示例模板：[`apps/apple/LocalSigning.xcconfig.example`](../../apps/apple/LocalSigning.xcconfig.example)）。
+- 一次配置命令：
+  ```bash
+  make ipad-setup-signing TEAM_ID=你的10位TeamID BUNDLE_PREFIX=com.你的唯一标识.aboutpaint
+  ```
+  此后无论运行多少次 `make sync` 或 `xcodegen generate`，你的 `DEVELOPMENT_TEAM` 与专属 Bundle ID 前缀都不会丢失，也不会泄漏到 Git 仓库中。
+
+### 6.2 两种真机测试路径对比
+
+| 路径 | 费用与账号 | 有效期与安装方式 | 适用阶段 |
+| :--- | :--- | :--- | :--- |
+| **路径 A：免费 Apple ID 直装真机（Personal Team）** | 免费（任意 Apple ID） | USB-C 或同局域网 Wi-Fi 直装；每 **7 天**需重新运行一次 `make run-ipad-device` 或 Xcode `⌘R` | 日常高频自测、现场调手感与 Apple Pencil Pro 压感验证 |
+| **路径 B：Apple Developer Program + TestFlight** | \$99/年 | **90 天**无线 OTA 安装、支持最多 100 名内部/10,000 名外部测试者，并可申请 iPad 大内存权限 `increased-memory-limit` | 长期稳定使用、免连线更新与多人 Beta 测试 |
+
+### 6.3 端侧一键命令与 iPad Pro 硬件特性
+- **真机命令清单**：
+  - `make ipad-devices`：列出已配对/连接的物理 iPad（基于 `xcrun devicectl list devices`）。
+  - `make build-ipad-device`：校验 `generic/platform=iOS` 真机 `arm64` 编译与 `aarch64-apple-ios` 静态库链接（无需签名即可在 CI/GoNext 验证）。
+  - `make run-ipad-device`（可选 `DEVICE="iPad"`）：增量编译 Rust → 签名构建 → 自动安装并拉起真机 App。
+  - `make archive-ipad-testflight`：生成 Release `.xcarchive` 并自动打开 Xcode Organizer 上传 TestFlight。
+- **iPad Pro 13" (M5) 原生绘画与文件能力**：
+  - 240Hz `coalescedTouches` 真实压感与倾角动态调幅（[`ApplePencilInputAdapter.swift`](../../apps/apple/iPadOS/ApplePencilInputAdapter.swift)）；
+  - **Apple Pencil Pro** 轻捏（Squeeze）切换图层/笔刷抽屉、轻点两下（Double-Tap）切换画笔/橡皮擦；
+  - 掌压防误触 + 顶栏 `Pencil Only` 开关（开启后手指拖拽平移画布、仅 Apple Pencil 落笔）、双指轻点撤销 / 三指轻点重做；
+  - 开启 `UIFileSharingEnabled` 与 `LSSupportsOpeningDocumentsInPlace`，工作区与导出的 PNG/PSD（8BPS）直接保存在 iPadOS **「文件（Files）」App → 我的 iPad → AboutPaint iPad** 的 `DefaultWorkspace/` 与 `Exports/` 目录中。

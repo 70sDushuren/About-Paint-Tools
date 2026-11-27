@@ -1,0 +1,9 @@
+// Copy this file to `apps/apple/LocalSigning.xcconfig` (or run:
+//   make ipad-setup-signing TEAM_ID=YOUR_10_CHAR_TEAM_ID
+// ) so `make sync` / `xcodegen generate` always preserves your physical iPad Pro signing!
+
+DEVELOPMENT_TEAM = YOUR_TEAM_ID_HERE
+
+// Optional: If using a Free Apple ID (Personal Team) or if `org.aboutpainttools.*` is
+// already taken, set a unique bundle identifier prefix for your iPad Pro device builds:
+// ABOUT_PAINT_BUNDLE_PREFIX = com.yourname.aboutpaint

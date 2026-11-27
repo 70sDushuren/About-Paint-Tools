@@ -1,0 +1,11 @@
+// Shared Apple signing & versioning baseline for About-Paint-Tools.
+// Local developer Team ID / Bundle ID overrides live in `LocalSigning.xcconfig` (gitignored),
+// so running `make sync` or `xcodegen generate` NEVER wipes your Xcode signing configuration!
+
+CODE_SIGN_STYLE = Automatic
+MARKETING_VERSION = 1.0.0
+CURRENT_PROJECT_VERSION = 4
+ABOUT_PAINT_BUNDLE_PREFIX = org.aboutpainttools.mangastudio
+
+// Optional local developer override (silently ignored when absent, e.g. in CI)
+#include? "LocalSigning.xcconfig"

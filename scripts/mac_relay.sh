@@ -128,6 +128,22 @@ run_allowed_action() {
         build
       ;;
 
+    build-ipad-device)
+      if ! is_macos; then
+        echo "error: build-ipad-device requires macOS with Xcode" >&2
+        return 1
+      fi
+      bash "$ROOT/scripts/dev.sh" build-ipad-device
+      ;;
+
+    deploy-ipad-device)
+      if ! is_macos; then
+        echo "error: deploy-ipad-device requires macOS with Xcode" >&2
+        return 1
+      fi
+      bash "$ROOT/scripts/dev.sh" run-ipad-device "iPad"
+      ;;
+
     build-duo)
       if ! is_macos; then
         echo "error: build-duo requires macOS with Xcode" >&2

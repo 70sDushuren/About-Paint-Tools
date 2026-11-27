@@ -304,6 +304,14 @@ public enum RulerModeKind: UInt32, CaseIterable, Sendable, Identifiable {
 /// demonstrate live `< 300ms` cross-app hot-reload immediately on launch.
 public enum SuiteSharedWorkspace {
     public static var defaultProjectDir: String {
+        #if os(iOS)
+        let base = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return base
+            .appendingPathComponent("DefaultWorkspace", isDirectory: true)
+            .appendingPathComponent("StarlightLive", isDirectory: true)
+            .path
+        #else
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         return base
@@ -311,6 +319,7 @@ public enum SuiteSharedWorkspace {
             .appendingPathComponent("DefaultWorkspace", isDirectory: true)
             .appendingPathComponent("StarlightLive", isDirectory: true)
             .path
+        #endif
     }
 
     public static func bootstrapDefaultWorkspaceIfNeeded() -> String {
