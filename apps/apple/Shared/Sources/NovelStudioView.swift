@@ -375,7 +375,7 @@ public struct NovelStudioView: View {
                     }
                     .buttonStyle(.plain)
                 } else {
-                    Picker("Theme", selection: $theme) {
+                    Picker("Theme", selection: $controller.s3PaperTheme) {
                         ForEach(PaperThemeKind.allCases) { item in
                             Text(item.rawValue).tag(item)
                         }
