@@ -1,5 +1,37 @@
 # iPad Pro & Mac Local Device Dev Log
 
+## 2026-11-27 13:30 CST — v1.0.0-rc5 云端三项升级接力验证与真机部署 (Physical iPad Pro 13" M5)
+
+- **基线提交**：接力云端 `01d93c2` (`ops/cloud-dev-log/CLOUD_DEV_LOG.md` `v1.0.0-rc5`)
+- **测试设备**：iPad Pro 13" (M5) (`iPad (103)` via USB-C 真机部署 & `devicectl` 签名安装启动)
+- **所属阶段**：`v1.0.0-rc5` 选区局部浮动自由变形、画布双指旋转与多画布画廊/相册导入验证
+
+### 1. 本地接力编译小修与三切片 XCFramework 重建
+1. **强制重编 3-Slice `MangaCore.xcframework`**：
+   - 执行 `./scripts/dev.sh build-rust --force` 与 `./scripts/dev.sh xcode-gen`，将新增的 2 个 Rust C11 FFI 符号 (`manga_project_transform_selected_pixels_affine` 与 `manga_project_import_rgba_to_layer`) 完整打包进 `aarch64-apple-ios`、`aarch64-apple-ios-sim`、`aarch64-apple-darwin` 三切片框架。
+2. **修复 Swift 6 枚举成员引用小瑕疵**：
+   - 在 `apps/apple/Shared/Sources/StudioWorkspaceController.swift` 的 `CanvasSizePresetOption.allPresets` 中，将条漫长卷预设使用的 `.webtoonStrip` 修正为 `CanvasPresetKind.webtoonStrip800`，使 `MangaStudio-iPadOS`、`MangaStudio-macOS-Touch`、`MangaStudio-iPhoneDuo` 三个 Target 及 `MangaStudio-macOS-Tests` 在 Swift 6 严格并发下 100% 零报错零警告编译通过。
+
+### 2. 测试套件与真机实测结果
+- **macOS 单元测试套件 (`MangaStudio-macOS-Tests`)**：
+  - 共 **48 项 XCTest 全部通过 (`0 failures`)**，其中新增的 `MangaStudioV100Rc5IpadTests` 三项核心测试全部绿灯：
+    - `testCanvasRotationNormalizationAndResetViewport` (`0.001s`)
+    - `testFloatingSelectionPixelTransformPreservesUnselectedAndSupportsCopyStamp` (`0.016s`)
+    - `testPhotoImportToNewRustLayerAndReferenceImage` (`0.191s`)
+- **物理 iPad Pro 13" (M5) (`iPad (103)`) 真机部署与验证**：
+  - 使用本地已忽略的 `LocalSigning.xcconfig` (`DEVELOPMENT_TEAM = NSB5UZC327`) 执行 `make run-ipad-device`，成功编译、签名 (`Apple Development`)、安装并启动 `org.aboutpainttools.mangastudio.ipad` (`databaseSequenceNumber: 2020`)。
+  - **通过项**：
+    1. **选区局部像素浮动自由变形 (`Floating Selection Pixel Transform`)**：圈选局部选区后开启自由变换栏，可切换 **`选区局部变形` / `整层变形`** 与 **`剪切移动` / `保留原图(复制)`**，仅对选区内像素做位移/缩放/旋转，未选中区域像素保持完好。
+    2. **画布双指自由旋转 + 捏合缩放 + 双指平移**：UIKit 触控层同时识别 `UIRotationGestureRecognizer`、`UIPinchGestureRecognizer` 与 `UIPanGestureRecognizer`（限定 `.direct` 手指触控，与 Apple Pencil 笔迹零冲突），`0° / ±90° / ±180°` 具备 `±4°` 磁吸停靠，右下角悬浮盘亦提供 `↺ -15° | 0° | ↻ +15°` 快捷旋转条。
+    3. **多画布画廊 (`Canvas Gallery`) 与相册照片导入 (`PhotosPicker`)**：左上角画廊入口可一键新建 B5 / A4 / B4 / 16:9 / 1:1 / Webtoon 画布、切换历史作品缩略图，并支持从 iPad 系统相册导入图片为新图层或载入参考浮窗 (`Reference Window`)。
+
+### 3. 涉及修改的文件清单
+- `apps/apple/Shared/Sources/StudioWorkspaceController.swift` (修正 `.webtoonStrip800` 枚举名)
+- `ops/local-dev-log/IPAD_MAC_DEV_LOG.md` (追加本次 `v1.0.0-rc5` 真机验证记录)
+
+---
+
+
 ## 2026-11-27 12:22 CST — v1.0.0-rc4+ iPadOS 体验打磨 (Physical iPad Pro 13" M5)
 
 - **测试设备**：iPad Pro 13" (M5) (`iPad (103)` via USB-C 真机部署 & 240Hz Apple Pencil Pro / Touch 交互测试)

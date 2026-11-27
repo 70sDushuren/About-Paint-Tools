@@ -343,7 +343,7 @@ public struct CanvasSizePresetOption: Identifiable, Equatable, Sendable {
         CanvasSizePresetOption(id: "b4", title: "B4 商业漫画 HD", subtitle: "1200 × 1698 · 印刷比例", width: 1200, height: 1698, preset: .b4PrintManga600Dpi),
         CanvasSizePresetOption(id: "4k", title: "宽屏插画 16:9", subtitle: "1920 × 1080 · 彩插/封面", width: 1920, height: 1080, preset: .illustration4K),
         CanvasSizePresetOption(id: "sq", title: "角色人设 1:1", subtitle: "1200 × 1200 · 头像/立绘", width: 1200, height: 1200, preset: .illustration4K),
-        CanvasSizePresetOption(id: "webtoon", title: "条漫长卷 Webtoon", subtitle: "800 × 2400 · 竖屏滚动", width: 800, height: 2400, preset: .webtoonStrip),
+        CanvasSizePresetOption(id: "webtoon", title: "条漫长卷 Webtoon", subtitle: "800 × 2400 · 竖屏滚动", width: 800, height: 2400, preset: .webtoonStrip800),
     ]
 }
 
