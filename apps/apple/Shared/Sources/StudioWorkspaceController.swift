@@ -25,6 +25,7 @@ public enum S2DrawingToolKind: String, CaseIterable, Codable, Sendable, Identifi
     case ruler
     case panelKnife
     case textBubble
+    case handPan
 
     public var id: String { rawValue }
 
@@ -43,6 +44,7 @@ public enum S2DrawingToolKind: String, CaseIterable, Codable, Sendable, Identifi
         case .ruler: return "Ruler"
         case .panelKnife: return "Frame Divider"
         case .textBubble: return "Text / Bubble"
+        case .handPan: return "Pan / Move Canvas"
         }
     }
 
@@ -61,12 +63,20 @@ public enum S2DrawingToolKind: String, CaseIterable, Codable, Sendable, Identifi
         case .ruler: return "ruler.fill"
         case .panelKnife: return "rectangle.split.2x2"
         case .textBubble: return "text.bubble.fill"
+        case .handPan: return "hand.raised.fill"
         }
     }
 
     public var usesBrushDynamics: Bool {
         switch self {
         case .brush, .eraser, .smudge, .blur: return true
+        default: return false
+        }
+    }
+
+    public var isSelectionTool: Bool {
+        switch self {
+        case .lasso, .rectSelect, .magicWand: return true
         default: return false
         }
     }
@@ -365,6 +375,10 @@ public final class StudioWorkspaceController: ObservableObject {
     @Published public var s2BucketCloseGapPx: Int = 3 { didSet { scheduleAutoSave() } }
     @Published public var s2BucketExpandPx: Int = 1 { didSet { scheduleAutoSave() } }
     @Published public var s2BucketTolerance: Int = 24 { didSet { scheduleAutoSave() } }
+    @Published public var s2PanelGutterPx: Double = 14.0
+    @Published public var s2ScreentoneLpi: Double = 60.0
+    @Published public var s2ScreentoneDensity: Double = 0.28
+    @Published public var s2EyedropperAutoSwitchToBrush: Bool = true
     @Published public var s2ViewportZoom: Double = 1.0 { didSet { scheduleAutoSave() } }
     @Published public var s2PanOffset: CGSize = .zero { didSet { scheduleAutoSave() } }
     @Published public var s2RotationDeg: Double = 0.0 { didSet { scheduleAutoSave() } }
@@ -393,12 +407,16 @@ public final class StudioWorkspaceController: ObservableObject {
     @Published public var s2SelectionPixelCount: Int = 0
     @Published public var s2SelectionRectNorm: CGRect? = nil
     @Published public var s2SelectionLassoNorm: [CGPoint] = []
+    @Published public var s2LiveLassoNorm: [CGPoint] = []
+    @Published public var s2LiveMarqueeStartNorm: CGPoint? = nil
+    @Published public var s2LiveMarqueeCurrentNorm: CGPoint? = nil
     @Published public var s2AllocatedTiles: Int = 0
     @Published public var s2CanvasPixelWidth: Int = 800
     @Published public var s2CanvasPixelHeight: Int = 1132
     @Published public var s2CanUndoRaster: Bool = false
     @Published public var s2CanRedoRaster: Bool = false
     @Published public var s2EyedropperPreview: PersistedRGBA? = nil
+    @Published public var s2EyedropperLoupeNorm: CGPoint? = nil
     @Published public var s2PanelCount: Int = 1
     #if canImport(CoreGraphics)
     @Published public var s2CompositeImage: CGImage? = nil
@@ -542,8 +560,20 @@ public final class StudioWorkspaceController: ObservableObject {
     public func switchSuiteApp(_ app: SuiteAppKind) {
         flushAllSync()
         activeSuiteApp = app
-        if workspaceMode == .dualNovelManga && app == .hub {
+        if workspaceMode == .dualNovelManga {
             workspaceMode = .mangaStudio
+        }
+    }
+
+    public func toggleDualNovelMangaStudio() {
+        flushAllSync()
+        if workspaceMode == .dualNovelManga {
+            workspaceMode = .mangaStudio
+        } else {
+            workspaceMode = .dualNovelManga
+            if activeSuiteApp == .hub {
+                activeSuiteApp = .manga
+            }
         }
     }
 
@@ -571,6 +601,9 @@ public final class StudioWorkspaceController: ObservableObject {
             if s2RecentColors.count > 12 {
                 s2RecentColors.removeLast()
             }
+        } else if let idx = s2RecentColors.firstIndex(of: rgba), idx > 0 {
+            s2RecentColors.remove(at: idx)
+            s2RecentColors.insert(rgba, at: 0)
         }
     }
 
@@ -580,6 +613,13 @@ public final class StudioWorkspaceController: ObservableObject {
 
     public func zoomOut() {
         s2ViewportZoom = max(s2ViewportZoom / 1.25, 0.2)
+    }
+
+    public func panCanvas(by delta: CGSize) {
+        s2PanOffset = CGSize(
+            width: s2PanOffset.width + delta.width,
+            height: s2PanOffset.height + delta.height
+        )
     }
 
     public func resetViewport() {
@@ -732,6 +772,132 @@ public final class StudioWorkspaceController: ObservableObject {
         lastStatusBanner = horizontal ? "Flipped layer horizontally" : "Flipped layer vertically"
     }
 
+    // MARK: - Selection Operations (Fill / Erase / Transform / Expand / Contract Active Selection)
+
+    private var activeSelectionBoundsCanvas: CGRect {
+        let w = CGFloat(s2CanvasPixelWidth)
+        let h = CGFloat(s2CanvasPixelHeight)
+        if let normRect = s2SelectionRectNorm {
+            return CGRect(
+                x: normRect.minX * w,
+                y: normRect.minY * h,
+                width: max(1, normRect.width * w),
+                height: max(1, normRect.height * h)
+            )
+        } else if !s2SelectionLassoNorm.isEmpty {
+            let xs = s2SelectionLassoNorm.map { $0.x * w }
+            let ys = s2SelectionLassoNorm.map { $0.y * h }
+            let minX = xs.min() ?? 0
+            let maxX = xs.max() ?? w
+            let minY = ys.min() ?? 0
+            let maxY = ys.max() ?? h
+            return CGRect(x: minX, y: minY, width: max(1, maxX - minX), height: max(1, maxY - minY))
+        }
+        return CGRect(x: 0, y: 0, width: w, height: h)
+    }
+
+    /// Fills the currently active Lasso / Marquee / Magic Wand selection with the active foreground color.
+    @discardableResult
+    public func fillActiveSelectionWithCurrentColor() -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        proj.pushUndoSnapshot()
+        let bounds = activeSelectionBoundsCanvas
+        let radius = Float(max(bounds.width, bounds.height) + 16.0)
+        let midX = Float(bounds.midX)
+        let midY = Float(bounds.midY)
+        let alpha = UInt8(max(1, min(255, Int(round(s2BrushOpacity * 255.0)))))
+        let touched = proj.paintSegment(
+            layerId: s2SelectedLayerId,
+            x0: midX,
+            y0: midY,
+            x1: midX,
+            y1: midY,
+            radiusPx: radius,
+            hardness: 1.0,
+            opacity: Float(s2BrushOpacity),
+            rgba: (s2ActiveColor.r, s2ActiveColor.g, s2ActiveColor.b, alpha)
+        )
+        refreshCompositeImage()
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "Filled selection (\(touched) px) with \(s2ActiveColor.hexString)"
+        return touched
+        #else
+        return 0
+        #endif
+    }
+
+    /// Clears/erases only the pixels inside the currently active Lasso / Marquee / Magic Wand selection.
+    @discardableResult
+    public func eraseActiveSelectionPixels() -> Int {
+        #if canImport(MangaCoreFFI)
+        guard let proj = rustProject else { return 0 }
+        proj.pushUndoSnapshot()
+        let bounds = activeSelectionBoundsCanvas
+        let radius = Float(max(bounds.width, bounds.height) + 16.0)
+        let midX = Float(bounds.midX)
+        let midY = Float(bounds.midY)
+        let touched = proj.eraseSegment(
+            layerId: s2SelectedLayerId,
+            x0: midX,
+            y0: midY,
+            x1: midX,
+            y1: midY,
+            radiusPx: radius,
+            hardness: 1.0,
+            opacity: 1.0
+        )
+        refreshCompositeImage()
+        markDirtyAndScheduleSave()
+        lastStatusBanner = "Cleared pixels inside selection (\(touched) px)"
+        return touched
+        #else
+        return 0
+        #endif
+    }
+
+    /// Expands or contracts the active Lasso or Marquee selection outline and updates the Rust selection mask.
+    @discardableResult
+    public func adjustActiveSelectionBorder(deltaPx: CGFloat) -> Int {
+        let w = CGFloat(max(1, s2CanvasPixelWidth))
+        let h = CGFloat(max(1, s2CanvasPixelHeight))
+        let dxNorm = deltaPx / w
+        let dyNorm = deltaPx / h
+
+        if let rect = s2SelectionRectNorm {
+            let newRect = rect.insetBy(dx: -dxNorm, dy: -dyNorm)
+            let clamped = CGRect(
+                x: min(max(newRect.minX, 0.0), 0.98),
+                y: min(max(newRect.minY, 0.0), 0.98),
+                width: min(max(newRect.width, 0.01), 1.0 - min(max(newRect.minX, 0.0), 0.98)),
+                height: min(max(newRect.height, 0.01), 1.0 - min(max(newRect.minY, 0.0), 0.98))
+            )
+            let canvasRect = CGRect(
+                x: clamped.minX * w,
+                y: clamped.minY * h,
+                width: clamped.width * w,
+                height: clamped.height * h
+            )
+            return setMarqueeSelection(canvasRect: canvasRect, normRect: clamped)
+        } else if s2SelectionLassoNorm.count >= 3 {
+            let cx = s2SelectionLassoNorm.map(\.x).reduce(0, +) / CGFloat(s2SelectionLassoNorm.count)
+            let cy = s2SelectionLassoNorm.map(\.y).reduce(0, +) / CGFloat(s2SelectionLassoNorm.count)
+            var newNorm: [CGPoint] = []
+            var newCanvas: [CGPoint] = []
+            for pt in s2SelectionLassoNorm {
+                let vx = pt.x - cx
+                let vy = pt.y - cy
+                let len = max(0.0001, hypot(vx, vy))
+                let nx = min(max(pt.x + (vx / len) * dxNorm, 0.0), 1.0)
+                let ny = min(max(pt.y + (vy / len) * dyNorm, 0.0), 1.0)
+                newNorm.append(CGPoint(x: nx, y: ny))
+                newCanvas.append(CGPoint(x: nx * w, y: ny * h))
+            }
+            return setLassoSelection(canvasPoints: newCanvas, normPoints: newNorm)
+        }
+        return s2SelectionPixelCount
+    }
+
     // MARK: - v1.0.0-rc3 Real Rust RGBA8 Raster Painting, Bucket, Eyedropper & Selection
 
     public func refreshCompositeImage() {
@@ -843,24 +1009,43 @@ public final class StudioWorkspaceController: ObservableObject {
         #endif
     }
 
+    /// Samples the visible composited pixel (including blue sketch tint, layer blend modes, or paper backdrop)
+    /// and sets it as the active foreground color immediately.
     @discardableResult
     public func sampleEyedropper(canvasX: Int, canvasY: Int) -> PersistedRGBA? {
         #if canImport(MangaCoreFFI)
         guard let proj = rustProject else { return nil }
-        let cx = UInt32(max(0, min(Int(proj.width) - 1, canvasX)))
-        let cy = UInt32(max(0, min(Int(proj.height) - 1, canvasY)))
-        guard let sampled = proj.sampleEyedropper(x: cx, y: cy) else { return nil }
-        let color: PersistedRGBA
-        if sampled.3 == 0 {
-            color = s2Backdrop == .transparentDark
+        let w = Int(proj.width)
+        let h = Int(proj.height)
+        guard w > 0, h > 0 else { return nil }
+        let cx = max(0, min(w - 1, canvasX))
+        let cy = max(0, min(h - 1, canvasY))
+
+        var pickedColor: PersistedRGBA?
+        if let raw = proj.sampleEyedropper(x: UInt32(cx), y: UInt32(cy)), raw.3 > 0 {
+            pickedColor = PersistedRGBA(r: raw.0, g: raw.1, b: raw.2, a: 255)
+        }
+
+        // Fallback to composited RGBA buffer so blue-sketch-tinted layers & paper backdrop sample accurately
+        let comp = proj.compositeRGBA(backdropCode: s2Backdrop.rustBackdropCode)
+        let offset = (cy * w + cx) * 4
+        if offset + 3 < comp.count {
+            let cr = comp[offset]
+            let cg = comp[offset + 1]
+            let cb = comp[offset + 2]
+            if pickedColor == nil {
+                pickedColor = PersistedRGBA(r: cr, g: cg, b: cb, a: 255)
+            }
+        }
+
+        let color = pickedColor ?? (
+            s2Backdrop == .transparentDark
                 ? PersistedRGBA(r: 44, g: 46, b: 52, a: 255)
                 : PersistedRGBA(r: 255, g: 255, b: 255, a: 255)
-        } else {
-            color = PersistedRGBA(r: sampled.0, g: sampled.1, b: sampled.2, a: 255)
-        }
+        )
         s2EyedropperPreview = color
         setActiveColor(color)
-        lastStatusBanner = "Eyedropper picked \(color.hexString) at (\(cx), \(cy))"
+        lastStatusBanner = "Eyedropper picked \(color.hexString) (RGB \(color.r),\(color.g),\(color.b)) at (\(cx), \(cy))"
         return color
         #else
         return nil
@@ -900,7 +1085,7 @@ public final class StudioWorkspaceController: ObservableObject {
         s2HasActiveSelection = count > 0
         s2SelectionRectNorm = nil
         s2SelectionLassoNorm = count > 0 ? normPoints : []
-        lastStatusBanner = count > 0 ? "Lasso selected \(count) px" : "Selection cleared"
+        lastStatusBanner = count > 0 ? "Lasso selected \(count) px — Use Selection Action Bar to Fill, Clear, Invert, or Transform" : "Selection cleared"
         return count
         #else
         s2HasActiveSelection = true
@@ -925,7 +1110,7 @@ public final class StudioWorkspaceController: ObservableObject {
         s2HasActiveSelection = count > 0
         s2SelectionRectNorm = count > 0 ? CGRect(x: 0.02, y: 0.02, width: 0.96, height: 0.96) : nil
         s2SelectionLassoNorm = []
-        lastStatusBanner = count > 0 ? "Magic Wand selected \(count) px" : "Magic Wand empty"
+        lastStatusBanner = count > 0 ? "Magic Wand selected \(count) px (tol=\(s2BucketTolerance))" : "Magic Wand empty"
         return count
         #else
         return 0
@@ -952,6 +1137,9 @@ public final class StudioWorkspaceController: ObservableObject {
         s2SelectionPixelCount = 0
         s2SelectionRectNorm = nil
         s2SelectionLassoNorm = []
+        s2LiveLassoNorm = []
+        s2LiveMarqueeStartNorm = nil
+        s2LiveMarqueeCurrentNorm = nil
         lastStatusBanner = "Deselected"
     }
 
@@ -960,6 +1148,9 @@ public final class StudioWorkspaceController: ObservableObject {
         if let proj = rustProject {
             s2SelectionPixelCount = proj.invertSelection()
             s2HasActiveSelection = s2SelectionPixelCount > 0
+            if s2HasActiveSelection && s2SelectionRectNorm == nil && s2SelectionLassoNorm.isEmpty {
+                s2SelectionRectNorm = CGRect(x: 0, y: 0, width: 1, height: 1)
+            }
             lastStatusBanner = "Inverted selection (\(s2SelectionPixelCount) px)"
         }
         #endif
@@ -1333,22 +1524,24 @@ public final class StudioWorkspaceController: ObservableObject {
     }
 
     @discardableResult
-    public func applyScreentoneFill(lpi: Float = 60.0, density: Float = 0.28, patternCode: UInt32 = 0) -> Int {
+    public func applyScreentoneFill(lpi: Float? = nil, density: Float? = nil, patternCode: UInt32 = 0) -> Int {
         #if canImport(MangaCoreFFI)
         guard let proj = rustProject else { return 0 }
+        let useLpi = lpi ?? Float(s2ScreentoneLpi)
+        let useDensity = density ?? Float(s2ScreentoneDensity)
         proj.pushUndoSnapshot()
         let count = proj.applyScreentone(
             layerId: s2SelectedLayerId,
-            lpi: lpi,
+            lpi: useLpi,
             dpi: 300.0,
             angleDeg: 45.0,
-            density: density,
+            density: useDensity,
             patternCode: patternCode,
             rgba: (s2ActiveColor.r, s2ActiveColor.g, s2ActiveColor.b, 255)
         )
         refreshCompositeImage()
         markDirtyAndScheduleSave()
-        lastStatusBanner = "Screentone applied (\(Int(lpi)) LPI, \(Int(density * 100))%, \(count) px)"
+        lastStatusBanner = "Screentone applied (\(Int(useLpi)) LPI, \(Int(useDensity * 100))%, \(count) px)"
         return count
         #else
         return 0
@@ -1356,9 +1549,10 @@ public final class StudioWorkspaceController: ObservableObject {
     }
 
     @discardableResult
-    public func slicePanelFrame(from p0: CGPoint, to p1: CGPoint, gutterPx: Float = 14.0) -> Int {
+    public func slicePanelFrame(from p0: CGPoint, to p1: CGPoint, gutterPx: Float? = nil) -> Int {
         #if canImport(MangaCoreFFI)
         guard let proj = rustProject else { return 0 }
+        let useGutter = gutterPx ?? Float(s2PanelGutterPx)
         proj.pushUndoSnapshot()
         let count = proj.sliceAndRasterizePanel(
             layerId: s2SelectedLayerId,
@@ -1366,12 +1560,12 @@ public final class StudioWorkspaceController: ObservableObject {
             y0: Float(p0.y),
             x1: Float(p1.x),
             y1: Float(p1.y),
-            gutterPx: gutterPx
+            gutterPx: useGutter
         )
         s2PanelCount = count
         refreshCompositeImage()
         markDirtyAndScheduleSave()
-        lastStatusBanner = "Sliced Manga Panel (\(count) panels total)"
+        lastStatusBanner = "Sliced Manga Panel (\(count) panels total, gutter=\(Int(useGutter))px)"
         return count
         #else
         return 0

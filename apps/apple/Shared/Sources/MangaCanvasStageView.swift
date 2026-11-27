@@ -69,7 +69,8 @@ extension LayerBlendMode {
 /// `S2 v1.0.0-rc3` — `雕龙 / DracoNib` ibisPaint-aligned Real RGBA8 Raster Studio Stage:
 /// - Real Rust `LayerStack` RGBA8 pixel compositing (`CGImage`) with 22 blend modes & clipping masks.
 /// - 16 ibisPaint brushes + Force Fade + Rope Stabilizer + real transparent Eraser / Smudge / Blur.
-/// - Live interactive Close-Gap Bucket Fill, Eyedropper loupe, Marquee / Lasso / Magic Wand selections.
+/// - Focused Per-Tool Tuning Bar, Interactive Lasso/Marquee Selection Action Bar, 2-Finger/Hand Canvas Panning,
+///   High-Contrast Eyedropper Loupe, and 1-Tap Dual Novel+Manga Split View.
 public struct MangaCanvasStageView: View {
     @ObservedObject public var controller: StudioWorkspaceController
     public let layout: WorkspaceLayoutHintKind
@@ -85,6 +86,7 @@ public struct MangaCanvasStageView: View {
     @State private var activeLassoNorm: [CGPoint] = []
     @State private var activeLassoCanvas: [CGPoint] = []
     @State private var eyedropperLoupePos: CGPoint?
+    @State private var panDragPrevViewPt: CGPoint?
     @State private var pinchBaseZoom: Double?
     @State private var canvasDimensions: String = "800 × 1132 (B4 Live RGBA8)"
     @State private var statusLine: String = "Ready"
@@ -143,10 +145,14 @@ public struct MangaCanvasStageView: View {
             }
 
             VStack(spacing: 0) {
-                contextualToolPropertyBar
+                focusedToolTuningBar
                 if controller.s2Tool == .transform {
                     Divider().background(SuiteColorTokens.mangaBorder)
                     transformInteractiveBar
+                }
+                if controller.s2HasActiveSelection {
+                    Divider().background(SuiteColorTokens.mangaBorder)
+                    activeSelectionWorkflowBar
                 }
                 Divider().background(SuiteColorTokens.mangaBorder)
                 canvasViewport
@@ -196,6 +202,7 @@ public struct MangaCanvasStageView: View {
                     let selected = controller.s2Tool == tool
                     Button {
                         controller.selectTool(tool)
+                        statusLine = "当前工具: \(tool.displayName)"
                     } label: {
                         Image(systemName: tool.systemSymbol)
                             .font(.system(size: 15, weight: .semibold))
@@ -203,12 +210,30 @@ public struct MangaCanvasStageView: View {
                             .background(selected ? SuiteColorTokens.mangaAccent : Color.white.opacity(0.05))
                             .foregroundStyle(selected ? .white : Color.white.opacity(0.78))
                             .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .strokeBorder(selected ? Color.white.opacity(0.55) : Color.clear, lineWidth: 1)
+                            )
                     }
                     .buttonStyle(.plain)
                     .help(tool.displayName)
                 }
 
                 Divider().background(SuiteColorTokens.mangaBorder).padding(.horizontal, 8)
+
+                // Quick 1-Tap Dual Novel + Canvas Split Toggle directly in tool rail
+                Button {
+                    controller.toggleDualNovelMangaStudio()
+                } label: {
+                    Image(systemName: "rectangle.split.2x1.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(width: 40, height: 36)
+                        .background(controller.workspaceMode == .dualNovelManga ? SuiteColorTokens.novelAccent : Color.white.opacity(0.05))
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .help("同屏打开小说与画布 (S2+S3 Dual Split)")
 
                 // Inspector & Layer Drawer toggles
                 Button {
@@ -250,10 +275,16 @@ public struct MangaCanvasStageView: View {
     private var leftQuickCaliperStrip: some View {
         VStack(spacing: 12) {
             // Active Color Swatch + Native HSB Color Picker
-            ColorPicker("", selection: activeColorBinding, supportsOpacity: false)
-                .labelsHidden()
-                .frame(width: 30, height: 30)
-                .help("Active Foreground Color (\(controller.s2ActiveColor.hexString))")
+            VStack(spacing: 3) {
+                ColorPicker("", selection: activeColorBinding, supportsOpacity: false)
+                    .labelsHidden()
+                    .frame(width: 30, height: 30)
+                    .help("Active Foreground Color (\(controller.s2ActiveColor.hexString))")
+                Text(controller.s2ActiveColor.hexString)
+                    .font(.system(size: 7.5, weight: .bold, design: .monospaced))
+                    .foregroundStyle(Color.white.opacity(0.75))
+                    .lineLimit(1)
+            }
 
             VStack(spacing: 4) {
                 Text("\(Int(controller.s2BrushSize))")
@@ -292,6 +323,7 @@ public struct MangaCanvasStageView: View {
                 ForEach(controller.s2RecentColors.prefix(5), id: \.hexString) { swatch in
                     Button {
                         controller.setActiveColor(swatch)
+                        statusLine = "Color: \(swatch.hexString)"
                     } label: {
                         Circle()
                             .fill(swatch.swiftUIColor)
@@ -316,166 +348,105 @@ public struct MangaCanvasStageView: View {
         }
     }
 
-    // MARK: - Zero-Overlap Contextual Top Tool Property Bar (1:1 Synced with Menu Bar)
+    // MARK: - Fix #2: Dedicated Per-Tool Focused Tuning Bar (Shows ONLY Controls for the Active Tool)
 
-    private var contextualToolPropertyBar: some View {
+    private var activePresetName: String {
+        starterPresets.first(where: { $0.id == controller.s2PresetIndex })?.name ?? "G-Pen"
+    }
+
+    private var focusedToolTuningBar: some View {
         HStack(spacing: 10) {
+            // Left: Active Tool Pill + Dedicated Focused Tuning Controls for THIS tool only
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    Label(controller.s2Tool.displayName, systemImage: controller.s2Tool.systemSymbol)
-                        .font(.caption.bold())
-                        .lineLimit(1)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(SuiteColorTokens.mangaAccent)
-                        .foregroundStyle(.white)
-                        .clipShape(Capsule())
-                        .fixedSize(horizontal: true, vertical: false)
-
-                    if controller.s2Tool.usesBrushDynamics {
-                        Toggle("Force Fade", isOn: $controller.s2ForceFade)
-                            .toggleStyle(.button)
-                            .font(.caption2.bold())
-                            .tint(SuiteColorTokens.mangaAccent)
-                            .fixedSize(horizontal: true, vertical: false)
-
-                        HStack(spacing: 5) {
-                            Text("Rope \(Int(controller.s2StabilizerPx))px")
-                                .font(.caption2.monospaced())
-                                .foregroundStyle(Color.white.opacity(0.82))
-                                .fixedSize(horizontal: true, vertical: false)
-                            Slider(value: $controller.s2StabilizerPx, in: 0...24)
-                                .frame(width: 76)
-                                .tint(SuiteColorTokens.mangaAccent)
-                        }
+                HStack(spacing: 10) {
+                    // Tool badge
+                    HStack(spacing: 5) {
+                        Image(systemName: controller.s2Tool.systemSymbol)
+                            .font(.caption.bold())
+                        Text(controller.s2Tool.displayName)
+                            .font(.caption.bold())
+                            .lineLimit(1)
                     }
-
-                    if controller.s2Tool == .bucket {
-                        Menu("Gap: \(controller.s2BucketCloseGapPx)px") {
-                            ForEach([0, 1, 2, 3, 5, 8], id: \.self) { px in
-                                Button("\(px)px") { controller.s2BucketCloseGapPx = px }
-                            }
-                        }
-                        .font(.caption2.bold())
-                        .fixedSize(horizontal: true, vertical: false)
-
-                        Menu("Expand: \(controller.s2BucketExpandPx)px") {
-                            ForEach([0, 1, 2, 3], id: \.self) { px in
-                                Button("+\(px)px") { controller.s2BucketExpandPx = px }
-                            }
-                        }
-                        .font(.caption2.bold())
-                        .fixedSize(horizontal: true, vertical: false)
-                    }
-
-                    Menu("Ruler: \(controller.s2RulerMode.displayName)") {
-                        ForEach(RulerModeKind.allCases) { mode in
-                            Button(mode.displayName) { controller.s2RulerMode = mode }
-                        }
-                    }
-                    .font(.caption2.bold())
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(SuiteColorTokens.mangaAccent)
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
                     .fixedSize(horizontal: true, vertical: false)
 
-                    Menu("Shape: \(controller.s2ShapeAssist.displayName)") {
-                        ForEach(S2ShapeAssistKind.allCases) { shape in
-                            Button(shape.displayName) { controller.s2ShapeAssist = shape }
+                    // Strictly tool-specific performance & tuning parameters
+                    focusedControlsForCurrentTool
+                }
+                .padding(.vertical, 2)
+            }
+            .layoutPriority(1)
+
+            // Right: Essential Viewport, Dual-Split & Undo/Redo Cluster
+            HStack(spacing: 7) {
+                // Studio Extras Menu (keeps FX, Screentone, Reference, Export organized & out of the way)
+                Menu {
+                    Section("Studio Actions") {
+                        Button("Apply 60 LPI Screentone") {
+                            _ = controller.applyScreentoneFill()
+                            statusLine = controller.lastStatusBanner
+                        }
+                        Button(controller.s2ShowReferenceWindow ? "Hide Reference Window" : "Show Reference Window") {
+                            controller.s2ShowReferenceWindow.toggle()
+                        }
+                        Button(controller.s2MirrorHorizontal ? "Disable Mirror Preview" : "Mirror Canvas Horizontally (H)") {
+                            controller.s2MirrorHorizontal.toggle()
                         }
                     }
-                    .font(.caption2.bold())
-                    .fixedSize(horizontal: true, vertical: false)
-
-                    Menu("FX") {
+                    Section("Layer FX Filters") {
                         ForEach(S2FilterActionKind.allCases) { fx in
                             Button(fx.displayName) {
                                 controller.s2PendingFilter = fx
                             }
                         }
                     }
-                    .font(.caption2.bold())
-                    .disabled(!controller.canRunFilterOnSelectedLayer)
-                    .fixedSize(horizontal: true, vertical: false)
-
-                    Button("Tone") {
-                        _ = controller.applyScreentoneFill()
-                        statusLine = controller.lastStatusBanner
-                    }
-                    .font(.caption2.bold())
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Color.white.opacity(0.10))
-                    .foregroundStyle(.white)
-                    .clipShape(Capsule())
-                    .buttonStyle(.plain)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .help("Apply 60 LPI Procedural Screentone")
-
-                    Button("Ref") {
-                        controller.s2ShowReferenceWindow.toggle()
-                    }
-                    .font(.caption2.bold())
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(controller.s2ShowReferenceWindow ? SuiteColorTokens.hubAccent : Color.white.opacity(0.10))
-                    .foregroundStyle(.white)
-                    .clipShape(Capsule())
-                    .buttonStyle(.plain)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .help("Toggle Floating Reference Window")
-
                     #if os(iOS)
-                    Button {
-                        controller.s2ApplePencilOnlyDraw.toggle()
-                        statusLine = controller.s2ApplePencilOnlyDraw
-                            ? "Apple Pencil Only: Finger pans canvas, Pencil draws"
-                            : "Touch & Pencil Draw enabled"
-                    } label: {
-                        Label("Pencil Only", systemImage: "pencil.tip")
-                            .font(.caption2.bold())
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(controller.s2ApplePencilOnlyDraw ? SuiteColorTokens.novelAccent : Color.white.opacity(0.10))
-                            .foregroundStyle(.white)
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .fixedSize(horizontal: true, vertical: false)
-
-                    Menu("Export") {
-                        Button("Save PNG to Files") {
+                    Section("Touch & Export") {
+                        Button(controller.s2ApplePencilOnlyDraw ? "✓ Apple Pencil Only (Finger Pans)" : "Apple Pencil Only (Finger Pans)") {
+                            controller.s2ApplePencilOnlyDraw.toggle()
+                        }
+                        Button("Export PNG to Files") {
                             _ = controller.exportCanvasPng(to: nil, transparentBackground: controller.s2Backdrop != .whitePaper)
                             statusLine = controller.lastStatusBanner
                         }
-                        Button("Save PSD (8BPS) to Files") {
+                        Button("Export PSD (8BPS) to Files") {
                             _ = controller.exportCanvasPsd(to: nil)
                             statusLine = controller.lastStatusBanner
                         }
                     }
-                    .font(.caption2.bold())
-                    .fixedSize(horizontal: true, vertical: false)
                     #endif
-
-                    if let activeLayer = controller.selectedCelLayer {
-                        Text("Layer: \(activeLayer.name) [\(activeLayer.blendMode.displayName)]")
-                            .font(.caption2.monospaced())
-                            .foregroundStyle(activeLayer.blueSketchTint ? Color(red: 0.45, green: 0.72, blue: 1.0) : Color.white.opacity(0.75))
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-                    }
-                }
-            }
-            .layoutPriority(1)
-
-            // Right fixed quick actions (guaranteed non-overlapping)
-            HStack(spacing: 8) {
-                Button {
-                    controller.s2MirrorHorizontal.toggle()
                 } label: {
-                    Image(systemName: "arrow.left.and.right.righttriangle.left.righttriangle.right")
+                    HStack(spacing: 3) {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.caption2)
+                        Text("More")
+                            .font(.caption2.bold())
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.10))
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+                    .fixedSize(horizontal: true, vertical: false)
+                }
+                .fixedSize(horizontal: true, vertical: false)
+
+                Button {
+                    controller.selectTool(controller.s2Tool == .handPan ? .brush : .handPan)
+                } label: {
+                    Image(systemName: "hand.draw.fill")
                         .font(.caption)
-                        .foregroundStyle(controller.s2MirrorHorizontal ? SuiteColorTokens.mangaAccent : Color.white.opacity(0.75))
+                        .padding(5)
+                        .background(controller.s2Tool == .handPan ? SuiteColorTokens.hubAccent : Color.white.opacity(0.10))
+                        .foregroundStyle(.white)
+                        .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .help("Horizontal Mirror Preview (H)")
+                .help("拖动移动画布 (Hand Pan Tool)")
 
                 Button {
                     controller.zoomOut()
@@ -493,7 +464,7 @@ public struct MangaCanvasStageView: View {
                 .foregroundStyle(.white)
                 .buttonStyle(.plain)
                 .fixedSize(horizontal: true, vertical: false)
-                .help("Reset Viewport (⌘0)")
+                .help("重置画布缩放与居中 (Reset Zoom & Pan)")
 
                 Button {
                     controller.zoomIn()
@@ -525,6 +496,503 @@ public struct MangaCanvasStageView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(SuiteColorTokens.mangaPanel)
+    }
+
+    @ViewBuilder
+    private var focusedControlsForCurrentTool: some View {
+        switch controller.s2Tool {
+        case .brush:
+            // Focused Brush Controls: Preset, Size, Opacity, Stabilizer, Force Fade, Shape
+            Menu {
+                ForEach(starterPresets.filter { !$0.isEraser }) { preset in
+                    Button("\(preset.name) [\(preset.trackBadge)]") {
+                        controller.s2PresetIndex = preset.id
+                        controller.s2BrushSize = preset.defaultSize
+                        controller.s2BrushOpacity = preset.baseOpacity
+                    }
+                }
+            } label: {
+                focusedPillLabel(title: "笔刷: \(activePresetName)", icon: "paintbrush.pointed.fill")
+            }
+            .fixedSize(horizontal: true, vertical: false)
+
+            focusedSliderCluster(
+                label: "粗细 \(Int(controller.s2BrushSize))px",
+                value: $controller.s2BrushSize,
+                range: 1...100,
+                width: 84
+            )
+
+            focusedSliderCluster(
+                label: "不透明度 \(Int(controller.s2BrushOpacity * 100))%",
+                value: $controller.s2BrushOpacity,
+                range: 0.05...1.0,
+                width: 76
+            )
+
+            focusedSliderCluster(
+                label: "抖动修正 \(Int(controller.s2StabilizerPx))",
+                value: $controller.s2StabilizerPx,
+                range: 0...24,
+                width: 72
+            )
+
+            Toggle("起笔渐细", isOn: $controller.s2ForceFade)
+                .toggleStyle(.button)
+                .font(.caption2.bold())
+                .tint(SuiteColorTokens.mangaAccent)
+                .fixedSize(horizontal: true, vertical: false)
+
+            Menu {
+                ForEach(S2ShapeAssistKind.allCases) { shape in
+                    Button(shape.displayName) { controller.s2ShapeAssist = shape }
+                }
+            } label: {
+                focusedPillLabel(title: "形状: \(controller.s2ShapeAssist.displayName)", icon: "square.on.circle")
+            }
+            .fixedSize(horizontal: true, vertical: false)
+
+        case .eraser:
+            // Focused Eraser Controls: Size, Strength/Opacity, Stabilizer, Clear Layer
+            focusedSliderCluster(
+                label: "橡皮大小 \(Int(controller.s2BrushSize))px",
+                value: $controller.s2BrushSize,
+                range: 1...100,
+                width: 96
+            )
+
+            focusedSliderCluster(
+                label: "擦除力度 \(Int(controller.s2BrushOpacity * 100))%",
+                value: $controller.s2BrushOpacity,
+                range: 0.05...1.0,
+                width: 84
+            )
+
+            focusedSliderCluster(
+                label: "稳定器 \(Int(controller.s2StabilizerPx))",
+                value: $controller.s2StabilizerPx,
+                range: 0...24,
+                width: 72
+            )
+
+            Button {
+                controller.clearCurrentLayer()
+                statusLine = controller.lastStatusBanner
+            } label: {
+                focusedPillLabel(title: "清空当前图层", icon: "trash")
+            }
+            .buttonStyle(.plain)
+
+        case .smudge, .blur:
+            // Focused Smudge / Blur Controls: Radius, Strength, Stabilizer
+            focusedSliderCluster(
+                label: "作用半径 \(Int(controller.s2BrushSize))px",
+                value: $controller.s2BrushSize,
+                range: 2...80,
+                width: 96
+            )
+
+            focusedSliderCluster(
+                label: "混色强度 \(Int(controller.s2BrushOpacity * 100))%",
+                value: $controller.s2BrushOpacity,
+                range: 0.05...1.0,
+                width: 88
+            )
+
+            focusedSliderCluster(
+                label: "平滑 \(Int(controller.s2StabilizerPx))",
+                value: $controller.s2StabilizerPx,
+                range: 0...24,
+                width: 72
+            )
+
+        case .bucket:
+            // Focused Bucket Fill Controls: Active Color, Close-Gap, Expand, Tolerance
+            ColorPicker("", selection: activeColorBinding, supportsOpacity: false)
+                .labelsHidden()
+                .frame(width: 22, height: 22)
+
+            focusedIntStepperCluster(
+                title: "封口间隙 Gap: \(controller.s2BucketCloseGapPx)px",
+                value: $controller.s2BucketCloseGapPx,
+                range: 0...15
+            )
+
+            focusedIntStepperCluster(
+                title: "扩张 Expand: +\(controller.s2BucketExpandPx)px",
+                value: $controller.s2BucketExpandPx,
+                range: 0...8
+            )
+
+            Text("点按闭合线稿区域即可自动封口填色")
+                .font(.caption2)
+                .foregroundStyle(Color.white.opacity(0.75))
+                .fixedSize(horizontal: true, vertical: false)
+
+        case .eyedropper:
+            // Focused Eyedropper Controls: Live Picked Color Swatch + Hex + RGB + Auto-switch to Brush
+            HStack(spacing: 6) {
+                RoundedRectangle(cornerRadius: 5)
+                    .fill((controller.s2EyedropperPreview ?? controller.s2ActiveColor).swiftUIColor)
+                    .frame(width: 24, height: 20)
+                    .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(Color.white, lineWidth: 1.5))
+
+                let c = controller.s2EyedropperPreview ?? controller.s2ActiveColor
+                Text("当前提取: \(c.hexString) (RGB \(c.r),\(c.g),\(c.b))")
+                    .font(.caption2.monospaced().bold())
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Color.white.opacity(0.12))
+            .clipShape(Capsule())
+
+            Toggle("吸色后自动切回画笔", isOn: $controller.s2EyedropperAutoSwitchToBrush)
+                .toggleStyle(.button)
+                .font(.caption2.bold())
+                .tint(SuiteColorTokens.hubAccent)
+                .fixedSize(horizontal: true, vertical: false)
+
+            Text("在画布上点按或拖动即可实时提取图层合成颜色")
+                .font(.caption2)
+                .foregroundStyle(Color.white.opacity(0.72))
+                .fixedSize(horizontal: true, vertical: false)
+
+        case .lasso, .rectSelect:
+            // Focused Lasso & Marquee Selection Guide + Quick Actions
+            if !controller.s2HasActiveSelection {
+                HStack(spacing: 6) {
+                    Image(systemName: "hand.point.up.left.fill")
+                        .font(.caption2)
+                        .foregroundStyle(SuiteColorTokens.hubAccent)
+                    Text("第1步: 在画布上拖动圈出选区 → 第2步: 在弹出选区栏中【填色/擦除/扩缩/变形/网点】")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(SuiteColorTokens.hubAccent.opacity(0.22))
+                .clipShape(Capsule())
+            } else {
+                Text("已选中 \(controller.s2SelectionPixelCount) px · 请使用下方选区调整栏操作，或直接重新圈选")
+                    .font(.caption2.bold())
+                    .foregroundStyle(SuiteColorTokens.hubAccent)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+
+        case .magicWand:
+            // Focused Magic Wand Tolerance Slider
+            focusedIntSliderCluster(
+                label: "魔棒容差 Tolerance: \(controller.s2BucketTolerance)",
+                value: $controller.s2BucketTolerance,
+                range: 0...128,
+                width: 96
+            )
+
+            Text("点按画布色块自动选中相近颜色区域")
+                .font(.caption2)
+                .foregroundStyle(Color.white.opacity(0.72))
+                .fixedSize(horizontal: true, vertical: false)
+
+        case .handPan:
+            // Focused Hand / Move Canvas Controls
+            HStack(spacing: 6) {
+                Text("位移 (\(Int(controller.s2PanOffset.width)), \(Int(controller.s2PanOffset.height)))")
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: true, vertical: false)
+
+                Button("← 左移") { controller.panCanvas(by: CGSize(width: -60, height: 0)) }
+                    .buttonStyle(FocusedActionPillStyle())
+                Button("→ 右移") { controller.panCanvas(by: CGSize(width: 60, height: 0)) }
+                    .buttonStyle(FocusedActionPillStyle())
+                Button("↑ 上移") { controller.panCanvas(by: CGSize(width: 0, height: -60)) }
+                    .buttonStyle(FocusedActionPillStyle())
+                Button("↓ 下移") { controller.panCanvas(by: CGSize(width: 0, height: 60)) }
+                    .buttonStyle(FocusedActionPillStyle())
+
+                Button("居中归位") {
+                    controller.resetViewport()
+                    statusLine = "画布已居中归位 (100%)"
+                }
+                .buttonStyle(FocusedActionPillStyle(accent: SuiteColorTokens.hubAccent))
+            }
+
+            #if os(iOS)
+            Toggle("单指移画布/仅Pencil绘画", isOn: $controller.s2ApplePencilOnlyDraw)
+                .toggleStyle(.button)
+                .font(.caption2.bold())
+                .tint(SuiteColorTokens.novelAccent)
+                .fixedSize(horizontal: true, vertical: false)
+            #endif
+
+        case .transform:
+            Text("在下方【自由变换栏】调整位移(dX/dY)、缩放(Scale)、旋转(Rotate)或翻转图层")
+                .font(.caption2.bold())
+                .foregroundStyle(SuiteColorTokens.hubAccent)
+                .fixedSize(horizontal: true, vertical: false)
+
+        case .ruler:
+            // Focused Ruler Mode Picker
+            ForEach(RulerModeKind.allCases) { mode in
+                let active = controller.s2RulerMode == mode
+                Button {
+                    controller.s2RulerMode = mode
+                    statusLine = "尺规模式: \(mode.displayName)"
+                } label: {
+                    Text(mode.displayName)
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(active ? SuiteColorTokens.hubAccent : Color.white.opacity(0.10))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .fixedSize(horizontal: true, vertical: false)
+            }
+
+            Button("切回画笔绘画 →") {
+                controller.selectTool(.brush)
+            }
+            .buttonStyle(FocusedActionPillStyle(accent: SuiteColorTokens.mangaAccent))
+
+        case .panelKnife:
+            // Focused Panel Knife Gutter Width Controls
+            focusedSliderCluster(
+                label: "分格间距 Gutter \(Int(controller.s2PanelGutterPx))px",
+                value: $controller.s2PanelGutterPx,
+                range: 4...36,
+                width: 96
+            )
+
+            Text("已切分 \(controller.s2PanelCount) 格 · 在画布上划过即可分割漫画分镜框")
+                .font(.caption2)
+                .foregroundStyle(Color.white.opacity(0.78))
+                .fixedSize(horizontal: true, vertical: false)
+
+        case .textBubble:
+            Text("点按画布放置台词气泡 (\(controller.s2SpeechBubbles.count) 个) · 可切换横排/竖排与直接输入台词")
+                .font(.caption2)
+                .foregroundStyle(Color.white.opacity(0.82))
+                .fixedSize(horizontal: true, vertical: false)
+
+            if !controller.s2SpeechBubbles.isEmpty {
+                Button("移除最后一个气泡") {
+                    if let last = controller.s2SpeechBubbles.last {
+                        controller.removeSpeechBubble(id: last.id)
+                    }
+                }
+                .buttonStyle(FocusedActionPillStyle())
+            }
+        }
+    }
+
+    // MARK: - Fix #1: Clear Step-by-Step Selection Adjustment & Action Bar (Lasso / Marquee / Magic Wand)
+
+    private var activeSelectionWorkflowBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                HStack(spacing: 4) {
+                    Image(systemName: "lasso.badge.sparkles")
+                        .font(.caption2.bold())
+                        .foregroundStyle(SuiteColorTokens.hubAccent)
+                    Text("选区已激活 (\(controller.s2SelectionPixelCount) px):")
+                        .font(.caption2.bold())
+                        .foregroundStyle(.white)
+                }
+                .fixedSize(horizontal: true, vertical: false)
+
+                Button {
+                    let count = controller.fillActiveSelectionWithCurrentColor()
+                    statusLine = "已在选区内填充当前颜色 (\(count) px)"
+                } label: {
+                    Label("填色 Fill", systemImage: "paintbrush.fill")
+                }
+                .buttonStyle(FocusedActionPillStyle(accent: SuiteColorTokens.mangaAccent))
+
+                Button {
+                    let count = controller.eraseActiveSelectionPixels()
+                    statusLine = "已清除选区内像素 (\(count) px)"
+                } label: {
+                    Label("清除 Erase", systemImage: "eraser.fill")
+                }
+                .buttonStyle(FocusedActionPillStyle())
+
+                Button {
+                    let count = controller.adjustActiveSelectionBorder(deltaPx: 6.0)
+                    statusLine = "选区已向外扩大 +6px (\(count) px)"
+                } label: {
+                    Label("扩大 +6px", systemImage: "arrow.up.left.and.arrow.down.right")
+                }
+                .buttonStyle(FocusedActionPillStyle())
+
+                Button {
+                    let count = controller.adjustActiveSelectionBorder(deltaPx: -6.0)
+                    statusLine = "选区已向内收缩 -6px (\(count) px)"
+                } label: {
+                    Label("收缩 -6px", systemImage: "arrow.down.right.and.arrow.up.left")
+                }
+                .buttonStyle(FocusedActionPillStyle())
+
+                Button {
+                    controller.invertCanvasSelection()
+                    statusLine = "已反选选区 Invert Selection"
+                } label: {
+                    Label("反选 Invert", systemImage: "circle.lefthalf.filled")
+                }
+                .buttonStyle(FocusedActionPillStyle())
+
+                Button {
+                    _ = controller.applyScreentoneFill()
+                    statusLine = controller.lastStatusBanner
+                } label: {
+                    Label("贴网点 Tone", systemImage: "circle.grid.3x3.fill")
+                }
+                .buttonStyle(FocusedActionPillStyle())
+
+                Button {
+                    controller.selectTool(.brush)
+                    statusLine = "已切到画笔：现在绘画将仅作用在选区内部"
+                } label: {
+                    Label("在选区内绘画", systemImage: "pencil.tip")
+                }
+                .buttonStyle(FocusedActionPillStyle(accent: SuiteColorTokens.hubAccent))
+
+                Button {
+                    controller.selectTool(.transform)
+                    statusLine = "已开启自由变换栏"
+                } label: {
+                    Label("变换图层", systemImage: "arrow.up.left.and.down.right.magnifyingglass")
+                }
+                .buttonStyle(FocusedActionPillStyle())
+
+                Button {
+                    controller.clearCanvasSelection()
+                    statusLine = "已取消选区 Deselected"
+                } label: {
+                    Label("取消选区", systemImage: "xmark.circle.fill")
+                }
+                .buttonStyle(FocusedActionPillStyle(accent: Color.red.opacity(0.75)))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        }
+        .background(SuiteColorTokens.mangaPanel.opacity(0.96))
+    }
+
+    // MARK: - Focused Bar Subcomponents
+
+    private func focusedPillLabel(title: String, icon: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.caption2)
+            Text(title)
+                .font(.caption2.bold())
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(Color.white.opacity(0.11))
+        .foregroundStyle(.white)
+        .clipShape(Capsule())
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func focusedSliderCluster(
+        label: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        width: CGFloat
+    ) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(.caption2.monospaced().bold())
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: true, vertical: false)
+            Slider(value: value, in: range)
+                .frame(width: width)
+                .tint(SuiteColorTokens.mangaAccent)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(Color.white.opacity(0.07))
+        .clipShape(Capsule())
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func focusedIntSliderCluster(
+        label: String,
+        value: Binding<Int>,
+        range: ClosedRange<Int>,
+        width: CGFloat
+    ) -> some View {
+        let doubleBinding = Binding<Double>(
+            get: { Double(value.wrappedValue) },
+            set: { value.wrappedValue = Int($0.rounded()) }
+        )
+        return focusedSliderCluster(
+            label: label,
+            value: doubleBinding,
+            range: Double(range.lowerBound)...Double(range.upperBound),
+            width: width
+        )
+    }
+
+    private func focusedIntStepperCluster(
+        title: String,
+        value: Binding<Int>,
+        range: ClosedRange<Int>
+    ) -> some View {
+        HStack(spacing: 4) {
+            Button("−") {
+                value.wrappedValue = max(range.lowerBound, value.wrappedValue - 1)
+            }
+            .font(.caption.bold())
+            .frame(width: 20, height: 20)
+            .background(Color.white.opacity(0.14))
+            .foregroundStyle(.white)
+            .clipShape(Circle())
+            .buttonStyle(.plain)
+
+            Text(title)
+                .font(.caption2.monospaced().bold())
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: true, vertical: false)
+
+            Button("+") {
+                value.wrappedValue = min(range.upperBound, value.wrappedValue + 1)
+            }
+            .font(.caption.bold())
+            .frame(width: 20, height: 20)
+            .background(Color.white.opacity(0.14))
+            .foregroundStyle(.white)
+            .clipShape(Circle())
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Color.white.opacity(0.08))
+        .clipShape(Capsule())
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private struct FocusedActionPillStyle: ButtonStyle {
+        var accent: Color = Color.white.opacity(0.13)
+
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .font(.caption2.bold())
+                .lineLimit(1)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(configuration.isPressed ? accent.opacity(0.65) : accent)
+                .foregroundStyle(.white)
+                .clipShape(Capsule())
+                .fixedSize(horizontal: true, vertical: false)
+        }
     }
 
     // MARK: - Phase 3: Interactive Transform Bar (`T`)
@@ -611,7 +1079,7 @@ public struct MangaCanvasStageView: View {
         .background(SuiteColorTokens.mangaPanel.opacity(0.95))
     }
 
-    // MARK: - Real Rust RGBA8 Composited Canvas Viewport (Zero Overlapping Debug Overlays)
+    // MARK: - Real Rust RGBA8 Composited Canvas Viewport (With Pan Pad, Selection HUD & Eyedropper Loupe)
 
     private var canvasAspectRatio: CGFloat {
         let w = CGFloat(max(1, controller.s2CanvasPixelWidth))
@@ -653,15 +1121,25 @@ public struct MangaCanvasStageView: View {
                             }
                         }
 
-                        if let loupePos = eyedropperLoupePos, let preview = controller.s2EyedropperPreview {
-                            Circle()
-                                .fill(preview.swiftUIColor)
-                                .frame(width: 44, height: 44)
-                                .overlay(Circle().strokeBorder(Color.white, lineWidth: 3))
-                                .shadow(color: .black.opacity(0.5), radius: 6)
-                                .position(x: loupePos.x, y: max(28, loupePos.y - 36))
-                                .allowsHitTesting(false)
+                        // High-Contrast Eyedropper Loupe (Works on both iPadOS UIKit Touch & macOS Drag!)
+                        GeometryReader { loupeGeo in
+                            if let norm = controller.s2EyedropperLoupeNorm,
+                               let preview = controller.s2EyedropperPreview
+                            {
+                                let lx = norm.x * loupeGeo.size.width
+                                let ly = norm.y * loupeGeo.size.height
+                                eyedropperLoupeHUD(color: preview)
+                                    .position(x: lx, y: max(42, ly - 52))
+                                    .allowsHitTesting(false)
+                            } else if let loupePos = eyedropperLoupePos,
+                                      let preview = controller.s2EyedropperPreview
+                            {
+                                eyedropperLoupeHUD(color: preview)
+                                    .position(x: loupePos.x, y: max(42, loupePos.y - 52))
+                                    .allowsHitTesting(false)
+                            }
                         }
+                        .allowsHitTesting(false)
                     }
                     .aspectRatio(canvasAspectRatio, contentMode: .fit)
                     .overlay {
@@ -710,6 +1188,34 @@ public struct MangaCanvasStageView: View {
                     floatingReferenceWindow
                         .offset(refWindowOffset)
                 }
+
+                // Bottom-Right Floating Canvas Navigation D-Pad (Left/Right/Up/Down Pan + Center Reset)
+                VStack {
+                    Spacer()
+                    HStack(alignment: .bottom) {
+                        // Bottom-Left status & gesture tip badge
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(controller.s2ActiveColor.swiftUIColor)
+                                .frame(width: 12, height: 12)
+                                .overlay(Circle().strokeBorder(Color.white, lineWidth: 1))
+                            Text(statusLine)
+                                .font(.caption2.monospaced())
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(SuiteColorTokens.mangaPanel.opacity(0.88))
+                        .clipShape(Capsule())
+                        .overlay(Capsule().strokeBorder(Color.white.opacity(0.15), lineWidth: 1))
+
+                        Spacer()
+
+                        floatingCanvasPanControlPad
+                    }
+                    .padding(12)
+                }
             }
             .simultaneousGesture(
                 MagnificationGesture()
@@ -724,6 +1230,117 @@ public struct MangaCanvasStageView: View {
             )
         }
         .clipped()
+    }
+
+    // MARK: - Fix #5: High-Contrast Eyedropper Loupe HUD
+
+    private func eyedropperLoupeHUD(color: PersistedRGBA) -> some View {
+        VStack(spacing: 3) {
+            ZStack {
+                Circle()
+                    .fill(color.swiftUIColor)
+                    .frame(width: 54, height: 54)
+                Circle()
+                    .strokeBorder(Color.white, lineWidth: 3)
+                    .frame(width: 54, height: 54)
+                Circle()
+                    .strokeBorder(Color.black.opacity(0.6), lineWidth: 1)
+                    .frame(width: 56, height: 56)
+                Image(systemName: "plus")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(Int(color.r) + Int(color.g) + Int(color.b) > 380 ? Color.black : Color.white)
+            }
+            Text(color.hexString)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.black.opacity(0.82))
+                .foregroundStyle(.white)
+                .clipShape(Capsule())
+        }
+        .shadow(color: .black.opacity(0.55), radius: 6, y: 3)
+    }
+
+    // MARK: - Fix #3: Floating On-Canvas Pan & Center Control Pad
+
+    private var floatingCanvasPanControlPad: some View {
+        HStack(spacing: 4) {
+            Button {
+                controller.panCanvas(by: CGSize(width: -70, height: 0))
+            } label: {
+                Image(systemName: "arrow.left")
+                    .font(.caption.bold())
+                    .frame(width: 28, height: 28)
+                    .background(Color.white.opacity(0.12))
+                    .foregroundStyle(.white)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help("画布左移")
+
+            VStack(spacing: 4) {
+                Button {
+                    controller.panCanvas(by: CGSize(width: 0, height: -70))
+                } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.caption.bold())
+                        .frame(width: 28, height: 26)
+                        .background(Color.white.opacity(0.12))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("画布上移")
+
+                Button {
+                    controller.resetViewport()
+                    statusLine = "画布已居中归位 (100%)"
+                } label: {
+                    Text("居中")
+                        .font(.system(size: 9, weight: .bold))
+                        .frame(width: 32, height: 22)
+                        .background(SuiteColorTokens.mangaAccent)
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("重置画布位移与缩放")
+
+                Button {
+                    controller.panCanvas(by: CGSize(width: 0, height: 70))
+                } label: {
+                    Image(systemName: "arrow.down")
+                        .font(.caption.bold())
+                        .frame(width: 28, height: 26)
+                        .background(Color.white.opacity(0.12))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("画布下移")
+            }
+
+            Button {
+                controller.panCanvas(by: CGSize(width: 70, height: 0))
+            } label: {
+                Image(systemName: "arrow.right")
+                    .font(.caption.bold())
+                    .frame(width: 28, height: 28)
+                    .background(Color.white.opacity(0.12))
+                    .foregroundStyle(.white)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help("画布右移")
+        }
+        .padding(6)
+        .background(SuiteColorTokens.mangaPanel.opacity(0.90))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.4), radius: 6, y: 2)
     }
 
     @ViewBuilder
@@ -934,6 +1551,17 @@ public struct MangaCanvasStageView: View {
     }
 
     private func handleCanvasDragChanged(at viewPoint: CGPoint, canvasViewSize: CGSize) {
+        if controller.s2Tool == .handPan {
+            if let prev = panDragPrevViewPt {
+                controller.panCanvas(by: CGSize(
+                    width: viewPoint.x - prev.x,
+                    height: viewPoint.y - prev.y
+                ))
+            }
+            panDragPrevViewPt = viewPoint
+            return
+        }
+
         let mapped = mapViewPointToCanvas(viewPoint, viewSize: canvasViewSize)
         let canvasPt = mapped.canvas
         let normPt = mapped.norm
@@ -941,33 +1569,39 @@ public struct MangaCanvasStageView: View {
         switch controller.s2Tool {
         case .eyedropper:
             eyedropperLoupePos = viewPoint
+            controller.s2EyedropperLoupeNorm = normPt
             if let picked = controller.sampleEyedropper(canvasX: Int(canvasPt.x), canvasY: Int(canvasPt.y)) {
-                statusLine = "Eyedropper: \(picked.hexString)"
+                statusLine = "吸色预览 Eyedropper: \(picked.hexString) (RGB \(picked.r),\(picked.g),\(picked.b))"
             }
             return
 
-        case .bucket, .magicWand, .textBubble, .transform:
+        case .bucket, .magicWand, .textBubble, .transform, .handPan:
             return
 
         case .panelKnife:
             if dragStartNorm == nil {
                 dragStartNorm = normPt
                 shapeStartCanvas = canvasPt
+                controller.s2LiveMarqueeStartNorm = normPt
             }
             dragCurrentNorm = normPt
             shapeEndCanvas = canvasPt
+            controller.s2LiveMarqueeCurrentNorm = normPt
             return
 
         case .rectSelect:
             if dragStartNorm == nil {
                 dragStartNorm = normPt
+                controller.s2LiveMarqueeStartNorm = normPt
             }
             dragCurrentNorm = normPt
+            controller.s2LiveMarqueeCurrentNorm = normPt
             return
 
         case .lasso:
             activeLassoNorm.append(normPt)
             activeLassoCanvas.append(canvasPt)
+            controller.s2LiveLassoNorm = activeLassoNorm
             return
 
         case .brush, .eraser, .smudge, .blur:
@@ -975,9 +1609,11 @@ public struct MangaCanvasStageView: View {
                 if dragStartNorm == nil {
                     dragStartNorm = normPt
                     shapeStartCanvas = canvasPt
+                    controller.s2LiveMarqueeStartNorm = normPt
                 }
                 dragCurrentNorm = normPt
                 shapeEndCanvas = canvasPt
+                controller.s2LiveMarqueeCurrentNorm = normPt
                 return
             }
             break
@@ -1038,13 +1674,28 @@ public struct MangaCanvasStageView: View {
     }
 
     private func handleCanvasDragEnded(at viewPoint: CGPoint, canvasViewSize: CGSize) {
+        if controller.s2Tool == .handPan {
+            panDragPrevViewPt = nil
+            statusLine = "画布已移动 (\(Int(controller.s2PanOffset.width)), \(Int(controller.s2PanOffset.height)))"
+            return
+        }
+
         let mapped = mapViewPointToCanvas(viewPoint, viewSize: canvasViewSize)
         let canvasPt = mapped.canvas
         let normPt = mapped.norm
 
         switch controller.s2Tool {
         case .eyedropper:
+            if let picked = controller.sampleEyedropper(canvasX: Int(canvasPt.x), canvasY: Int(canvasPt.y)) {
+                if controller.s2EyedropperAutoSwitchToBrush {
+                    controller.s2Tool = .brush
+                    statusLine = "已提取颜色 \(picked.hexString) → 自动切回画笔"
+                } else {
+                    statusLine = "已提取颜色 \(picked.hexString)"
+                }
+            }
             eyedropperLoupePos = nil
+            controller.s2EyedropperLoupeNorm = nil
             return
 
         case .bucket:
@@ -1054,7 +1705,7 @@ public struct MangaCanvasStageView: View {
 
         case .magicWand:
             let count = controller.applyMagicWandSelection(canvasX: Int(canvasPt.x), canvasY: Int(canvasPt.y))
-            statusLine = "Magic Wand selected \(count) px."
+            statusLine = "魔棒已选中 \(count) px · 请在上方选区栏进行填充、清除或扩缩"
             return
 
         case .textBubble:
@@ -1064,13 +1715,15 @@ public struct MangaCanvasStageView: View {
 
         case .panelKnife:
             if let s = shapeStartCanvas, let e = shapeEndCanvas {
-                let count = controller.slicePanelFrame(from: s, to: e, gutterPx: 14.0)
+                let count = controller.slicePanelFrame(from: s, to: e, gutterPx: Float(controller.s2PanelGutterPx))
                 statusLine = "Panel Knife sliced frame (\(count) panels)."
             }
             dragStartNorm = nil
             dragCurrentNorm = nil
             shapeStartCanvas = nil
             shapeEndCanvas = nil
+            controller.s2LiveMarqueeStartNorm = nil
+            controller.s2LiveMarqueeCurrentNorm = nil
             return
 
         case .rectSelect:
@@ -1078,20 +1731,22 @@ public struct MangaCanvasStageView: View {
                 let normRect = CGRect(
                     x: min(s.x, e.x),
                     y: min(s.y, e.y),
-                    width: abs(e.x - s.x),
-                    height: abs(e.y - s.y)
+                    width: max(0.01, abs(e.x - s.x)),
+                    height: max(0.01, abs(e.y - s.y))
                 )
                 let canvasRect = CGRect(
                     x: normRect.minX * CGFloat(controller.s2CanvasPixelWidth),
                     y: normRect.minY * CGFloat(controller.s2CanvasPixelHeight),
-                    width: normRect.width * CGFloat(controller.s2CanvasPixelWidth),
-                    height: normRect.height * CGFloat(controller.s2CanvasPixelHeight)
+                    width: max(4.0, normRect.width * CGFloat(controller.s2CanvasPixelWidth)),
+                    height: max(4.0, normRect.height * CGFloat(controller.s2CanvasPixelHeight))
                 )
                 let count = controller.setMarqueeSelection(canvasRect: canvasRect, normRect: normRect)
-                statusLine = "Marquee selected \(count) px."
+                statusLine = "选区已建立 (\(count) px) · 请使用上方选区栏进行填色、清除或调整"
             }
             dragStartNorm = nil
             dragCurrentNorm = nil
+            controller.s2LiveMarqueeStartNorm = nil
+            controller.s2LiveMarqueeCurrentNorm = nil
             return
 
         case .lasso:
@@ -1100,10 +1755,11 @@ public struct MangaCanvasStageView: View {
                     canvasPoints: activeLassoCanvas,
                     normPoints: activeLassoNorm
                 )
-                statusLine = "Lasso selected \(count) px."
+                statusLine = "套索已选中 \(count) px · 请在上方选区栏进行填色、清除或扩缩调整"
             }
             activeLassoCanvas.removeAll()
             activeLassoNorm.removeAll()
+            controller.s2LiveLassoNorm.removeAll()
             return
 
         case .brush:
@@ -1121,6 +1777,8 @@ public struct MangaCanvasStageView: View {
                 dragCurrentNorm = nil
                 shapeStartCanvas = nil
                 shapeEndCanvas = nil
+                controller.s2LiveMarqueeStartNorm = nil
+                controller.s2LiveMarqueeCurrentNorm = nil
                 return
             }
 
@@ -1140,7 +1798,9 @@ public struct MangaCanvasStageView: View {
     }
 
     private func renderLiveShapeOrKnifePreview(in context: inout GraphicsContext, size: CGSize) {
-        guard let s = dragStartNorm, let e = dragCurrentNorm else { return }
+        let sOpt = dragStartNorm ?? controller.s2LiveMarqueeStartNorm
+        let eOpt = dragCurrentNorm ?? controller.s2LiveMarqueeCurrentNorm
+        guard let s = sOpt, let e = eOpt else { return }
         let p0 = CGPoint(x: s.x * size.width, y: s.y * size.height)
         let p1 = CGPoint(x: e.x * size.width, y: e.y * size.height)
 
@@ -1171,10 +1831,12 @@ public struct MangaCanvasStageView: View {
     }
 
     private func renderSelectionOverlay(in context: inout GraphicsContext, size: CGSize) {
-        let dashStyle = StrokeStyle(lineWidth: 1.5, dash: [5, 4])
+        let dashStyle = StrokeStyle(lineWidth: 2.0, dash: [6, 4])
 
-        // Live marquee drag preview
-        if controller.s2Tool == .rectSelect, let s = dragStartNorm, let e = dragCurrentNorm {
+        // Live marquee drag preview (works on both iPadOS UIKit touch & macOS drag)
+        let sOpt = dragStartNorm ?? controller.s2LiveMarqueeStartNorm
+        let eOpt = dragCurrentNorm ?? controller.s2LiveMarqueeCurrentNorm
+        if controller.s2Tool == .rectSelect, let s = sOpt, let e = eOpt {
             let rect = CGRect(
                 x: min(s.x, e.x) * size.width,
                 y: min(s.y, e.y) * size.height,
@@ -1182,24 +1844,27 @@ public struct MangaCanvasStageView: View {
                 height: abs(e.y - s.y) * size.height
             )
             let p = Path(rect)
-            context.stroke(p, with: .color(.black), lineWidth: 2.0)
+            context.fill(p, with: .color(SuiteColorTokens.hubAccent.opacity(0.14)))
+            context.stroke(p, with: .color(.black), lineWidth: 2.5)
             context.stroke(p, with: .color(.white), style: dashStyle)
             return
         }
 
-        // Live lasso drag preview
-        if activeLassoNorm.count >= 2 {
+        // Live lasso drag preview (works on both iPadOS UIKit touch & macOS drag)
+        let liveLasso = !controller.s2LiveLassoNorm.isEmpty ? controller.s2LiveLassoNorm : activeLassoNorm
+        if liveLasso.count >= 2 {
             var p = Path()
-            p.move(to: CGPoint(x: activeLassoNorm[0].x * size.width, y: activeLassoNorm[0].y * size.height))
-            for pt in activeLassoNorm.dropFirst() {
+            p.move(to: CGPoint(x: liveLasso[0].x * size.width, y: liveLasso[0].y * size.height))
+            for pt in liveLasso.dropFirst() {
                 p.addLine(to: CGPoint(x: pt.x * size.width, y: pt.y * size.height))
             }
-            context.stroke(p, with: .color(.black), lineWidth: 2.0)
+            context.fill(p, with: .color(SuiteColorTokens.hubAccent.opacity(0.14)))
+            context.stroke(p, with: .color(.black), lineWidth: 2.5)
             context.stroke(p, with: .color(.white), style: dashStyle)
             return
         }
 
-        // Committed marching-ants selection
+        // Committed marching-ants selection with subtle cyan highlight tint
         if let rectNorm = controller.s2SelectionRectNorm {
             let rect = CGRect(
                 x: rectNorm.minX * size.width,
@@ -1208,8 +1873,9 @@ public struct MangaCanvasStageView: View {
                 height: rectNorm.height * size.height
             )
             let p = Path(rect)
-            context.stroke(p, with: .color(.black.opacity(0.85)), lineWidth: 2.0)
-            context.stroke(p, with: .color(.white), style: dashStyle)
+            context.fill(p, with: .color(SuiteColorTokens.hubAccent.opacity(0.10)))
+            context.stroke(p, with: .color(.black.opacity(0.85)), lineWidth: 2.5)
+            context.stroke(p, with: .color(SuiteColorTokens.hubAccent), style: dashStyle)
         } else if controller.s2SelectionLassoNorm.count >= 3 {
             var p = Path()
             let pts = controller.s2SelectionLassoNorm
@@ -1218,8 +1884,9 @@ public struct MangaCanvasStageView: View {
                 p.addLine(to: CGPoint(x: pt.x * size.width, y: pt.y * size.height))
             }
             p.closeSubpath()
-            context.stroke(p, with: .color(.black.opacity(0.85)), lineWidth: 2.0)
-            context.stroke(p, with: .color(.white), style: dashStyle)
+            context.fill(p, with: .color(SuiteColorTokens.hubAccent.opacity(0.10)))
+            context.stroke(p, with: .color(.black.opacity(0.85)), lineWidth: 2.5)
+            context.stroke(p, with: .color(SuiteColorTokens.hubAccent), style: dashStyle)
         }
     }
 

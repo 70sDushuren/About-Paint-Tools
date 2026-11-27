@@ -68,7 +68,7 @@ public enum ApplePencilInputAdapter {
 /// - Hardware `force` (pressure), `altitudeAngle` (tilt), and `rollAngle` (barrel roll).
 /// - `UIPencilInteraction`: Double-Tap (Brush ↔ Eraser) & Apple Pencil Pro Squeeze (toggle Drawer).
 /// - Built-in Palm Rejection + `Apple Pencil Only` mode (finger pans canvas while Pencil draws).
-/// - Native 2-finger tap Undo & 3-finger tap Redo gestures.
+/// - Always-on 2-finger drag canvas pan + 2-finger tap Undo & 3-finger tap Redo gestures.
 public struct ApplePencilCanvasOverlayView: UIViewRepresentable {
     public let controller: StudioWorkspaceController
     public let presetHardness: Float
@@ -102,7 +102,7 @@ public struct ApplePencilCanvasOverlayView: UIViewRepresentable {
 }
 
 @MainActor
-public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDelegate {
+public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDelegate, UIGestureRecognizerDelegate {
     public weak var controller: StudioWorkspaceController?
     public var presetHardness: Float = 0.90
     public var onStatusUpdate: ((String) -> Void)?
@@ -116,6 +116,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
     private var lassoCanvasPts: [CGPoint] = []
     private var lassoNormPts: [CGPoint] = []
     private var fingerPanPrevLocation: CGPoint?
+    private var twoFingerPanBaseOffset: CGSize?
     private var lastToolBeforeEraser: S2DrawingToolKind = .brush
 
     public override init(frame: CGRect) {
@@ -133,6 +134,16 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         pencilInteraction.delegate = self
         addInteraction(pencilInteraction)
 
+        // Two-finger pan gesture so the user can always pan left/right/up/down with two fingers
+        let twoFingerPan = UIPanGestureRecognizer(target: self, action: #selector(handleTwoFingerPan(_:)))
+        twoFingerPan.minimumNumberOfTouches = 2
+        twoFingerPan.maximumNumberOfTouches = 2
+        twoFingerPan.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+        twoFingerPan.delaysTouchesBegan = false
+        twoFingerPan.cancelsTouchesInView = true
+        twoFingerPan.delegate = self
+        addGestureRecognizer(twoFingerPan)
+
         let twoFingerUndo = UITapGestureRecognizer(target: self, action: #selector(handleTwoFingerTapUndo))
         twoFingerUndo.numberOfTouchesRequired = 2
         twoFingerUndo.delaysTouchesBegan = false
@@ -144,6 +155,33 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         threeFingerRedo.delaysTouchesBegan = false
         threeFingerRedo.cancelsTouchesInView = false
         addGestureRecognizer(threeFingerRedo)
+    }
+
+    public func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+        true
+    }
+
+    @objc private func handleTwoFingerPan(_ recognizer: UIPanGestureRecognizer) {
+        guard let ctrl = controller else { return }
+        let translation = recognizer.translation(in: superview ?? self)
+        switch recognizer.state {
+        case .began:
+            twoFingerPanBaseOffset = ctrl.s2PanOffset
+            resetTransientStrokeState()
+        case .changed:
+            let base = twoFingerPanBaseOffset ?? ctrl.s2PanOffset
+            ctrl.s2PanOffset = CGSize(
+                width: base.width + translation.x,
+                height: base.height + translation.y
+            )
+        case .ended, .cancelled, .failed:
+            twoFingerPanBaseOffset = nil
+        default:
+            break
+        }
     }
 
     @objc private func handleTwoFingerTapUndo() {
@@ -194,6 +232,13 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
 
     public override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let ctrl = controller else { return }
+        // If two or more finger touches are down, treat as multi-touch pan/zoom
+        let allTouches = event?.allTouches ?? touches
+        if allTouches.count >= 2 && !allTouches.contains(where: { $0.type == .pencil }) {
+            resetTransientStrokeState()
+            return
+        }
+
         // Prefer Apple Pencil over finger touches when both contact simultaneously
         let candidate = touches.first(where: { $0.type == .pencil }) ?? touches.first
         guard let touch = candidate else { return }
@@ -203,9 +248,10 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
             return
         }
 
-        // Apple Pencil Only mode: finger pans canvas smoothly while Apple Pencil draws!
-        if ctrl.s2ApplePencilOnlyDraw && touch.type != .pencil {
-            fingerPanPrevLocation = touch.location(in: superview)
+        // Hand Pan tool OR Apple Pencil Only mode (finger pans canvas smoothly while Apple Pencil draws)
+        if ctrl.s2Tool == .handPan || (ctrl.s2ApplePencilOnlyDraw && touch.type != .pencil) {
+            fingerPanPrevLocation = touch.location(in: superview ?? self)
+            activeTouch = touch
             return
         }
 
@@ -214,8 +260,9 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
 
         switch ctrl.s2Tool {
         case .eyedropper:
+            ctrl.s2EyedropperLoupeNorm = mapped.norm
             if let picked = ctrl.sampleEyedropper(canvasX: Int(mapped.canvas.x), canvasY: Int(mapped.canvas.y)) {
-                onStatusUpdate?("Eyedropper: \(picked.hexString)")
+                onStatusUpdate?("吸色成功 Eyedropper: \(picked.hexString) (RGB \(picked.r),\(picked.g),\(picked.b))")
             }
         case .bucket, .magicWand, .textBubble, .transform:
             dragStartCanvasPt = mapped.canvas
@@ -223,13 +270,18 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         case .rectSelect, .panelKnife:
             dragStartCanvasPt = mapped.canvas
             dragStartNormPt = mapped.norm
+            ctrl.s2LiveMarqueeStartNorm = mapped.norm
+            ctrl.s2LiveMarqueeCurrentNorm = mapped.norm
         case .lasso:
             lassoCanvasPts = [mapped.canvas]
             lassoNormPts = [mapped.norm]
+            ctrl.s2LiveLassoNorm = lassoNormPts
         case .brush, .eraser, .smudge, .blur:
             if ctrl.s2Tool == .brush && ctrl.s2ShapeAssist != .freehand {
                 dragStartCanvasPt = mapped.canvas
                 dragStartNormPt = mapped.norm
+                ctrl.s2LiveMarqueeStartNorm = mapped.norm
+                ctrl.s2LiveMarqueeCurrentNorm = mapped.norm
                 return
             }
             if let layer = ctrl.selectedCelLayer, !layer.visible {
@@ -250,9 +302,9 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         guard let ctrl = controller else { return }
 
         if let prevPan = fingerPanPrevLocation,
-           let finger = touches.first(where: { $0.type != .pencil })
+           let panTouch = activeTouch ?? touches.first
         {
-            let cur = finger.location(in: superview)
+            let cur = panTouch.location(in: superview ?? self)
             ctrl.s2PanOffset = CGSize(
                 width: ctrl.s2PanOffset.width + (cur.x - prevPan.x),
                 height: ctrl.s2PanOffset.height + (cur.y - prevPan.y)
@@ -266,14 +318,19 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
 
         switch ctrl.s2Tool {
         case .eyedropper:
+            ctrl.s2EyedropperLoupeNorm = mapped.norm
             if let picked = ctrl.sampleEyedropper(canvasX: Int(mapped.canvas.x), canvasY: Int(mapped.canvas.y)) {
-                onStatusUpdate?("Eyedropper: \(picked.hexString)")
+                onStatusUpdate?("吸色预览 Eyedropper: \(picked.hexString) (RGB \(picked.r),\(picked.g),\(picked.b))")
             }
+        case .rectSelect, .panelKnife:
+            ctrl.s2LiveMarqueeCurrentNorm = mapped.norm
         case .lasso:
             lassoCanvasPts.append(mapped.canvas)
             lassoNormPts.append(mapped.norm)
+            ctrl.s2LiveLassoNorm = lassoNormPts
         case .brush, .eraser, .smudge, .blur:
             if ctrl.s2Tool == .brush && ctrl.s2ShapeAssist != .freehand {
+                ctrl.s2LiveMarqueeCurrentNorm = mapped.norm
                 return
             }
             processCoalescedStrokeSamples(touch: touch, event: event, ctrl: ctrl)
@@ -283,49 +340,71 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
     }
 
     public override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        fingerPanPrevLocation = nil
+        if fingerPanPrevLocation != nil {
+            fingerPanPrevLocation = nil
+            activeTouch = nil
+            if let ctrl = controller {
+                onStatusUpdate?("Canvas panned (\(Int(ctrl.s2PanOffset.width)), \(Int(ctrl.s2PanOffset.height)))")
+            }
+            return
+        }
         guard let ctrl = controller, let touch = activeTouch, touches.contains(touch) else { return }
         let mapped = mapToCanvas(touch.preciseLocation(in: self))
 
         switch ctrl.s2Tool {
+        case .eyedropper:
+            if let picked = ctrl.sampleEyedropper(canvasX: Int(mapped.canvas.x), canvasY: Int(mapped.canvas.y)) {
+                if ctrl.s2EyedropperAutoSwitchToBrush {
+                    ctrl.s2Tool = .brush
+                    onStatusUpdate?("已提取颜色 \(picked.hexString) → 自动切回画笔 Brush")
+                } else {
+                    onStatusUpdate?("已提取颜色 Picked \(picked.hexString)")
+                }
+            }
+            ctrl.s2EyedropperLoupeNorm = nil
         case .bucket:
             let filled = ctrl.applyBucketFill(canvasX: Int(mapped.canvas.x), canvasY: Int(mapped.canvas.y))
             onStatusUpdate?("Close-Gap Bucket filled \(filled) px")
         case .magicWand:
             let count = ctrl.applyMagicWandSelection(canvasX: Int(mapped.canvas.x), canvasY: Int(mapped.canvas.y))
-            onStatusUpdate?("Magic Wand selected \(count) px")
+            onStatusUpdate?("Magic Wand selected \(count) px · 可在上方选区栏填充/擦除/扩缩")
         case .textBubble:
             ctrl.addSpeechBubble(normX: Double(mapped.norm.x), normY: Double(mapped.norm.y))
             onStatusUpdate?(ctrl.lastStatusBanner)
         case .panelKnife:
             if let start = dragStartCanvasPt {
-                let count = ctrl.slicePanelFrame(from: start, to: mapped.canvas, gutterPx: 14.0)
+                let count = ctrl.slicePanelFrame(from: start, to: mapped.canvas, gutterPx: Float(ctrl.s2PanelGutterPx))
                 onStatusUpdate?("Panel Knife sliced frame (\(count) panels)")
             }
+            ctrl.s2LiveMarqueeStartNorm = nil
+            ctrl.s2LiveMarqueeCurrentNorm = nil
         case .rectSelect:
             if let sNorm = dragStartNormPt, let sCanvas = dragStartCanvasPt {
                 let normRect = CGRect(
                     x: min(sNorm.x, mapped.norm.x),
                     y: min(sNorm.y, mapped.norm.y),
-                    width: abs(mapped.norm.x - sNorm.x),
-                    height: abs(mapped.norm.y - sNorm.y)
+                    width: max(0.01, abs(mapped.norm.x - sNorm.x)),
+                    height: max(0.01, abs(mapped.norm.y - sNorm.y))
                 )
                 let canvasRect = CGRect(
                     x: min(sCanvas.x, mapped.canvas.x),
                     y: min(sCanvas.y, mapped.canvas.y),
-                    width: abs(mapped.canvas.x - sCanvas.x),
-                    height: abs(mapped.canvas.y - sCanvas.y)
+                    width: max(4.0, abs(mapped.canvas.x - sCanvas.x)),
+                    height: max(4.0, abs(mapped.canvas.y - sCanvas.y))
                 )
                 let count = ctrl.setMarqueeSelection(canvasRect: canvasRect, normRect: normRect)
-                onStatusUpdate?("Marquee selected \(count) px")
+                onStatusUpdate?("选区已建立 (\(count) px) · 请使用选区操作栏填充/擦除/调整")
             }
+            ctrl.s2LiveMarqueeStartNorm = nil
+            ctrl.s2LiveMarqueeCurrentNorm = nil
         case .lasso:
             if lassoCanvasPts.count >= 3 {
                 let count = ctrl.setLassoSelection(canvasPoints: lassoCanvasPts, normPoints: lassoNormPts)
-                onStatusUpdate?("Lasso selected \(count) px")
+                onStatusUpdate?("套索已选中 \(count) px · 请在上方/底部选区栏进行填充、清除或扩缩调整")
             }
             lassoCanvasPts.removeAll()
             lassoNormPts.removeAll()
+            ctrl.s2LiveLassoNorm.removeAll()
         case .brush, .eraser, .smudge, .blur:
             if ctrl.s2Tool == .brush && ctrl.s2ShapeAssist != .freehand, let start = dragStartCanvasPt {
                 _ = ctrl.drawRasterShape(
@@ -336,6 +415,8 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
                     hardness: presetHardness,
                     opacity: Float(ctrl.s2BrushOpacity)
                 )
+                ctrl.s2LiveMarqueeStartNorm = nil
+                ctrl.s2LiveMarqueeCurrentNorm = nil
                 onStatusUpdate?(ctrl.lastStatusBanner)
             } else {
                 processCoalescedStrokeSamples(touch: touch, event: event, ctrl: ctrl)
@@ -363,6 +444,12 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         stabilizedPt = nil
         dragStartCanvasPt = nil
         dragStartNormPt = nil
+        lassoCanvasPts.removeAll()
+        lassoNormPts.removeAll()
+        controller?.s2LiveLassoNorm.removeAll()
+        controller?.s2LiveMarqueeStartNorm = nil
+        controller?.s2LiveMarqueeCurrentNorm = nil
+        controller?.s2EyedropperLoupeNorm = nil
     }
 
     private func processCoalescedStrokeSamples(touch: UITouch, event: UIEvent?, ctrl: StudioWorkspaceController) {

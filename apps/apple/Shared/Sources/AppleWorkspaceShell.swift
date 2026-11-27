@@ -43,6 +43,8 @@ public struct AppleWorkspaceState: Sendable {
 /// across all 5 languages (`en`, `zh-Hans`, `zh-Hant`, `yue-Hant`, `es`) and window widths.
 public struct AppleWorkspaceShellView: View {
     @ObservedObject public var controller: StudioWorkspaceController
+    @State private var dualSplitNovelFraction: CGFloat = 0.42
+    @State private var dualSwapSides: Bool = false
 
     public init(controller: StudioWorkspaceController) {
         self.controller = controller
@@ -60,11 +62,12 @@ public struct AppleWorkspaceShellView: View {
     public var body: some View {
         GeometryReader { proxy in
             let width = proxy.size.width
-            let layout = resolveLayout(width: Float(width), height: Float(proxy.size.height))
+            let height = proxy.size.height
+            let layout = resolveLayout(width: Float(width), height: Float(height))
             VStack(spacing: 0) {
                 topBar(layout: layout, availableWidth: width)
                 Divider()
-                mainContent(layout: layout)
+                mainContent(layout: layout, size: proxy.size)
                 Divider()
                 bottomStatusBar(layout: layout)
             }
@@ -200,6 +203,7 @@ public struct AppleWorkspaceShellView: View {
             suitePillButton(.hub, label: compact ? "S1" : "S1 Hub")
             suitePillButton(.manga, label: compact ? "S2" : "S2 Manga")
             suitePillButton(.novel, label: compact ? "S3" : "S3 Novel")
+            dualStudioPillButton(compact: compact)
         }
         .padding(3)
         .background(Color.secondary.opacity(0.14))
@@ -225,11 +229,50 @@ public struct AppleWorkspaceShellView: View {
         .buttonStyle(.plain)
     }
 
+    private func dualStudioPillButton(compact: Bool) -> some View {
+        let selected = controller.workspaceMode == .dualNovelManga
+        return Button {
+            controller.toggleDualNovelMangaStudio()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "rectangle.split.2x1.fill")
+                    .font(.caption2)
+                Text(compact ? "S2+S3" : "S2+S3 同屏双创")
+                    .font(.caption.weight(selected ? .bold : .medium))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(
+                selected
+                    ? LinearGradient(
+                        colors: [SuiteColorTokens.novelAccent, SuiteColorTokens.mangaAccent],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                    : LinearGradient(
+                        colors: [Color.clear, Color.clear],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+            )
+            .foregroundStyle(selected ? .white : (isDarkHeader ? Color.white.opacity(0.88) : .primary))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .fixedSize(horizontal: true, vertical: false)
+        }
+        .buttonStyle(.plain)
+        .help("同时打开小说文稿与漫画画布 (Dual Novel + Manga Split Studio)")
+    }
+
     private var suiteAppMenuFallback: some View {
         Menu {
             Button("S1 Hub") { controller.switchSuiteApp(.hub) }
             Button("S2 Manga") { controller.switchSuiteApp(.manga) }
             Button("S3 Novel") { controller.switchSuiteApp(.novel) }
+            Divider()
+            Button("S2+S3 同屏双创 (Novel + Canvas)") {
+                controller.toggleDualNovelMangaStudio()
+            }
         } label: {
             Text("\(suiteBadgeCode) ▾")
                 .font(.caption.bold())
@@ -248,6 +291,9 @@ public struct AppleWorkspaceShellView: View {
             ForEach(StudioWorkspaceMode.allCases) { mode in
                 Button {
                     controller.workspaceMode = mode
+                    if mode == .dualNovelManga {
+                        controller.activeSuiteApp = .manga
+                    }
                 } label: {
                     let title = localizedCore(mode.rawValue)
                     Text(controller.workspaceMode == mode ? "✓ \(title)" : title)
@@ -271,23 +317,67 @@ public struct AppleWorkspaceShellView: View {
         .fixedSize(horizontal: true, vertical: false)
     }
 
-    // MARK: - Main Adaptive Tri-App Stage
+    // MARK: - Main Adaptive Tri-App Stage (Supports Simultaneous Novel + Manga Canvas Split!)
 
     @ViewBuilder
-    private func mainContent(layout: WorkspaceLayoutHintKind) -> some View {
-        if controller.workspaceMode == .dualNovelManga && layout != .singlePaneCompact {
-            HStack(spacing: max(controller.hingeAvoidanceWidthPt, 1)) {
-                NovelStudioView(
-                    controller: controller,
-                    layout: .singlePaneCompact
-                )
-                .frame(minWidth: 320, maxWidth: .infinity)
+    private func mainContent(layout: WorkspaceLayoutHintKind, size: CGSize) -> some View {
+        if controller.workspaceMode == .dualNovelManga {
+            VStack(spacing: 0) {
+                dualStudioControlStrip
+                Divider()
+                if size.width >= 640 {
+                    // Landscape or iPad Portrait side-by-side split
+                    let novelWidth = max(260, min(size.width - 360, size.width * dualSplitNovelFraction))
+                    HStack(spacing: 0) {
+                        if !dualSwapSides {
+                            NovelStudioView(
+                                controller: controller,
+                                layout: .singlePaneCompact
+                            )
+                            .frame(width: novelWidth)
 
-                MangaCanvasStageView(
-                    controller: controller,
-                    layout: .singlePaneCompact
-                )
-                .frame(minWidth: 420, maxWidth: .infinity)
+                            dualSplitDivider(totalWidth: size.width, isHorizontalSplit: true)
+
+                            MangaCanvasStageView(
+                                controller: controller,
+                                layout: .singlePaneCompact
+                            )
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
+                            MangaCanvasStageView(
+                                controller: controller,
+                                layout: .singlePaneCompact
+                            )
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                            dualSplitDivider(totalWidth: size.width, isHorizontalSplit: true)
+
+                            NovelStudioView(
+                                controller: controller,
+                                layout: .singlePaneCompact
+                            )
+                            .frame(width: novelWidth)
+                        }
+                    }
+                } else {
+                    // Compact narrow width: top/bottom vertical split so both Novel and Canvas stay visible
+                    let novelHeight = max(180, min(size.height - 260, size.height * dualSplitNovelFraction))
+                    VStack(spacing: 0) {
+                        NovelStudioView(
+                            controller: controller,
+                            layout: .singlePaneCompact
+                        )
+                        .frame(height: novelHeight)
+
+                        Divider()
+
+                        MangaCanvasStageView(
+                            controller: controller,
+                            layout: .singlePaneCompact
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
             }
         } else {
             switch controller.activeSuiteApp {
@@ -312,6 +402,86 @@ public struct AppleWorkspaceShellView: View {
                 )
             }
         }
+    }
+
+    private var dualStudioControlStrip: some View {
+        HStack(spacing: 10) {
+            Label("S2+S3 同屏双创模式 (小说文稿 + 漫画画布)", systemImage: "rectangle.split.2x1.fill")
+                .font(.caption.bold())
+                .foregroundStyle(.white)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            HStack(spacing: 6) {
+                Text("比例:")
+                    .font(.caption2)
+                    .foregroundStyle(Color.white.opacity(0.75))
+
+                ForEach([("35:65", 0.35), ("42:58", 0.42), ("50:50", 0.50)], id: \.0) { item in
+                    let active = abs(dualSplitNovelFraction - CGFloat(item.1)) < 0.03
+                    Button(item.0) {
+                        dualSplitNovelFraction = CGFloat(item.1)
+                    }
+                    .font(.caption2.monospaced().bold())
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(active ? SuiteColorTokens.novelAccent : Color.white.opacity(0.12))
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+                    .buttonStyle(.plain)
+                }
+
+                Button {
+                    dualSwapSides.toggle()
+                } label: {
+                    Label("左右互换", systemImage: "arrow.left.arrow.right")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.white.opacity(0.14))
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    controller.switchSuiteApp(.manga)
+                } label: {
+                    Label("仅看画布", systemImage: "paintbrush.pointed.fill")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(SuiteColorTokens.mangaAccent)
+                        .foregroundStyle(.white)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 5)
+        .background(SuiteColorTokens.mangaPanel)
+    }
+
+    private func dualSplitDivider(totalWidth: CGFloat, isHorizontalSplit: Bool) -> some View {
+        ZStack {
+            Rectangle()
+                .fill(SuiteColorTokens.mangaBorder)
+                .frame(width: 8)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.white.opacity(0.45))
+                .frame(width: 3, height: 36)
+        }
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    guard totalWidth > 400 else { return }
+                    let delta = (dualSwapSides ? -value.translation.width : value.translation.width) / totalWidth
+                    dualSplitNovelFraction = min(max(dualSplitNovelFraction + delta * 0.25, 0.28), 0.62)
+                }
+        )
     }
 
     // MARK: - Non-Overlapping Bottom Status Bar (Replaces Floating Canvas Telemetry)
@@ -364,7 +534,7 @@ public struct AppleWorkspaceShellView: View {
     }
 
     private var isDarkHeader: Bool {
-        controller.activeSuiteApp == .manga && controller.workspaceMode != .dualNovelManga
+        controller.activeSuiteApp == .manga || controller.workspaceMode == .dualNovelManga
     }
 
     private var shellChromeBackground: Color {
@@ -380,6 +550,9 @@ public struct AppleWorkspaceShellView: View {
     }
 
     private var suiteBadgeCode: String {
+        if controller.workspaceMode == .dualNovelManga {
+            return "S2+S3"
+        }
         switch controller.activeSuiteApp {
         case .hub: return "S1"
         case .manga: return "S2"
@@ -388,6 +561,9 @@ public struct AppleWorkspaceShellView: View {
     }
 
     private var suiteDisplayTitle: String {
+        if controller.workspaceMode == .dualNovelManga {
+            return "双创同屏 · DracoNib + LitteraCore"
+        }
         switch controller.activeSuiteApp {
         case .hub: return "创想空间 · NoemaDock"
         case .manga: return "雕龙 · DracoNib"
@@ -396,6 +572,9 @@ public struct AppleWorkspaceShellView: View {
     }
 
     private var suiteAccentColor: Color {
+        if controller.workspaceMode == .dualNovelManga {
+            return SuiteColorTokens.novelAccent
+        }
         switch controller.activeSuiteApp {
         case .hub: return SuiteColorTokens.hubAccent
         case .manga: return SuiteColorTokens.mangaAccent
