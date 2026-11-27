@@ -122,8 +122,10 @@ All project documents are maintained in 1:1 mirrored **English** and **Simplifie
 | 08. Tri-App Original UI Design & `vX.Y.Z` Patch Roadmap | [08-tri-app-ui-design-and-patch-roadmap.md](./docs/en/08-tri-app-ui-design-and-patch-roadmap.md) | [08-tri-app-ui-design-and-patch-roadmap.md](./docs/zh-CN/08-tri-app-ui-design-and-patch-roadmap.md) |
 | 09. Apple MacBook Pro Xcode & Xcode Cloud Guide | [09-apple-xcode-and-cloud-dev-guide.md](./docs/en/09-apple-xcode-and-cloud-dev-guide.md) | [09-apple-xcode-and-cloud-dev-guide.md](./docs/zh-CN/09-apple-xcode-and-cloud-dev-guide.md) |
 | 10. Engineering Philosophy, Strategy, Skills & Living Retrospective | [10-engineering-retrospective-and-playbook.md](./docs/en/10-engineering-retrospective-and-playbook.md) | [10-engineering-retrospective-and-playbook.md](./docs/zh-CN/10-engineering-retrospective-and-playbook.md) |
+| 11. Cloud Agent × Local Xcode Agent Dual-Agent Collaboration Spec | [11-cloud-local-dual-agent-collaboration.md](./docs/en/11-cloud-local-dual-agent-collaboration.md) | [11-cloud-local-dual-agent-collaboration.md](./docs/zh-CN/11-cloud-local-dual-agent-collaboration.md) |
 
-- **Bilingual Side-by-Side Study Edition (中英对照综合学习版)**: [10-engineering-retrospective-and-playbook-bilingual.md](./docs/bilingual/10-engineering-retrospective-and-playbook-bilingual.md) *(with Core Bilingual Engineering Glossary; updated at every `S4` gate)*
+- **Bilingual Side-by-Side Editions (中英并排对照版)**: [Doc 10 Retrospective](./docs/bilingual/10-engineering-retrospective-and-playbook-bilingual.md) · [Doc 11 Cloud × Local Dual-Agent Collaboration](./docs/bilingual/11-cloud-local-dual-agent-collaboration-bilingual.md)
+- **Reusable Dual-Agent Collaboration Skill**: [`skills/cloud-local-dual-agent-collab/SKILL.md`](./skills/cloud-local-dual-agent-collab/SKILL.md) *(shared by Cloud & Local IDE Agents and reusable in future cross-platform projects)*
 - **Interactive HTML UI Demos**: [`S1 NoemaDock`](./docs/demos/s1_hub_ui_demo.html) · [`S2 DracoNib`](./docs/demos/s2_manga_ui_demo.html) · [`S3 LitteraCore`](./docs/demos/s3_novel_ui_demo.html)
 - **Apple Keynote-Compatible Bilingual Decks (14 Slides)**: [English `.pptx`](./docs/presentations/About-Paint-Tools_Overview_and_Plan_en.pptx) ([PDF](./docs/presentations/About-Paint-Tools_Overview_and_Plan_en.pdf)) · [简体中文 `.pptx`](./docs/presentations/About-Paint-Tools_Overview_and_Plan_zh-CN.pptx) ([PDF](./docs/presentations/About-Paint-Tools_Overview_and_Plan_zh-CN.pdf))
 
@@ -136,9 +138,16 @@ About-Paint-Tools/
 ├── LICENSE                      # MIT License
 ├── README.md                    # English project homepage
 ├── README.zh-CN.md              # Simplified Chinese project homepage
+├── skills/
+│   └── cloud-local-dual-agent-collab/SKILL.md  # Reusable Cloud <-> Local IDE Dual-Agent Skill
+├── ops/
+│   ├── cloud-dev-log/           # Cloud-only append-only handoff log (CLOUD_DEV_LOG.md)
+│   ├── local-dev-log/           # Local-only append-only device log (IPAD_MAC_DEV_LOG.md)
+│   └── relay/                   # Autonomous GoNext GitOps orders/ & paired results/
 ├── docs/
-│   ├── en/                      # Canonical English documentation (01–09)
-│   ├── zh-CN/                   # Canonical Simplified Chinese documentation (01–09)
+│   ├── en/                      # Canonical English documentation (01–11)
+│   ├── zh-CN/                   # Canonical Simplified Chinese documentation (01–11)
+│   ├── bilingual/               # Bilingual side-by-side study editions (10–11)
 │   ├── assets/ui-mockups/       # S1/S2/S3 original high-res UI mockups (7 images)
 │   ├── demos/                   # S1/S2/S3 self-contained interactive HTML UI demos (3 files)
 │   └── presentations/           # Bilingual Apple Keynote-compatible decks (.pptx + .pdf)

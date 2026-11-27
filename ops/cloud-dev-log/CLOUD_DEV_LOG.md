@@ -6,6 +6,20 @@
 
 ---
 
+## 2026-11-27 11:35 PST — Formalized Dual-Agent Collaboration Skill (`cloud-local-dual-agent-collab`) & Bilingual Doc 11
+
+- **Base Commit**: Built on top of Local Mac verification commit `74ca465` (48/48 Apple Silicon XCTests PASS + physical iPad Pro 13" M5 deployed!)
+- **FFI Rebuild Required**: **NO** (docs & skill only; no changes to `core/manga-core/` or `apps/apple/` — `git pull --rebase` is sufficient).
+- **Added / Updated Files**:
+  - `skills/cloud-local-dual-agent-collab/SKILL.md` (canonical dual-agent collaboration skill, also registered globally as `cloud-local-dual-agent-collab`)
+  - `docs/zh-CN/11-cloud-local-dual-agent-collaboration.md` (Simplified Chinese spec)
+  - `docs/en/11-cloud-local-dual-agent-collaboration.md` (1:1 English mirror)
+  - `docs/bilingual/11-cloud-local-dual-agent-collaboration-bilingual.md` (Bilingual side-by-side edition + prompt templates + glossary)
+  - `README.md` & `README.zh-CN.md` (indexed Doc 11 and reusable skill)
+- **Note for Local Xcode Agent**: Going forward, follow `skills/cloud-local-dual-agent-collab/SKILL.md` as our shared collaboration baseline (read `CLOUD_DEV_LOG.md` on pull, rebuild XCFramework whenever `build-rust --force` is flagged, keep `LocalSigning.xcconfig` gitignored, append to `IPAD_MAC_DEV_LOG.md`, and push via `make push`).
+
+---
+
 ## 2026-11-27 10:45 PST — `v1.0.0-rc5` Cloud Handoff: Floating Selection Transform, 2-Finger Canvas Rotation, Multi-Canvas Gallery & Photo Import
 
 - **Base Commit**: Built cleanly on top of Local Mac commit `e3eeb98` (`ops/local-dev-log/IPAD_MAC_DEV_LOG.md` Entry #1)

@@ -122,8 +122,10 @@ flowchart TD
 | 08. 三独立工具原创 UI 设计与 `vX.Y.Z` 小步规划 | [08-tri-app-ui-design-and-patch-roadmap.md](./docs/zh-CN/08-tri-app-ui-design-and-patch-roadmap.md) | [08-tri-app-ui-design-and-patch-roadmap.md](./docs/en/08-tri-app-ui-design-and-patch-roadmap.md) |
 | 09. Apple MacBook Pro Xcode 与 Xcode Cloud 开发指南 | [09-apple-xcode-and-cloud-dev-guide.md](./docs/zh-CN/09-apple-xcode-and-cloud-dev-guide.md) | [09-apple-xcode-and-cloud-dev-guide.md](./docs/en/09-apple-xcode-and-cloud-dev-guide.md) |
 | 10. 项目开发思路、工程策略、可复用技能与阶段复盘手册 | [10-engineering-retrospective-and-playbook.md](./docs/zh-CN/10-engineering-retrospective-and-playbook.md) | [10-engineering-retrospective-and-playbook.md](./docs/en/10-engineering-retrospective-and-playbook.md) |
+| 11. 云端 Agent × 端侧 Xcode Agent 双代理协同机制规范 | [11-cloud-local-dual-agent-collaboration.md](./docs/zh-CN/11-cloud-local-dual-agent-collaboration.md) | [11-cloud-local-dual-agent-collaboration.md](./docs/en/11-cloud-local-dual-agent-collaboration.md) |
 
-- **中英对照综合学习版（含核心双语工程术语词表，每轮 `S4` 定期增补）**：[10-engineering-retrospective-and-playbook-bilingual.md](./docs/bilingual/10-engineering-retrospective-and-playbook-bilingual.md)
+- **中英并排对照版（含核心双语工程术语词表）**：[10. 工程复盘与可复用技能](./docs/bilingual/10-engineering-retrospective-and-playbook-bilingual.md) · [11. 云-端双 Agent 协同机制规范](./docs/bilingual/11-cloud-local-dual-agent-collaboration-bilingual.md)
+- **可复用双 Agent 协同技能（Skill）**：[`skills/cloud-local-dual-agent-collab/SKILL.md`](./skills/cloud-local-dual-agent-collab/SKILL.md) *(云端与端侧 Xcode Agent 共享，可直接复用于后续跨平台新项目)*
 - **可交互 HTML UI 设计稿 Demo**：[`S1 创想空间`](./docs/demos/s1_hub_ui_demo.html) · [`S2 雕龙`](./docs/demos/s2_manga_ui_demo.html) · [`S3 文心`](./docs/demos/s3_novel_ui_demo.html)
 - **Apple Keynote 兼容双语汇报文稿（14 页）**：[简体中文 `.pptx`](./docs/presentations/About-Paint-Tools_Overview_and_Plan_zh-CN.pptx)（[PDF](./docs/presentations/About-Paint-Tools_Overview_and_Plan_zh-CN.pdf)） · [English `.pptx`](./docs/presentations/About-Paint-Tools_Overview_and_Plan_en.pptx)（[PDF](./docs/presentations/About-Paint-Tools_Overview_and_Plan_en.pdf)）
 
@@ -136,9 +138,16 @@ About-Paint-Tools/
 ├── LICENSE                      # MIT 开源许可证
 ├── README.md                    # 英文主页（GitHub 默认入口）
 ├── README.zh-CN.md              # 简体中文主页
+├── skills/
+│   └── cloud-local-dual-agent-collab/SKILL.md  # 可复用云-端双 Agent 协同 Skill
+├── ops/
+│   ├── cloud-dev-log/           # 云端专属只写交接日志（CLOUD_DEV_LOG.md）
+│   ├── local-dev-log/           # 端侧专属只写真机日志（IPAD_MAC_DEV_LOG.md）
+│   └── relay/                   # 无人值守 GoNext GitOps 任务单与配对回执
 ├── docs/
-│   ├── zh-CN/                   # 简体中文基准文档（01–09）
-│   ├── en/                      # 英文基准文档（1:1 镜像，01–09）
+│   ├── zh-CN/                   # 简体中文基准文档（01–11）
+│   ├── en/                      # 英文基准文档（1:1 镜像，01–11）
+│   ├── bilingual/               # 中英并排对照版文档（10–11）
 │   ├── assets/ui-mockups/       # S1/S2/S3 原创高清 UI 设计稿（7 张）
 │   ├── demos/                   # S1/S2/S3 自包含可交互 HTML UI Demo（3 份）
 │   └── presentations/           # 中英双语 Apple Keynote 兼容汇报文稿（.pptx + .pdf）
