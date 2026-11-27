@@ -1,5 +1,34 @@
 # iPad Pro & Mac Local Device Dev Log
 
+## 2026-11-27 15:05 CST — v1.0.0-rc5+ 顶栏固定 LED 保存指示灯 + 悬浮 Hint、多图层上下顺序调整与 60FPS 零阻塞绘制性能优化 (Physical iPad Pro 13" M5)
+
+- **测试设备**：iPad Pro 13" (M5) (`iPad (103)` via USB-C 真机部署启动)
+- **修复问题清单**：
+  1. **第一行顶栏固定尺寸 LED 保存状态灯 + 悬浮 Hint 提示 (`Fixed-Position Top Bar Save LED Indicator & Floating Hint Toast`)**：
+     - 将 `AppleWorkspaceShell.swift` 顶栏原本随 `"Saved HH:mm:ss"` / `"Unsaved…"` 文本长度变化导致整行控件左右跳动的文字胶囊，替换为严格固定尺寸 (`30×26pt`) 的 **LED 状态呼吸灯胶囊** (`saveStatusLedIndicatorButton`)，同时将语言胶囊与 `?` 提示胶囊固定为 `42×26pt`，确保第一行所有显示项目位置完全固定、互不影响。
+     - 当存在未保存修改 (`hasUnsavedChanges == true`) 时，橙色 LED 呈亮暗交替呼吸闪烁；已保存时呈常亮翠绿色。点击 LED（或开启 `?` Hint 模式）时，在顶栏右下方以独立悬浮层 (`floatingSaveStatusHintToast`, `.zIndex(99)`) 展示详细保存状态并立即执行保存，2.4 秒后自动渐隐，完全不挤压第一行布局。
+  2. **多图层上下调整位置与堆叠次序 (`Multi-Layer Stack Reordering Up / Down`)**：
+     - 在 `CelLayerDrawerView.swift` 顶部工具栏新增专用的 **上移一层 (`arrow.up`)** 与 **下移一层 (`arrow.down`)** 快捷按钮，并增加直观的 `"堆叠次序 (上层遮挡下层) · 上移 ▲ / 下移 ▼"` 说明栏。
+     - 为每个图层行标注 `#1..#N` 层级序号徽标，将图层行右侧的上下移动按钮放大为适合 iPad 触控的 `24×26pt` 并排独立胶囊按钮（高亮当前可移动方向），同时支持长按上下文菜单 (`.contextMenu`) 一键上移、下移、复制、清空或删除图层，并与 Rust `LayerStack` 及单步 Undo/Redo 完整同步。
+  3. **彻底消除连续绘制与手势操作中的卡顿、响应延迟叠加与死机 (`60FPS Throttled Compositing, Sub-Pixel Filtering, Zero-Copy Metal CGImage & Idle-Aware Auto-Save`)**：
+     - **60FPS 节流合成与精简 `@Published` 广播**：修复 `ApplePencilInputAdapter.swift` 在 240Hz `touchesMoved` 下每帧无节制执行全画布 `makeCGImage` 及重复写入 6 个 `@Published` 属性导致 SwiftUI 主线程重绘风暴的问题。新增 `refreshCompositeImage(interactive: true)`（限制合成频率不高于 60FPS `16ms` 并带尾帧补齐）及 `0.45px` 亚像素冗余采样过滤。
+     - **零拷贝 Metal `CGImage` 上传**：在 `MangaCoreBridge.swift` 中缓存静态 `sRGB` 色彩空间，并对不透明背景合成图采用 `CGImageAlphaInfo.noneSkipLast | CGBitmapInfo.byteOrder32Big` + `.interpolation(.low)`，消除 iPadOS CoreAnimation 每帧在主线程通过 CPU 执行 `vImagePremultiplyData_RGBA8888` 软件预乘的开销。
+     - **交互感知空闲自动保存**：移除高频滑杆/手势属性（`s2BrushSize`、`s2BrushOpacity`、`s2StabilizerPx`、`s2ViewportZoom`、`s2PanOffset`、`s2RotationDeg`）上的 `didSet { scheduleAutoSave() }`，引入 `isCanvasInteractionActive` 标志位并将自动保存防抖设为 `3.2s` 且仅在非交互空闲时触发（跳过后台自动保存时的 PNG 缩略图重编码），彻底避免落笔中途主线程同步写盘 (`fsync`) 造成的等待时间叠加与假死。
+- **验证结果**：
+  - `MangaStudio-macOS-Tests` 全量 **52 项单元测试 100% 通过 (`0 failures`)**，含新增的 `testMultiLayerStackOrderMoveUpDownAndThrottledInteractiveComposite`。
+  - 已通过 `devicectl` 安装并启动至物理 `iPad (103)` (`org.aboutpainttools.mangastudio.ipad`)。
+- **涉及修改的文件清单**：
+  - `apps/apple/Shared/Sources/AppleWorkspaceShell.swift`
+  - `apps/apple/Shared/Sources/CelLayerDrawerView.swift`
+  - `apps/apple/Shared/Sources/MangaCoreBridge.swift`
+  - `apps/apple/Shared/Sources/StudioWorkspaceController.swift`
+  - `apps/apple/Shared/Sources/MangaCanvasStageView.swift`
+  - `apps/apple/iPadOS/ApplePencilInputAdapter.swift`
+  - `apps/apple/Shared/Tests/MangaStudioV100Rc5IpadTests.swift`
+  - `ops/local-dev-log/IPAD_MAC_DEV_LOG.md`
+
+---
+
 ## 2026-11-27 14:30 CST — v1.0.0-rc5+ iPadOS 笔刷/橡皮尺寸可视化、图层删除像素清理与 Undo/Redo 同步修订 (Physical iPad Pro 13" M5)
 
 - **测试设备**：iPad Pro 13" (M5) (`iPad (103)` via USB-C 真机部署启动 `pid: 1207`)

@@ -109,6 +109,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
 
     private var activeTouch: UITouch?
     private var hasOpenedStrokeUndoCheckpoint: Bool = false
+    private var hasStampedInitialContact: Bool = false
     private var lastCanvasPt: CGPoint?
     private var anchorCanvasPt: CGPoint?
     private var stabilizedPt: CGPoint?
@@ -190,6 +191,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         let translation = recognizer.translation(in: superview ?? self)
         switch recognizer.state {
         case .began:
+            ctrl.isCanvasInteractionActive = true
             twoFingerPanBaseOffset = ctrl.s2PanOffset
             abortTentativeFingerStrokeIfNeeded()
         case .changed:
@@ -200,6 +202,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
             )
         case .ended, .cancelled, .failed:
             twoFingerPanBaseOffset = nil
+            ctrl.isCanvasInteractionActive = false
         default:
             break
         }
@@ -209,6 +212,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         guard let ctrl = controller else { return }
         switch recognizer.state {
         case .began:
+            ctrl.isCanvasInteractionActive = true
             twoFingerRotateBaseDeg = ctrl.s2RotationDeg
             abortTentativeFingerStrokeIfNeeded()
         case .changed:
@@ -224,10 +228,13 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
                 finalDeg = target == -180.0 ? 180.0 : target
                 break
             }
-            ctrl.s2RotationDeg = finalDeg
-            onStatusUpdate?("画布旋转 \(Int(finalDeg.rounded()))°")
+            if abs(ctrl.s2RotationDeg - finalDeg) >= 0.15 {
+                ctrl.s2RotationDeg = finalDeg
+            }
         case .ended, .cancelled, .failed:
             twoFingerRotateBaseDeg = nil
+            ctrl.isCanvasInteractionActive = false
+            onStatusUpdate?("画布旋转 \(Int(ctrl.s2RotationDeg.rounded()))°")
         default:
             break
         }
@@ -237,15 +244,19 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         guard let ctrl = controller else { return }
         switch recognizer.state {
         case .began:
+            ctrl.isCanvasInteractionActive = true
             twoFingerPinchBaseZoom = ctrl.s2ViewportZoom
             abortTentativeFingerStrokeIfNeeded()
         case .changed:
             let base = twoFingerPinchBaseZoom ?? ctrl.s2ViewportZoom
             let clamped = min(max(base * Double(recognizer.scale), 0.2), 8.0)
-            ctrl.s2ViewportZoom = clamped
-            onStatusUpdate?("画布缩放 \(Int((clamped * 100.0).rounded()))%")
+            if abs(ctrl.s2ViewportZoom - clamped) >= 0.003 {
+                ctrl.s2ViewportZoom = clamped
+            }
         case .ended, .cancelled, .failed:
             twoFingerPinchBaseZoom = nil
+            ctrl.isCanvasInteractionActive = false
+            onStatusUpdate?("画布缩放 \(Int((ctrl.s2ViewportZoom * 100.0).rounded()))%")
         default:
             break
         }
@@ -305,6 +316,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
             controller?.performUndoStroke()
         }
         hasOpenedStrokeUndoCheckpoint = false
+        hasStampedInitialContact = false
         resetTransientStrokeState()
     }
 
@@ -331,6 +343,8 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         if touch.type != .pencil && touch.majorRadius > 28.0 {
             return
         }
+
+        ctrl.isCanvasInteractionActive = true
 
         // Hand Pan tool OR Apple Pencil Only mode (finger pans canvas smoothly while Apple Pencil draws)
         if ctrl.s2Tool == .handPan || (ctrl.s2ApplePencilOnlyDraw && touch.type != .pencil) {
@@ -375,6 +389,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
             anchorCanvasPt = mapped.canvas
             lastCanvasPt = mapped.canvas
             stabilizedPt = mapped.canvas
+            hasStampedInitialContact = false
             // Apple Pencil commits immediately on contact; finger touches wait until touchesMoved or 1-finger tap end
             // so staggered 2-finger tap Undo / pan / pinch / rotate never push bogus undo checkpoints!
             if touch.type == .pencil {
@@ -416,12 +431,13 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         switch ctrl.s2Tool {
         case .eyedropper:
             ctrl.s2EyedropperLoupeNorm = mapped.norm
-            if let picked = ctrl.sampleEyedropper(canvasX: Int(mapped.canvas.x), canvasY: Int(mapped.canvas.y)) {
-                onStatusUpdate?("吸色预览 Eyedropper: \(picked.hexString) (RGB \(picked.r),\(picked.g),\(picked.b))")
-            }
+            _ = ctrl.sampleEyedropper(canvasX: Int(mapped.canvas.x), canvasY: Int(mapped.canvas.y))
         case .rectSelect, .panelKnife:
             ctrl.s2LiveMarqueeCurrentNorm = mapped.norm
         case .lasso:
+            if let prev = lassoCanvasPts.last, hypot(mapped.canvas.x - prev.x, mapped.canvas.y - prev.y) < 1.5 {
+                return
+            }
             lassoCanvasPts.append(mapped.canvas)
             lassoNormPts.append(mapped.norm)
             ctrl.s2LiveLassoNorm = lassoNormPts
@@ -445,6 +461,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
             fingerPanPrevLocation = nil
             activeTouch = nil
             if let ctrl = controller {
+                ctrl.isCanvasInteractionActive = false
                 onStatusUpdate?("Canvas panned (\(Int(ctrl.s2PanOffset.width)), \(Int(ctrl.s2PanOffset.height)))")
             }
             return
@@ -525,7 +542,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
                     hasOpenedStrokeUndoCheckpoint = true
                 }
                 processCoalescedStrokeSamples(touch: touch, event: event, ctrl: ctrl)
-                ctrl.refreshCompositeImage()
+                ctrl.refreshCompositeImage(interactive: false)
                 ctrl.markDirtyAndScheduleSave()
                 let srcLabel = touch.type == .pencil ? "Apple Pencil Pro" : "Touch"
                 onStatusUpdate?("Committed \(srcLabel) \(ctrl.s2Tool.displayName) (\(ctrl.s2AllocatedTiles) tiles)")
@@ -534,12 +551,15 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
             break
         }
 
+        ctrl.isCanvasInteractionActive = false
         hasOpenedStrokeUndoCheckpoint = false
+        hasStampedInitialContact = false
         resetTransientStrokeState()
     }
 
     public override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         fingerPanPrevLocation = nil
+        controller?.isCanvasInteractionActive = false
         abortTentativeFingerStrokeIfNeeded()
     }
 
@@ -566,6 +586,7 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
         let rope = CGFloat(ctrl.s2StabilizerPx)
         let baseRadius = Float(max(0.75, ctrl.s2BrushSize * 0.5))
         let isPencil = touch.type == .pencil
+        var didModifyPixels = false
 
         for sample in samples {
             let mapped = mapToCanvas(CGPoint(x: CGFloat(sample.x), y: CGFloat(sample.y)))
@@ -588,6 +609,11 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
             stabilizedPt = targetPt
 
             let fromPt = lastCanvasPt ?? targetPt
+            // Skip redundant sub-pixel micro-samples after the initial contact dot so 240Hz queues never accumulate
+            if hasStampedInitialContact, hypot(targetPt.x - fromPt.x, targetPt.y - fromPt.y) < 0.45 {
+                continue
+            }
+
             let anchorPt = anchorCanvasPt ?? targetPt
 
             if isPencil {
@@ -611,9 +637,13 @@ public final class ApplePencilTouchCanvasUIView: UIView, UIPencilInteractionDele
                     opacity: Float(ctrl.s2BrushOpacity)
                 )
             }
+            hasStampedInitialContact = true
+            didModifyPixels = true
             lastCanvasPt = targetPt
         }
-        ctrl.refreshCompositeImage()
+        if didModifyPixels {
+            ctrl.refreshCompositeImage(interactive: true)
+        }
     }
 }
 #endif

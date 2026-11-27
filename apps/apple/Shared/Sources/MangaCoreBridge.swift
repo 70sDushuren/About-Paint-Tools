@@ -1348,29 +1348,35 @@ public final class MangaProjectEngine {
     }
 
     #if canImport(CoreGraphics)
+    private static let cachedSrgbColorSpace: CGColorSpace =
+        CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+
     public func makeCGImage(backdropCode: UInt32) -> CGImage? {
         let w = Int(width)
         let h = Int(height)
         guard w > 0, h > 0 else { return nil }
         let rgba = compositeRGBA(backdropCode: backdropCode)
         guard rgba.count == w * h * 4,
-              let provider = CGDataProvider(data: rgba as CFData),
-              let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)
+              let provider = CGDataProvider(data: rgba as CFData)
         else {
             return nil
         }
-        let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue)
+        // Backdrops 0..2 are 100% opaque (alpha == 255), so .noneSkipLast + .byteOrder32Big
+        // lets iPadOS/macOS CoreAnimation & Metal DMA-upload directly without CPU alpha-premultiply conversion!
+        let bitmapInfo: CGBitmapInfo = backdropCode <= 2
+            ? CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)
+            : CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue)
         return CGImage(
             width: w,
             height: h,
             bitsPerComponent: 8,
             bitsPerPixel: 32,
             bytesPerRow: w * 4,
-            space: colorSpace,
+            space: Self.cachedSrgbColorSpace,
             bitmapInfo: bitmapInfo,
             provider: provider,
             decode: nil,
-            shouldInterpolate: true,
+            shouldInterpolate: false,
             intent: .defaultIntent
         )
     }

@@ -415,14 +415,13 @@ public final class StudioWorkspaceController: ObservableObject {
             if !isRestoring && abs(s2BrushSize - oldValue) >= 0.1 {
                 triggerBrushSizePreviewHUD()
             }
-            scheduleAutoSave()
         }
     }
     @Published public var s2ShowBrushSizePreviewHUD: Bool = false
-    @Published public var s2BrushOpacity: Double = 1.0 { didSet { scheduleAutoSave() } }
+    @Published public var s2BrushOpacity: Double = 1.0
     @Published public var s2ForceFade: Bool = true { didSet { scheduleAutoSave() } }
     @Published public var s2ApplePencilOnlyDraw: Bool = false { didSet { scheduleAutoSave() } }
-    @Published public var s2StabilizerPx: Double = 6.0 { didSet { scheduleAutoSave() } }
+    @Published public var s2StabilizerPx: Double = 6.0
     @Published public var s2BucketCloseGapPx: Int = 3 { didSet { scheduleAutoSave() } }
     @Published public var s2BucketExpandPx: Int = 1 { didSet { scheduleAutoSave() } }
     @Published public var s2BucketTolerance: Int = 24 { didSet { scheduleAutoSave() } }
@@ -430,9 +429,9 @@ public final class StudioWorkspaceController: ObservableObject {
     @Published public var s2ScreentoneLpi: Double = 60.0
     @Published public var s2ScreentoneDensity: Double = 0.28
     @Published public var s2EyedropperAutoSwitchToBrush: Bool = true
-    @Published public var s2ViewportZoom: Double = 1.0 { didSet { scheduleAutoSave() } }
-    @Published public var s2PanOffset: CGSize = .zero { didSet { scheduleAutoSave() } }
-    @Published public var s2RotationDeg: Double = 0.0 { didSet { scheduleAutoSave() } }
+    @Published public var s2ViewportZoom: Double = 1.0
+    @Published public var s2PanOffset: CGSize = .zero
+    @Published public var s2RotationDeg: Double = 0.0
     @Published public var s2MirrorHorizontal: Bool = false { didSet { scheduleAutoSave() } }
     @Published public var s2Backdrop: S2CanvasBackdropKind = .whitePaper { didSet { refreshCompositeImage(); scheduleAutoSave() } }
     @Published public var s2ActiveColor: PersistedRGBA = PersistedRGBA(r: 20, g: 22, b: 28, a: 255) { didSet { scheduleAutoSave() } }
@@ -514,9 +513,15 @@ public final class StudioWorkspaceController: ObservableObject {
         case exportPsd(URL?)
     }
 
+    /// True while a touch stroke or multi-touch gesture is actively in progress on the canvas.
+    /// Prevents background auto-save tasks from performing synchronous disk I/O mid-stroke.
+    public var isCanvasInteractionActive: Bool = false
+
     private let appStateFileUrl: URL
     private var autoSaveTask: Task<Void, Never>?
     private var brushSizePreviewDismissTask: Task<Void, Never>?
+    private var trailingCompositeTask: Task<Void, Never>?
+    private var lastInteractiveCompositeTime: CFAbsoluteTime = 0
     private var isRestoring: Bool = false
     private var swiftUndoLayerStack: [SwiftLayerUndoState] = []
     private var swiftRedoLayerStack: [SwiftLayerUndoState] = []
@@ -617,7 +622,9 @@ public final class StudioWorkspaceController: ObservableObject {
     // MARK: - Shared Menu & UI Actions
 
     public func triggerBrushSizePreviewHUD() {
-        s2ShowBrushSizePreviewHUD = true
+        if !s2ShowBrushSizePreviewHUD {
+            s2ShowBrushSizePreviewHUD = true
+        }
         brushSizePreviewDismissTask?.cancel()
         brushSizePreviewDismissTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 900_000_000)
@@ -849,6 +856,7 @@ public final class StudioWorkspaceController: ObservableObject {
         guard let idx = s2CelLayers.firstIndex(where: { $0.id == id }) else { return }
         let target = up ? idx + 1 : idx - 1
         guard s2CelLayers.indices.contains(target) else { return }
+        let movedName = s2CelLayers[idx].name
         #if canImport(MangaCoreFFI)
         if let proj = rustProject {
             beginRasterUndoCheckpoint()
@@ -856,8 +864,10 @@ public final class StudioWorkspaceController: ObservableObject {
         }
         #endif
         s2CelLayers.swapAt(idx, target)
+        s2SelectedLayerId = id
         refreshCompositeImage()
         markDirtyAndScheduleSave()
+        lastStatusBanner = up ? "已上移图层 '\(movedName)' (#\(target + 1))" : "已下移图层 '\(movedName)' (#\(target + 1))"
     }
 
     public func clearCurrentLayer() {
@@ -1013,18 +1023,58 @@ public final class StudioWorkspaceController: ObservableObject {
 
     // MARK: - v1.0.0-rc3 Real Rust RGBA8 Raster Painting, Bucket, Eyedropper & Selection
 
-    public func refreshCompositeImage() {
+    /// Composites the Rust RGBA8 `LayerStack` into `s2CompositeImage`.
+    /// - Parameter interactive: When `true` (mid-stroke at 120–240Hz), throttles full-canvas `CGImage` generation
+    ///   to at most ~60 FPS (`16ms`) and skips redundant `@Published` broadcasts so main-thread frame queues never back up.
+    public func refreshCompositeImage(interactive: Bool = false) {
         #if canImport(MangaCoreFFI)
-        if let proj = rustProject {
-            s2CanvasPixelWidth = Int(proj.width)
-            s2CanvasPixelHeight = Int(proj.height)
-            s2AllocatedTiles = proj.allocatedTiles
-            s2CanUndoRaster = proj.canUndoSnapshot
-            s2CanRedoRaster = proj.canRedoSnapshot
+        guard let proj = rustProject else { return }
+
+        if interactive {
+            let now = CFAbsoluteTimeGetCurrent()
+            let elapsed = now - lastInteractiveCompositeTime
+            if elapsed < 0.015 {
+                if trailingCompositeTask == nil {
+                    let remainingNs = UInt64(max(0.004, 0.016 - elapsed) * 1_000_000_000)
+                    trailingCompositeTask = Task { @MainActor [weak self] in
+                        try? await Task.sleep(nanoseconds: remainingNs)
+                        guard let self, !Task.isCancelled else { return }
+                        self.trailingCompositeTask = nil
+                        self.lastInteractiveCompositeTime = CFAbsoluteTimeGetCurrent()
+                        #if canImport(CoreGraphics)
+                        if let p = self.rustProject {
+                            self.s2CompositeImage = p.makeCGImage(backdropCode: self.s2Backdrop.rustBackdropCode)
+                        }
+                        #endif
+                    }
+                }
+                return
+            }
+            lastInteractiveCompositeTime = now
             #if canImport(CoreGraphics)
             s2CompositeImage = proj.makeCGImage(backdropCode: s2Backdrop.rustBackdropCode)
             #endif
+            return
         }
+
+        trailingCompositeTask?.cancel()
+        trailingCompositeTask = nil
+        lastInteractiveCompositeTime = CFAbsoluteTimeGetCurrent()
+
+        let w = Int(proj.width)
+        let h = Int(proj.height)
+        let tiles = proj.allocatedTiles
+        let canUndo = proj.canUndoSnapshot
+        let canRedo = proj.canRedoSnapshot
+
+        if s2CanvasPixelWidth != w { s2CanvasPixelWidth = w }
+        if s2CanvasPixelHeight != h { s2CanvasPixelHeight = h }
+        if s2AllocatedTiles != tiles { s2AllocatedTiles = tiles }
+        if s2CanUndoRaster != canUndo { s2CanUndoRaster = canUndo }
+        if s2CanRedoRaster != canRedo { s2CanRedoRaster = canRedo }
+        #if canImport(CoreGraphics)
+        s2CompositeImage = proj.makeCGImage(backdropCode: s2Backdrop.rustBackdropCode)
+        #endif
         #endif
     }
 
@@ -1036,8 +1086,10 @@ public final class StudioWorkspaceController: ObservableObject {
         swiftRedoLayerStack.removeAll()
         #if canImport(MangaCoreFFI)
         rustProject?.pushUndoSnapshot()
-        s2CanUndoRaster = rustProject?.canUndoSnapshot ?? false
-        s2CanRedoRaster = rustProject?.canRedoSnapshot ?? false
+        let canUndo = rustProject?.canUndoSnapshot ?? false
+        let canRedo = rustProject?.canRedoSnapshot ?? false
+        if s2CanUndoRaster != canUndo { s2CanUndoRaster = canUndo }
+        if s2CanRedoRaster != canRedo { s2CanRedoRaster = canRedo }
         #endif
     }
 
@@ -1144,15 +1196,12 @@ public final class StudioWorkspaceController: ObservableObject {
             pickedColor = PersistedRGBA(r: raw.0, g: raw.1, b: raw.2, a: 255)
         }
 
-        // Fallback to composited RGBA buffer so blue-sketch-tinted layers & paper backdrop sample accurately
-        let comp = proj.compositeRGBA(backdropCode: s2Backdrop.rustBackdropCode)
-        let offset = (cy * w + cx) * 4
-        if offset + 3 < comp.count {
-            let cr = comp[offset]
-            let cg = comp[offset + 1]
-            let cb = comp[offset + 2]
-            if pickedColor == nil {
-                pickedColor = PersistedRGBA(r: cr, g: cg, b: cb, a: 255)
+        // Fallback when raw layer stack is transparent or blue-sketch-tinted
+        if pickedColor == nil || s2CelLayers.contains(where: { $0.visible && $0.blueSketchTint }) {
+            let comp = proj.compositeRGBA(backdropCode: s2Backdrop.rustBackdropCode)
+            let offset = (cy * w + cx) * 4
+            if offset + 3 < comp.count {
+                pickedColor = PersistedRGBA(r: comp[offset], g: comp[offset + 1], b: comp[offset + 2], a: 255)
             }
         }
 
@@ -1161,7 +1210,9 @@ public final class StudioWorkspaceController: ObservableObject {
                 ? PersistedRGBA(r: 44, g: 46, b: 52, a: 255)
                 : PersistedRGBA(r: 255, g: 255, b: 255, a: 255)
         )
-        s2EyedropperPreview = color
+        if s2EyedropperPreview != color {
+            s2EyedropperPreview = color
+        }
         setActiveColor(color)
         lastStatusBanner = "Eyedropper picked \(color.hexString) (RGB \(color.r),\(color.g),\(color.b)) at (\(cx), \(cy))"
         return color
@@ -2106,7 +2157,7 @@ public final class StudioWorkspaceController: ObservableObject {
             space: colorSpace,
             bitmapInfo: bitmapInfo
         ) else { return }
-        ctx.interpolationQuality = .medium
+        ctx.interpolationQuality = .low
         ctx.draw(cg, in: CGRect(x: 0, y: 0, width: tw, height: th))
         guard let thumbCg = ctx.makeImage(), let png = encodePngData(from: thumbCg) else { return }
         let thumbUrl = URL(fileURLWithPath: dir).appendingPathComponent(".about-paint-thumb.png")
@@ -2381,25 +2432,40 @@ public final class StudioWorkspaceController: ObservableObject {
 
     // MARK: - 3-Layer Auto-Save & Crash-Safe Restore
 
+    private static let saveTimestampFormatter: DateFormatter = {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "HH:mm:ss"
+        return fmt
+    }()
+
     public func markDirtyAndScheduleSave() {
-        hasUnsavedChanges = true
-        saveStatusBadge = "Unsaved…"
+        if !hasUnsavedChanges {
+            hasUnsavedChanges = true
+        }
+        if saveStatusBadge != "Unsaved…" {
+            saveStatusBadge = "Unsaved…"
+        }
         scheduleAutoSave()
     }
 
     public func scheduleAutoSave() {
         guard !isRestoring else { return }
         autoSaveTask?.cancel()
-        autoSaveTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        autoSaveTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 3_200_000_000)
+            guard let self, !Task.isCancelled else { return }
+            // Never run disk I/O while a stroke or gesture is actively underway
+            while self.isCanvasInteractionActive && !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
             guard !Task.isCancelled else { return }
-            self?.flushAllSync()
+            self.flushAllSync(includeThumbnail: false)
         }
     }
 
     /// Synchronously flushes Layer A (`.mnga` v2 + `novel/prose/<lang>.md`), Layer B (`.about-paint-session.json`),
     /// and Layer C (`app_state.json`) so closing/quitting (`⌘Q`) NEVER loses work.
-    public func flushAllSync() {
+    public func flushAllSync(includeThumbnail: Bool = true) {
         guard !isRestoring else { return }
         autoSaveTask?.cancel()
 
@@ -2423,16 +2489,18 @@ public final class StudioWorkspaceController: ObservableObject {
         // Layer B: Per-project full workspace session snapshot + lightweight Gallery thumbnail
         saveProjectSessionSync(to: activeProjectDir)
         #if canImport(CoreGraphics) && canImport(ImageIO) && canImport(UniformTypeIdentifiers)
-        writeGalleryThumbnailIfPossible(to: activeProjectDir)
+        if includeThumbnail {
+            writeGalleryThumbnailIfPossible(to: activeProjectDir)
+        }
         #endif
 
         // Layer C: Global app state (last opened project + locale + active app)
         saveGlobalAppStateSync()
 
-        hasUnsavedChanges = false
-        let fmt = DateFormatter()
-        fmt.dateFormat = "HH:mm:ss"
-        saveStatusBadge = "Saved \(fmt.string(from: Date()))"
+        if hasUnsavedChanges {
+            hasUnsavedChanges = false
+        }
+        saveStatusBadge = "Saved \(Self.saveTimestampFormatter.string(from: Date()))"
     }
 
     private func projectSessionUrl(for dir: String) -> URL {

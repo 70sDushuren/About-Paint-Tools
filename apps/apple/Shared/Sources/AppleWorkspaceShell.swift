@@ -45,6 +45,9 @@ public struct AppleWorkspaceShellView: View {
     @ObservedObject public var controller: StudioWorkspaceController
     @State private var dualSplitNovelFraction: CGFloat = 0.42
     @State private var dualSwapSides: Bool = false
+    @State private var ledPulsePhase: Bool = false
+    @State private var showSaveHintFloatingToast: Bool = false
+    @State private var saveHintDismissTask: Task<Void, Never>? = nil
 
     public init(controller: StudioWorkspaceController) {
         self.controller = controller
@@ -64,19 +67,35 @@ public struct AppleWorkspaceShellView: View {
             let width = proxy.size.width
             let height = proxy.size.height
             let layout = resolveLayout(width: Float(width), height: Float(height))
-            VStack(spacing: 0) {
-                topBar(layout: layout, availableWidth: width)
-                Divider()
-                mainContent(layout: layout, size: proxy.size)
-                Divider()
-                bottomStatusBar(layout: layout)
+            ZStack(alignment: .topTrailing) {
+                VStack(spacing: 0) {
+                    topBar(layout: layout, availableWidth: width)
+                    Divider()
+                    mainContent(layout: layout, size: proxy.size)
+                    Divider()
+                    bottomStatusBar(layout: layout)
+                }
+                .background(shellChromeBackground)
+
+                // Floating non-layout-shifting save status hint toast (triggered on LED tap or `?` Hint Mode)
+                if showSaveHintFloatingToast || controller.hintModeActive {
+                    floatingSaveStatusHintToast
+                        .padding(.top, 46)
+                        .padding(.trailing, 16)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .zIndex(99)
+                }
             }
-            .background(shellChromeBackground)
             .environment(\.locale, Locale(identifier: controller.activeLocale.bcp47))
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true)) {
+                    ledPulsePhase = true
+                }
+            }
         }
     }
 
-    // MARK: - Responsive Zero-Overlap Unified Top Bar
+    // MARK: - Responsive Zero-Overlap Unified Top Bar (Fixed-Position Items, No Layout Shifting)
 
     private func topBar(layout: WorkspaceLayoutHintKind, availableWidth: CGFloat) -> some View {
         HStack(spacing: 10) {
@@ -130,28 +149,9 @@ public struct AppleWorkspaceShellView: View {
 
             Spacer(minLength: 8)
 
-            // Right utility cluster (strict fixedSize pills so nothing collides)
+            // Right utility cluster (strictly constant width so nothing in the first row EVER shifts!)
             HStack(spacing: 8) {
-                Button {
-                    controller.flushAllSync()
-                } label: {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(controller.hasUnsavedChanges ? Color.orange : Color.green)
-                            .frame(width: 7, height: 7)
-                        Text(controller.saveStatusBadge)
-                            .font(.caption2.monospaced().bold())
-                            .lineLimit(1)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(Color.secondary.opacity(0.16))
-                    .foregroundStyle(isDarkHeader ? .white : .primary)
-                    .clipShape(Capsule())
-                    .fixedSize(horizontal: true, vertical: false)
-                }
-                .buttonStyle(.plain)
-                .help("Save All Work Now (⌘S)")
+                saveStatusLedIndicatorButton
 
                 // Live 5-Language Switcher
                 Menu {
@@ -165,28 +165,26 @@ public struct AppleWorkspaceShellView: View {
                 } label: {
                     Text(controller.activeLocale.shortBadge)
                         .font(.caption.bold())
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 5)
+                        .frame(width: 42, height: 26)
                         .background(Color.secondary.opacity(0.18))
                         .foregroundStyle(isDarkHeader ? .white : .primary)
                         .clipShape(Capsule())
-                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .fixedSize(horizontal: true, vertical: false)
                 .accessibilityLabel("Switch App Language")
 
-                // Global `?` Hint Mode toggle
+                // Global `?` Hint Mode toggle (fixed width so toggling `?` vs `? ON` doesn't shift row items either!)
                 Button {
-                    controller.hintModeActive.toggle()
+                    withAnimation(.easeOut(duration: 0.16)) {
+                        controller.hintModeActive.toggle()
+                    }
                 } label: {
                     Text(controller.hintModeActive ? "? ON" : "?")
                         .font(.caption.bold())
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 5)
+                        .frame(width: 42, height: 26)
                         .background(controller.hintModeActive ? suiteAccentColor : Color.secondary.opacity(0.18))
                         .foregroundStyle(controller.hintModeActive ? .white : (isDarkHeader ? .white : .primary))
                         .clipShape(Capsule())
-                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Toggle Icon Hint Inspection Mode")
@@ -196,6 +194,99 @@ public struct AppleWorkspaceShellView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .background(shellChromeBackground)
+    }
+
+    /// Fixed-width (28×26pt) breathing LED save indicator that NEVER shifts the top bar layout.
+    /// - Unsaved changes: Amber/Orange LED alternates bright & dim with glowing pulse halo.
+    /// - Saved: Steady emerald-green LED.
+    /// - Tapping saves immediately and shows a floating hint toast below the top bar.
+    private var saveStatusLedIndicatorButton: some View {
+        let unsaved = controller.hasUnsavedChanges
+        let ledColor = unsaved ? Color.orange : Color(red: 0.18, green: 0.86, blue: 0.48)
+        let activeOpacity: Double = unsaved ? (ledPulsePhase ? 1.0 : 0.32) : 0.95
+        let haloScale: CGFloat = unsaved ? (ledPulsePhase ? 1.45 : 0.85) : 1.0
+
+        return Button {
+            controller.flushAllSync()
+            triggerFloatingSaveHintToast()
+        } label: {
+            ZStack {
+                Capsule()
+                    .fill(Color.secondary.opacity(0.18))
+                    .frame(width: 30, height: 26)
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(ledColor.opacity(unsaved ? 0.55 : 0.28), lineWidth: 1)
+                    )
+
+                // Outer LED glow halo (breathes bright/dim when unsaved)
+                Circle()
+                    .fill(ledColor.opacity(unsaved ? (ledPulsePhase ? 0.42 : 0.10) : 0.22))
+                    .frame(width: 14, height: 14)
+                    .scaleEffect(haloScale)
+
+                // Core LED diode
+                Circle()
+                    .fill(ledColor.opacity(activeOpacity))
+                    .frame(width: 9, height: 9)
+                    .overlay(
+                        Circle()
+                            .fill(Color.white.opacity(0.65))
+                            .frame(width: 3, height: 3)
+                            .offset(x: -1.5, y: -1.5)
+                    )
+                    .shadow(color: ledColor.opacity(activeOpacity * 0.8), radius: unsaved ? 5 : 3)
+            }
+            .frame(width: 30, height: 26)
+        }
+        .buttonStyle(.plain)
+        .fixedSize(horizontal: true, vertical: false)
+        .help(unsaved ? "有未保存修改 (\(controller.saveStatusBadge)) · 点击立即保存 (⌘S)" : "工作区已同步保存 (\(controller.saveStatusBadge)) · 点击查看/立即保存")
+        .accessibilityLabel(unsaved ? "Unsaved changes LED, tap to save" : "Saved LED, tap to show save status")
+    }
+
+    private var floatingSaveStatusHintToast: some View {
+        let unsaved = controller.hasUnsavedChanges
+        let ledColor = unsaved ? Color.orange : Color(red: 0.18, green: 0.86, blue: 0.48)
+        return HStack(spacing: 7) {
+            Circle()
+                .fill(ledColor)
+                .frame(width: 8, height: 8)
+                .shadow(color: ledColor, radius: 3)
+            Text(unsaved ? "自动保存排队中 · \(controller.saveStatusBadge) (点按 LED 立即保存)" : "已安全保存 · \(controller.saveStatusBadge)")
+                .font(.caption2.monospaced().bold())
+                .foregroundStyle(.white)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.black.opacity(0.84))
+        .clipShape(Capsule())
+        .overlay(
+            Capsule()
+                .strokeBorder(ledColor.opacity(0.55), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.4), radius: 8, y: 3)
+        .onTapGesture {
+            controller.flushAllSync()
+            withAnimation(.easeOut(duration: 0.15)) {
+                showSaveHintFloatingToast = false
+            }
+        }
+    }
+
+    private func triggerFloatingSaveHintToast() {
+        withAnimation(.easeOut(duration: 0.15)) {
+            showSaveHintFloatingToast = true
+        }
+        saveHintDismissTask?.cancel()
+        saveHintDismissTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_200_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.2)) {
+                showSaveHintFloatingToast = false
+            }
+        }
     }
 
     private func suiteAppSegmentedButtons(compact: Bool) -> some View {
@@ -511,7 +602,7 @@ public struct AppleWorkspaceShellView: View {
             }
             .layoutPriority(1)
 
-            Text("CPFF v1.0 · MIT · v1.0.0-rc2")
+            Text("CPFF v1.0 · MIT · v1.0.0-rc5")
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(2)

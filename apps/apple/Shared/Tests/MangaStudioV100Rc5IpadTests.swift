@@ -258,4 +258,56 @@ final class MangaStudioV100Rc5IpadTests: XCTestCase {
         XCTAssertGreaterThan(ctrl.rustProject?.sampleEyedropper(x: 260, y: 260)?.3 ?? 0, 200)
         #endif
     }
+
+    func testMultiLayerStackOrderMoveUpDownAndThrottledInteractiveComposite() throws {
+        #if canImport(MangaCoreFFI)
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MangaV100Rc5LayerOrder-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        XCTAssertTrue(MangaHubProjectBootstrap.initProject(parentDir: tmp.path, folderName: "OrderPrj", author: "M5Pro"))
+        let prjDir = tmp.appendingPathComponent("OrderPrj").path
+        let appStateUrl = tmp.appendingPathComponent("app_state.json")
+
+        let ctrl = StudioWorkspaceController(appStateFileUrl: appStateUrl, initialProjectDir: prjDir)
+        XCTAssertEqual(ctrl.s2CelLayers.count, 3)
+
+        // Layer 1 (index 1, middle): Paint bright RED at (180, 180)
+        let midId = ctrl.s2CelLayers[1].id
+        ctrl.s2SelectedLayerId = midId
+        ctrl.setActiveColor(PersistedRGBA(r: 245, g: 25, b: 25, a: 255))
+        _ = ctrl.applyRasterSegment(from: CGPoint(x: 170, y: 180), to: CGPoint(x: 190, y: 180), radiusPx: 14, hardness: 1.0, opacity: 1.0)
+
+        // Layer 2 (index 2, top): Set blendMode to .normal & opacity 1.0, and paint bright BLUE at the exact same spot (180, 180)
+        let topId = ctrl.s2CelLayers[2].id
+        ctrl.s2CelLayers[2].blendMode = .normal
+        ctrl.s2CelLayers[2].opacity = 1.0
+        ctrl.syncLayerToRust(ctrl.s2CelLayers[2])
+        ctrl.s2SelectedLayerId = topId
+        ctrl.setActiveColor(PersistedRGBA(r: 20, g: 70, b: 250, a: 255))
+        _ = ctrl.applyRasterSegment(from: CGPoint(x: 170, y: 180), to: CGPoint(x: 190, y: 180), radiusPx: 14, hardness: 1.0, opacity: 1.0)
+        ctrl.refreshCompositeImage(interactive: true)
+
+        // Because Blue is on top of Red, sampling (180, 180) returns BLUE
+        let sampleBeforeMove = ctrl.rustProject?.sampleEyedropper(x: 180, y: 180)
+        XCTAssertGreaterThan(sampleBeforeMove?.2 ?? 0, 200, "Top layer (Blue) should occlude lower layer (Red)")
+
+        // Move the middle layer (Red) UP above Blue!
+        ctrl.moveLayer(id: midId, up: true)
+        XCTAssertEqual(ctrl.s2CelLayers[2].id, midId)
+        XCTAssertEqual(ctrl.s2CelLayers[1].id, topId)
+
+        // Now Red is at index 2 (top of stack), so sampling (180, 180) MUST return RED!
+        let sampleAfterMoveUp = ctrl.rustProject?.sampleEyedropper(x: 180, y: 180)
+        XCTAssertGreaterThan(sampleAfterMoveUp?.0 ?? 0, 200, "Moved-up layer (Red) must now occlude Blue")
+        XCTAssertLessThan(sampleAfterMoveUp?.2 ?? 255, 60)
+
+        // Move Red back DOWN -> Blue is back on top!
+        ctrl.moveLayer(id: midId, up: false)
+        XCTAssertEqual(ctrl.s2CelLayers[2].id, topId)
+        let sampleAfterMoveDown = ctrl.rustProject?.sampleEyedropper(x: 180, y: 180)
+        XCTAssertGreaterThan(sampleAfterMoveDown?.2 ?? 0, 200)
+        #endif
+    }
 }

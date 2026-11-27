@@ -1391,7 +1391,7 @@ public struct MangaCanvasStageView: View {
                         if let cgImage = controller.s2CompositeImage {
                             Image(decorative: cgImage, scale: 1.0)
                                 .resizable()
-                                .interpolation(.medium)
+                                .interpolation(.low)
                                 .clipShape(RoundedRectangle(cornerRadius: 6))
                         }
                         #endif
@@ -2016,7 +2016,7 @@ public struct MangaCanvasStageView: View {
             opacity: Float(controller.s2BrushOpacity)
         )
         lastDragCanvasPoint = targetPt
-        controller.refreshCompositeImage()
+        controller.refreshCompositeImage(interactive: true)
     }
 
     private func handleCanvasDragEnded(at viewPoint: CGPoint, canvasViewSize: CGSize) {
